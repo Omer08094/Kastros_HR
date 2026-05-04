@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-kastros-cream text-kastros-ink antialiased;
+}
+
+::selection {
+  @apply bg-kastros-mist/40 text-kastros-ink;
+}
+
+.focus-ring {
+  @apply outline-none ring-2 ring-kastros-gold/50 ring-offset-2 ring-offset-kastros-cream;
+}
