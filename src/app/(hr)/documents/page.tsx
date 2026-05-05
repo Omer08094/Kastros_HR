@@ -13,8 +13,15 @@ export default async function DocumentsPage() {
   const canDelete = session.role === "hr_admin";
 
   return (
-    <PageShell title="Documents" subtitle="Metadata registry with role-aware mutations">
-      <DocumentsClient documents={store.documents} canAdd={canAdd} canDelete={canDelete} />
+    <PageShell title="Documents" subtitle="Scanned records + policy manual acknowledgements">
+      <DocumentsClient
+        documents={store.documents}
+        policies={store.policies}
+        acknowledgements={store.policyAcknowledgements}
+        currentUserEmail={session.email}
+        canAdd={canAdd}
+        canDelete={canDelete}
+      />
     </PageShell>
   );
 }

@@ -11,6 +11,12 @@ export default async function PerformancePage() {
 
   const store = await readStore();
   const goals = visibleGoals(store, session);
+  const reviews =
+    session.role === "hr_admin"
+      ? store.reviews
+      : session.role === "manager"
+        ? store.reviews.filter((r) => r.managerEmail.toLowerCase() === session.email.toLowerCase())
+        : store.reviews.filter((r) => r.employeeEmail.toLowerCase() === session.email.toLowerCase());
   const teamEmails =
     session.role === "manager"
       ? store.employees
@@ -19,8 +25,8 @@ export default async function PerformancePage() {
       : [];
 
   return (
-    <PageShell title="Performance" subtitle="Goals with owner-aware permissions">
-      <PerformanceClient goals={goals} session={session} teamEmails={teamEmails} />
+    <PageShell title="Performance" subtitle="Managers own grading; HR manages framework and calibration">
+      <PerformanceClient goals={goals} reviews={reviews} session={session} teamEmails={teamEmails} />
     </PageShell>
   );
 }

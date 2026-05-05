@@ -14,8 +14,8 @@ export default async function TrainingPage() {
   const canAssign = session.role === "hr_admin";
 
   return (
-    <PageShell title="Learning" subtitle="Assignments, completions, and HR-driven curriculum drops">
-      <TrainingClient rows={rows} canAssign={canAssign} />
+    <PageShell title="Learning" subtitle="Degrees, certifications, internal/external training, PPTX logs, and attendance">
+      <TrainingClient rows={rows} academics={store.academics} employees={store.employees} canAssign={canAssign} />
     </PageShell>
   );
 }

@@ -114,6 +114,7 @@ export default function LoginPage() {
                             {row.role === "hr_admin" ? "Full HR control + reset demo dataset in Settings." : null}
                             {row.role === "payroll" ? "Payroll snapshot edits, workforce reads, reports." : null}
                             {row.role === "security_admin" ? "Security posture + audit feed + settings (no data reset)." : null}
+                            {row.role === "ceo" ? "Final leave approvals, restricted HR cases, exec-level oversight." : null}
                           </td>
                         </tr>
                       ))}

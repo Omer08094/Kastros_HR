@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import type { DocumentRow } from "@/lib/store/types";
-import { addDocument, deleteDocument } from "@/lib/store/hr-actions";
+import type { DocumentRow, PolicyAcknowledgement, PolicyManual } from "@/lib/store/types";
+import { acknowledgePolicy, addDocument, deleteDocument } from "@/lib/store/hr-actions";
 
 type ActionResult = { ok: true } | { error: string };
 
@@ -16,10 +16,16 @@ async function runAction(p: Promise<ActionResult>, onOk: () => void): Promise<st
 
 export function DocumentsClient({
   documents,
+  policies,
+  acknowledgements,
+  currentUserEmail,
   canAdd,
   canDelete,
 }: {
   documents: DocumentRow[];
+  policies: PolicyManual[];
+  acknowledgements: PolicyAcknowledgement[];
+  currentUserEmail: string;
   canAdd: boolean;
   canDelete: boolean;
 }) {
@@ -94,6 +100,45 @@ export function DocumentsClient({
               ) : null}
             </li>
           ))}
+        </ul>
+      </section>
+
+      <section className="rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm">
+        <h2 className="font-display text-lg font-semibold text-kastros-forest">Policy manual acknowledgement</h2>
+        <ul className="mt-4 divide-y divide-kastros-sand">
+          {policies.map((p) => {
+            const ack = acknowledgements.find(
+              (a) => a.policyId === p.id && a.employeeEmail.toLowerCase() === currentUserEmail.toLowerCase(),
+            );
+            return (
+              <li key={p.id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-medium text-kastros-forest">
+                    {p.title} ({p.version})
+                  </p>
+                  <p className="text-xs text-kastros-sage">Printable copy: {p.printableUrl}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {ack ? (
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs text-emerald-800 ring-1 ring-emerald-200">
+                      Acknowledged ({new Date(ack.acknowledgedAt).toLocaleDateString()})
+                    </span>
+                  ) : (
+                    <form action={(fd) => handle(acknowledgePolicy(fd))}>
+                      <input type="hidden" name="policyId" value={p.id} />
+                      <button
+                        type="submit"
+                        disabled={pending}
+                        className="rounded-lg bg-kastros-forest px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                      >
+                        Acknowledge
+                      </button>
+                    </form>
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       </section>
     </div>

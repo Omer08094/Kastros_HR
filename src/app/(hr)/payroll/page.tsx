@@ -12,8 +12,8 @@ export default async function PayrollPage() {
   const canEdit = session.role === "hr_admin" || session.role === "payroll";
 
   return (
-    <PageShell title="Payroll" subtitle="Editable snapshot for payroll + HR admins">
-      <PayrollClient snapshot={store.payroll} canEdit={canEdit} />
+    <PageShell title="Payroll" subtitle="Base salary + multi-allowance + hours x rate payroll formula">
+      <PayrollClient snapshot={store.payroll} entries={store.payrollEntries} employees={store.employees} canEdit={canEdit} />
     </PageShell>
   );
 }

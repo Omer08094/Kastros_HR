@@ -1,16 +1,40 @@
 export type EmployeeStatus = "Active" | "On leave" | "Offboarding";
+export type EmploymentType = "Permanent" | "Temporary" | "Contractual" | "Intern";
+
+export type FamilyRelation = {
+  name: string;
+  relation: string;
+  firmOrEmployer: string;
+  linkedToTraderOrMerchandiser: boolean;
+};
+
+export type EmergencyContact = {
+  name: string;
+  relation: string;
+  phone: string;
+};
 
 export type Employee = {
   id: string;
   name: string;
+  fatherName: string;
   email: string;
   title: string;
   location: string;
   status: EmployeeStatus;
+  department: string;
+  employmentType: EmploymentType;
+  joiningDate: string;
+  probationMonths: number;
+  probationCompletionDate: string;
+  companyPhone: string;
+  personalPhone: string;
+  emergencyContacts: EmergencyContact[];
+  familyRelations: FamilyRelation[];
   reportsToEmail: string | null;
 };
 
-export type LeaveStatus = "Pending" | "Approved" | "Denied";
+export type LeaveStatus = "PendingHR" | "PendingCEO" | "Approved" | "Denied";
 
 export type LeaveRequest = {
   id: string;
@@ -20,6 +44,8 @@ export type LeaveRequest = {
   end: string;
   status: LeaveStatus;
   decidedByEmail: string | null;
+  hrDecisionByEmail: string | null;
+  ceoDecisionByEmail: string | null;
   note: string | null;
 };
 
@@ -35,8 +61,22 @@ export type TrainingRow = {
   id: string;
   assigneeEmail: string;
   name: string;
+  provider: "Internal" | "External";
+  providerName: string;
+  trainingMaterialPptx: string | null;
+  attendanceMarked: boolean;
   due: string;
   status: "Required" | "Done";
+};
+
+export type AcademicRecord = {
+  id: string;
+  employeeEmail: string;
+  type: "Degree" | "Certification";
+  title: string;
+  institute: string;
+  year: string;
+  attachmentName: string | null;
 };
 
 export type DocumentRow = {
@@ -47,6 +87,20 @@ export type DocumentRow = {
   createdByEmail: string;
 };
 
+export type PolicyManual = {
+  id: string;
+  title: string;
+  version: string;
+  printableUrl: string;
+};
+
+export type PolicyAcknowledgement = {
+  id: string;
+  policyId: string;
+  employeeEmail: string;
+  acknowledgedAt: string;
+};
+
 export type HrCase = {
   id: string;
   reference: string;
@@ -54,6 +108,8 @@ export type HrCase = {
   status: string;
   opened: string;
   openedByEmail: string;
+  type: "Conflict of Interest" | "Code of Conduct" | "Other";
+  restrictedTo: Array<"hr_admin" | "ceo">;
 };
 
 export type Goal = {
@@ -64,11 +120,40 @@ export type Goal = {
   cycle: string;
 };
 
+export type PerformanceReview = {
+  id: string;
+  employeeEmail: string;
+  managerEmail: string;
+  department: string;
+  criteriaType: "Technical" | "Leadership" | "Operations";
+  grade: "A" | "B" | "C" | "D";
+  comments: string;
+  cycle: string;
+};
+
 export type PayrollSnapshot = {
   month: string;
   employeesPaid: number;
   exceptions: number;
   note: string;
+};
+
+export type PayrollAllowanceType = "Fuel" | "Transport" | "SIM/Mobile" | "Laptop" | "Other";
+
+export type PayrollAllowance = {
+  type: PayrollAllowanceType;
+  amount: number;
+};
+
+export type PayrollEntry = {
+  id: string;
+  employeeEmail: string;
+  month: string;
+  baseSalary: number;
+  allowances: PayrollAllowance[];
+  hoursWorked: number;
+  hourlyRate: number;
+  grossPay: number;
 };
 
 export type AuditRow = {
@@ -83,9 +168,14 @@ export type HrStore = {
   leaveRequests: LeaveRequest[];
   jobs: JobPosting[];
   training: TrainingRow[];
+  academics: AcademicRecord[];
   documents: DocumentRow[];
+  policies: PolicyManual[];
+  policyAcknowledgements: PolicyAcknowledgement[];
   cases: HrCase[];
   goals: Goal[];
+  reviews: PerformanceReview[];
   payroll: PayrollSnapshot;
+  payrollEntries: PayrollEntry[];
   audit: AuditRow[];
 };

@@ -8,7 +8,7 @@ export function isDirectReport(store: HrStore, managerEmail: string, employeeEma
 }
 
 export function visibleEmployees(store: HrStore, session: Session): Employee[] {
-  if (session.role === "hr_admin" || session.role === "recruiter" || session.role === "payroll") {
+  if (session.role === "hr_admin" || session.role === "recruiter" || session.role === "payroll" || session.role === "ceo") {
     return store.employees;
   }
   if (session.role === "manager") {
@@ -20,7 +20,7 @@ export function visibleEmployees(store: HrStore, session: Session): Employee[] {
 }
 
 export function visibleLeaveRequests(store: HrStore, session: Session) {
-  if (session.role === "hr_admin") return store.leaveRequests;
+  if (session.role === "hr_admin" || session.role === "ceo") return store.leaveRequests;
   if (session.role === "manager") {
     return store.leaveRequests.filter(
       (r) =>
@@ -33,12 +33,13 @@ export function visibleLeaveRequests(store: HrStore, session: Session) {
 
 export function canDecideLeave(store: HrStore, session: Session, requesterEmail: string): boolean {
   if (session.role === "hr_admin") return true;
+  if (session.role === "ceo") return true;
   if (session.role === "manager") return isDirectReport(store, session.email, requesterEmail);
   return false;
 }
 
 export function visibleGoals(store: HrStore, session: Session) {
-  if (session.role === "hr_admin") return store.goals;
+  if (session.role === "hr_admin" || session.role === "ceo") return store.goals;
   if (session.role === "manager") {
     const emails = new Set(visibleEmployees(store, session).map((e) => e.email.toLowerCase()));
     return store.goals.filter((g) => emails.has(g.ownerEmail.toLowerCase()));
@@ -47,7 +48,7 @@ export function visibleGoals(store: HrStore, session: Session) {
 }
 
 export function visibleTraining(store: HrStore, session: Session) {
-  if (session.role === "hr_admin") return store.training;
+  if (session.role === "hr_admin" || session.role === "ceo") return store.training;
   if (session.role === "manager") {
     const emails = new Set(visibleEmployees(store, session).map((e) => e.email.toLowerCase()));
     return store.training.filter((t) => emails.has(t.assigneeEmail.toLowerCase()));
@@ -77,6 +78,7 @@ export function roleBadge(role: RoleId): string {
     hr_admin: "HR admin",
     payroll: "Payroll",
     security_admin: "Security",
+    ceo: "CEO",
   };
   return map[role];
 }

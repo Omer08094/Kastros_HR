@@ -3,6 +3,7 @@ import { PageShell } from "@/components/PageShell";
 import { Card } from "@/components/Card";
 import { getSession } from "@/lib/auth";
 import { ROLE_LABELS } from "@/lib/roles";
+import { readStore } from "@/lib/store/persist";
 
 const steps = [
   { title: "Offer accepted", owner: "Recruiting", state: "Done" as const },
@@ -14,6 +15,12 @@ const steps = [
 export default async function OnboardingPage() {
   const session = await getSession();
   if (!session) redirect("/login");
+  const store = await readStore();
+  const upcomingProbation = store.employees.filter((e) => {
+    const end = new Date(e.probationCompletionDate);
+    const days = Math.ceil((end.getTime() - Date.now()) / (24 * 3600 * 1000));
+    return days >= 0 && days <= 10;
+  });
 
   return (
     <PageShell title="Onboarding" subtitle={`Playbook visibility for ${ROLE_LABELS[session.role]}`}>
@@ -47,6 +54,26 @@ export default async function OnboardingPage() {
             </li>
           ))}
         </ol>
+      </Card>
+      <Card className="mt-5" eyebrow="Organization overview" title="What Kastros does (new-hire orientation)">
+        <p className="text-sm leading-relaxed text-kastros-sage">
+          Similar to global commodity firms (e.g. LDC-style value-chain narrative), Kastros connects producers to destination
+          markets through sourcing, quality assurance, logistics, and trade execution. This section is intended as a day-1
+          context module for all new joiners.
+        </p>
+      </Card>
+      <Card className="mt-5" eyebrow="Probation tracker" title="Employees nearing completion (10-day window)">
+        <ul className="space-y-2 text-sm text-kastros-ink">
+          {upcomingProbation.length ? (
+            upcomingProbation.map((e) => (
+              <li key={e.id} className="rounded-lg bg-kastros-cream px-3 py-2 ring-1 ring-kastros-sand">
+                {e.name} ({e.email}) - probation ends on {e.probationCompletionDate}
+              </li>
+            ))
+          ) : (
+            <li className="text-kastros-sage">No probation completions due in the next 10 days.</li>
+          )}
+        </ul>
       </Card>
       <p className="mt-4 text-sm text-kastros-sage">
         Managers and HR admins can pair this view with People and Documents in the demo. Task automation can be added on top of

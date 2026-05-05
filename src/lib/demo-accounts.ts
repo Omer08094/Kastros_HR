@@ -57,6 +57,12 @@ export const DEMO_USERS: DemoUser[] = [
     role: "security_admin",
     name: "Noah Sato",
   },
+  {
+    email: "ceo@kastros.demo",
+    password: "Demo!CEO2026",
+    role: "ceo",
+    name: "Hassan Malik",
+  },
   /** Legacy quick path → HR admin (same access as amelia.hr). */
   {
     email: "demo@kastros.co",

@@ -1,4 +1,4 @@
-export const ROLE_IDS = ["employee", "manager", "recruiter", "hr_admin", "payroll", "security_admin"] as const;
+export const ROLE_IDS = ["employee", "manager", "recruiter", "hr_admin", "payroll", "security_admin", "ceo"] as const;
 
 export type RoleId = (typeof ROLE_IDS)[number];
 
@@ -13,4 +13,5 @@ export const ROLE_LABELS: Record<RoleId, string> = {
   hr_admin: "HR admin",
   payroll: "Payroll",
   security_admin: "Security admin",
+  ceo: "CEO",
 };

@@ -13,15 +13,26 @@ export default async function DashboardPage() {
   const store = await readStore();
   const people = visibleEmployees(store, session);
   const leave = visibleLeaveRequests(store, session);
-  const pendingLeave = leave.filter((l) => l.status === "Pending").length;
+  const pendingLeave = leave.filter((l) => l.status === "PendingHR" || l.status === "PendingCEO").length;
   const openJobs = store.jobs.length;
   const openCases = store.cases.filter((c) => c.status !== "Resolved" && c.status !== "Closed").length;
+  const today = new Date();
+  const probationAlerts = people.filter((e) => {
+    const end = new Date(e.probationCompletionDate);
+    const days = Math.ceil((end.getTime() - today.getTime()) / (24 * 3600 * 1000));
+    return days >= 0 && days <= 10;
+  });
 
   return (
     <PageShell
       title="Overview"
       subtitle={`Signed in as ${ROLE_LABELS[session.role]} · ${session.email}`}
     >
+      {probationAlerts.length ? (
+        <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <strong>Probation alert:</strong> {probationAlerts.length} employee(s) are within 10 days of probation completion. HR should trigger confirmation actions.
+        </div>
+      ) : null}
       <div className="grid gap-5 lg:grid-cols-4">
         <Card eyebrow="People" title="Visible headcount">
           <p className="font-display text-3xl font-semibold text-kastros-forest">{people.length}</p>

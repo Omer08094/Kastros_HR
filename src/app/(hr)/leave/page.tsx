@@ -12,12 +12,12 @@ export default async function LeavePage() {
   const store = await readStore();
   const requests = visibleLeaveRequests(store, session);
   const canCreate = session.role === "employee" || session.role === "manager" || session.role === "hr_admin";
-  const canDecide = session.role === "manager" || session.role === "hr_admin";
+  const canDecide = session.role === "manager" || session.role === "hr_admin" || session.role === "ceo";
 
   return (
     <PageShell
       title="Time off"
-      subtitle="Request, review, and track balances — scoped to your role"
+      subtitle="Two-step approval: HR then CEO (CEO direct reports go straight to CEO)"
     >
       <LeaveClient requests={requests} session={session} canCreate={canCreate} canDecide={canDecide} />
     </PageShell>

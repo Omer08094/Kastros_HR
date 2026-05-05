@@ -38,7 +38,7 @@ export function EmployeesClient({ employees, canManage }: { employees: Employee[
       {canManage ? (
         <section className="rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm">
           <h2 className="font-display text-lg font-semibold text-kastros-forest">Add team member</h2>
-          <p className="mt-1 text-sm text-kastros-sage">Creates a new profile in the demo store (persisted under /data).</p>
+          <p className="mt-1 text-sm text-kastros-sage">Includes family compliance, onboarding, contact, and probation details.</p>
           <form className="mt-4 grid gap-3 sm:grid-cols-2" action={(fd) => handle(addEmployee(fd))}>
             <label className="text-sm">
               <span className="text-kastros-sage">Full name</span>
@@ -47,6 +47,10 @@ export function EmployeesClient({ employees, canManage }: { employees: Employee[
                 required
                 className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm"
               />
+            </label>
+            <label className="text-sm">
+              <span className="text-kastros-sage">Father&apos;s name</span>
+              <input name="fatherName" required className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
             </label>
             <label className="text-sm">
               <span className="text-kastros-sage">Work email</span>
@@ -62,8 +66,68 @@ export function EmployeesClient({ employees, canManage }: { employees: Employee[
               <input name="title" required className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
             </label>
             <label className="text-sm">
+              <span className="text-kastros-sage">Department</span>
+              <input name="department" required className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
+            </label>
+            <label className="text-sm">
               <span className="text-kastros-sage">Location</span>
               <input name="location" required className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
+            </label>
+            <label className="text-sm">
+              <span className="text-kastros-sage">Employment type</span>
+              <select name="employmentType" defaultValue="Permanent" className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm">
+                <option>Permanent</option>
+                <option>Temporary</option>
+                <option>Contractual</option>
+                <option>Intern</option>
+              </select>
+            </label>
+            <label className="text-sm">
+              <span className="text-kastros-sage">Joining date</span>
+              <input name="joiningDate" type="date" required className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
+            </label>
+            <label className="text-sm">
+              <span className="text-kastros-sage">Probation months</span>
+              <input name="probationMonths" type="number" min={1} defaultValue={3} className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
+            </label>
+            <label className="text-sm">
+              <span className="text-kastros-sage">Company phone</span>
+              <input name="companyPhone" className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
+            </label>
+            <label className="text-sm">
+              <span className="text-kastros-sage">Personal phone</span>
+              <input name="personalPhone" className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
+            </label>
+            <label className="text-sm">
+              <span className="text-kastros-sage">Emergency contact name</span>
+              <input name="emergencyContactName" className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
+            </label>
+            <label className="text-sm">
+              <span className="text-kastros-sage">Emergency contact relation</span>
+              <input name="emergencyContactRelation" className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
+            </label>
+            <label className="text-sm">
+              <span className="text-kastros-sage">Emergency contact phone</span>
+              <input name="emergencyContactPhone" className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
+            </label>
+            <label className="text-sm">
+              <span className="text-kastros-sage">Family relation name</span>
+              <input name="familyRelationName" className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
+            </label>
+            <label className="text-sm">
+              <span className="text-kastros-sage">Family relation type</span>
+              <input name="familyRelationType" className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
+            </label>
+            <label className="text-sm">
+              <span className="text-kastros-sage">Family firm / employer</span>
+              <input name="familyRelationFirm" className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
+            </label>
+            <label className="text-sm">
+              <span className="text-kastros-sage">Linked to traders/merchandisers?</span>
+              <select name="familyLinked" defaultValue="no" className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm">
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
             </label>
             <label className="text-sm sm:col-span-2">
               <span className="text-kastros-sage">Reports to (manager email, optional)</span>
@@ -90,15 +154,16 @@ export function EmployeesClient({ employees, canManage }: { employees: Employee[
       <section className="rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm">
         <h2 className="font-display text-lg font-semibold text-kastros-forest">Directory</h2>
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left text-sm">
+          <table className="w-full min-w-[1100px] text-left text-sm">
             <thead>
               <tr className="border-b border-kastros-sand text-xs uppercase tracking-wide text-kastros-sage">
                 <th className="pb-3 pr-3 font-medium">Name</th>
                 <th className="pb-3 pr-3 font-medium">Email</th>
-                {!canManage ? <th className="pb-3 pr-3 font-medium">Title</th> : null}
-                {!canManage ? <th className="pb-3 pr-3 font-medium">Location</th> : null}
+                {!canManage ? <th className="pb-3 pr-3 font-medium">Title/Dept</th> : null}
+                {!canManage ? <th className="pb-3 pr-3 font-medium">Employment</th> : null}
                 {!canManage ? <th className="pb-3 pr-3 font-medium">Status</th> : null}
-                {!canManage ? <th className="pb-3 font-medium">Reports to</th> : null}
+                {!canManage ? <th className="pb-3 pr-3 font-medium">Probation</th> : null}
+                {!canManage ? <th className="pb-3 font-medium">Compliance / Contacts</th> : null}
                 {canManage ? <th className="pb-3 pr-3 font-medium">Edit</th> : null}
                 {canManage ? <th className="pb-3 font-medium"> </th> : null}
               </tr>
@@ -113,6 +178,7 @@ export function EmployeesClient({ employees, canManage }: { employees: Employee[
                       <form className="space-y-2" action={(fd) => handle(updateEmployee(fd))}>
                         <input type="hidden" name="id" value={e.id} />
                         <input name="title" defaultValue={e.title} className="w-full rounded-lg border border-kastros-sand px-2 py-1 text-xs" />
+                        <input name="department" defaultValue={e.department} className="w-full rounded-lg border border-kastros-sand px-2 py-1 text-xs" />
                         <input name="location" defaultValue={e.location} className="w-full rounded-lg border border-kastros-sand px-2 py-1 text-xs" />
                         <select name="status" defaultValue={e.status} className="w-full rounded-lg border border-kastros-sand px-2 py-1 text-xs">
                           <option>Active</option>
@@ -143,12 +209,31 @@ export function EmployeesClient({ employees, canManage }: { employees: Employee[
                   <tr key={e.id} className="text-kastros-ink">
                     <td className="py-3 pr-3 font-medium">{e.name}</td>
                     <td className="py-3 pr-3 text-kastros-sage">{e.email}</td>
-                    <td className="py-3 pr-3 text-kastros-sage">{e.title}</td>
-                    <td className="py-3 pr-3 text-kastros-sage">{e.location}</td>
+                    <td className="py-3 pr-3 text-kastros-sage">
+                      <div>{e.title}</div>
+                      <div className="text-xs">{e.department}</div>
+                    </td>
+                    <td className="py-3 pr-3 text-kastros-sage">
+                      <div>{e.employmentType}</div>
+                      <div className="text-xs">{e.location}</div>
+                    </td>
                     <td className="py-3 pr-3">
                       <span className="inline-flex rounded-full bg-kastros-cream px-2 py-0.5 text-xs ring-1 ring-kastros-sand">{e.status}</span>
                     </td>
-                    <td className="py-3 text-xs text-kastros-sage">{e.reportsToEmail ?? "—"}</td>
+                    <td className="py-3 pr-3 text-xs text-kastros-sage">
+                      <div>DOJ: {e.joiningDate}</div>
+                      <div>Probation end: {e.probationCompletionDate}</div>
+                    </td>
+                    <td className="py-3 text-xs text-kastros-sage">
+                      <div>Company: {e.companyPhone || "—"} | Personal: {e.personalPhone || "—"}</div>
+                      <div>NOK: {e.emergencyContacts[0]?.name ?? "—"} ({e.emergencyContacts[0]?.phone ?? "—"})</div>
+                      <div>
+                        Family COI:{" "}
+                        {e.familyRelations.some((f) => f.linkedToTraderOrMerchandiser)
+                          ? "Potential conflict flagged"
+                          : "No declared links"}
+                      </div>
+                    </td>
                   </tr>
                 ),
               )}

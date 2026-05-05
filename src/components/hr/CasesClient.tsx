@@ -43,6 +43,14 @@ export function CasesClient({ cases, canManage }: { cases: HrCase[]; canManage: 
               <span className="text-kastros-sage">Topic</span>
               <input name="topic" required className="mt-1 w-full rounded-xl border border-kastros-sand px-3 py-2 text-sm" />
             </label>
+            <label className="text-sm">
+              <span className="text-kastros-sage">Type</span>
+              <select name="type" className="mt-1 rounded-xl border border-kastros-sand px-3 py-2 text-sm">
+                <option>Conflict of Interest</option>
+                <option>Code of Conduct</option>
+                <option>Other</option>
+              </select>
+            </label>
             <button type="submit" disabled={pending} className="rounded-xl bg-kastros-forest px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
               Create
             </button>
@@ -60,6 +68,7 @@ export function CasesClient({ cases, canManage }: { cases: HrCase[]; canManage: 
                 <th className="pb-3 pr-3 font-medium">Topic</th>
                 <th className="pb-3 pr-3 font-medium">Opened</th>
                 <th className="pb-3 pr-3 font-medium">By</th>
+                <th className="pb-3 pr-3 font-medium">Type</th>
                 <th className="pb-3 pr-3 font-medium">Status</th>
                 {canManage ? <th className="pb-3 font-medium">Update</th> : null}
               </tr>
@@ -71,6 +80,7 @@ export function CasesClient({ cases, canManage }: { cases: HrCase[]; canManage: 
                   <td className="py-3 pr-3">{c.topic}</td>
                   <td className="py-3 pr-3 text-kastros-sage">{c.opened}</td>
                   <td className="py-3 pr-3 text-xs text-kastros-sage">{c.openedByEmail}</td>
+                  <td className="py-3 pr-3">{c.type}</td>
                   <td className="py-3 pr-3">{c.status}</td>
                   {canManage ? (
                     <td className="py-3">
