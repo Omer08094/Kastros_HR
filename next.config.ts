@@ -1,4 +1,8 @@
 import type { NextConfig } from "next";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -29,7 +33,15 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  /** Avoid wrong monorepo/root detection when another package-lock exists higher in the tree (e.g. user home). */
+  outputFileTracingRoot: projectRoot,
   poweredByHeader: false,
+  experimental: {
+    serverActions: {
+      /** Allow small onboarding document uploads (employee form). */
+      bodySizeLimit: "4mb",
+    },
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

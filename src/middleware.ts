@@ -15,6 +15,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  if (pathname.startsWith("/apply")) {
+    return NextResponse.next();
+  }
+
   if (PUBLIC_PATHS.has(pathname)) {
     const token = request.cookies.get(sessionCookieName)?.value;
     if (token) {

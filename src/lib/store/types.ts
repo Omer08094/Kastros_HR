@@ -55,6 +55,26 @@ export type JobPosting = {
   location: string;
   stage: string;
   applicantCount: number;
+  /** Shown on the public application portal */
+  description: string | null;
+};
+
+export type JobApplication = {
+  id: string;
+  jobId: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  linkedIn: string | null;
+  currentCompany: string | null;
+  yearsExperience: string | null;
+  salaryExpectation: string | null;
+  noticePeriod: string | null;
+  coverLetter: string | null;
+  /** Saved binary under data/uploads/{ref}; view via /api/hr-file/{ref} */
+  cvStoredRef: string | null;
+  cvOriginalName: string | null;
+  submittedAt: string;
 };
 
 export type TrainingRow = {
@@ -77,6 +97,8 @@ export type AcademicRecord = {
   institute: string;
   year: string;
   attachmentName: string | null;
+  /** Saved binary under data/uploads/{ref}; view via /api/hr-file/{ref} */
+  storedRef: string | null;
 };
 
 export type DocumentRow = {
@@ -85,6 +107,10 @@ export type DocumentRow = {
   owner: string;
   sensitivity: string;
   createdByEmail: string;
+  /** Personnel / onboarding file for this employee when set; otherwise company-wide library entry. */
+  employeeEmail: string | null;
+  /** Same ref as paired academic row when file was uploaded at onboarding. */
+  storedRef: string | null;
 };
 
 export type PolicyManual = {
@@ -167,6 +193,7 @@ export type HrStore = {
   employees: Employee[];
   leaveRequests: LeaveRequest[];
   jobs: JobPosting[];
+  jobApplications: JobApplication[];
   training: TrainingRow[];
   academics: AcademicRecord[];
   documents: DocumentRow[];

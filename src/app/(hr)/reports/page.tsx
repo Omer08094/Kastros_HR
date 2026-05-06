@@ -4,12 +4,16 @@ import { Card } from "@/components/Card";
 import { getSession } from "@/lib/auth";
 import { readStore } from "@/lib/store/persist";
 
-function bucket(title: string): "Trading" | "Operations" | "G&A" | "Technology" {
-  const t = title.toLowerCase();
-  if (t.includes("trade") || t.includes("risk") || t.includes("commodity") || t.includes("finance")) return "Trading";
-  if (t.includes("logistics") || t.includes("operations") || t.includes("quality") || t.includes("payroll")) return "Operations";
-  if (t.includes("security") || t.includes("people") || t.includes("talent") || t.includes("chief")) return "G&A";
-  return "Technology";
+const DEPARTMENT_KEYS = ["HR", "Execution & Operations", "Traders", "Finance"] as const;
+type ReportDept = (typeof DEPARTMENT_KEYS)[number];
+
+/** Maps stored `department` strings into the four report departments. */
+function departmentBucket(department: string): ReportDept {
+  const d = department.trim().toLowerCase();
+  if (d === "hr" || d.startsWith("hr ") || d.includes("human resource")) return "HR";
+  if (d.includes("finance") || d.includes("accounting") || d.includes("treasury")) return "Finance";
+  if (d.includes("trader") || d.includes("trading") || d.includes("merchandis")) return "Traders";
+  return "Execution & Operations";
 }
 
 export default async function ReportsPage() {
@@ -17,19 +21,19 @@ export default async function ReportsPage() {
   if (!session) redirect("/login");
 
   const store = await readStore();
-  const counts = { Trading: 0, Operations: 0, "G&A": 0, Technology: 0 } as Record<string, number>;
+  const counts = { HR: 0, "Execution & Operations": 0, Traders: 0, Finance: 0 } satisfies Record<ReportDept, number>;
   for (const e of store.employees) {
-    counts[bucket(e.title)] += 1;
+    counts[departmentBucket(e.department)] += 1;
   }
   const total = store.employees.length || 1;
-  const bars = (Object.keys(counts) as Array<keyof typeof counts>).map((label) => ({
+  const bars = DEPARTMENT_KEYS.map((label) => ({
     label,
     pct: Math.round((counts[label] / total) * 100),
   }));
 
   return (
-    <PageShell title="Reports" subtitle="Headcount composition derived from job titles in the demo store">
-      <Card eyebrow="Composition" title="Approximate function mix">
+    <PageShell title="Reports" subtitle="Headcount by department (HR, Execution & Operations, Traders, Finance)">
+      <Card eyebrow="Composition" title="Department mix">
         <div className="space-y-4">
           {bars.map((b) => (
             <div key={b.label}>

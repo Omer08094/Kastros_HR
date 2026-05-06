@@ -1,9 +1,15 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import type { Employee } from "@/lib/store/types";
-import { addEmployee, deleteEmployee, updateEmployee } from "@/lib/store/hr-actions";
+import { useEffect, useMemo, useState, useTransition, type FormEvent, type ReactNode } from "react";
+import type {
+  AcademicRecord,
+  DocumentRow,
+  Employee,
+  PolicyAcknowledgement,
+  PolicyManual,
+} from "@/lib/store/types";
+import { deleteEmployee, updateEmployee } from "@/lib/store/hr-actions";
 
 type ActionResult = { ok: true } | { error: string };
 
@@ -14,10 +20,102 @@ async function runAction(p: Promise<ActionResult>, onOk: () => void): Promise<st
   return null;
 }
 
-export function EmployeesClient({ employees, canManage }: { employees: Employee[]; canManage: boolean }) {
+function policyTitle(policies: PolicyManual[], policyId: string) {
+  return policies.find((p) => p.id === policyId)?.title ?? policyId;
+}
+
+function DetailSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="rounded-xl border border-kastros-sand/80 bg-kastros-cream/30 p-4">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-kastros-gold">{title}</h3>
+      <div className="mt-3">{children}</div>
+    </div>
+  );
+}
+
+function Dl({ rows }: { rows: Array<{ label: string; value: ReactNode }> }) {
+  return (
+    <dl className="grid gap-2 text-sm sm:grid-cols-[minmax(0,140px)_1fr] sm:gap-x-4">
+      {rows.map((r) => (
+        <div key={r.label} className="contents">
+          <dt className="text-kastros-sage">{r.label}</dt>
+          <dd className="text-kastros-ink">{r.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+export function EmployeesClient({
+  employees,
+  canManage,
+  documents,
+  academics,
+  policyAcknowledgements,
+  policies,
+}: {
+  employees: Employee[];
+  canManage: boolean;
+  documents: DocumentRow[];
+  academics: AcademicRecord[];
+  policyAcknowledgements: PolicyAcknowledgement[];
+  policies: PolicyManual[];
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [nameInput, setNameInput] = useState("");
+  const [appliedQuery, setAppliedQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
+
+  const filteredEmployees = useMemo(() => {
+    const q = appliedQuery.trim().toLowerCase();
+    if (!q) return employees;
+    return employees.filter(
+      (e) => e.name.toLowerCase().includes(q) || e.email.toLowerCase().includes(q),
+    );
+  }, [employees, appliedQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredEmployees.length / pageSize) || 1);
+  const safePage = Math.min(page, totalPages);
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, totalPages));
+  }, [totalPages]);
+
+  const pagedEmployees = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return filteredEmployees.slice(start, start + pageSize);
+  }, [filteredEmployees, safePage, pageSize]);
+
+  const rangeStart = filteredEmployees.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(safePage * pageSize, filteredEmployees.length);
+
+  function applySearch() {
+    setAppliedQuery(nameInput);
+    setPage(1);
+  }
+
+  function clearSearch() {
+    setNameInput("");
+    setAppliedQuery("");
+    setPage(1);
+  }
+
+  function onSearchSubmit(e: FormEvent) {
+    e.preventDefault();
+    applySearch();
+  }
+
+  const byEmail = useMemo(() => {
+    const em = (e: string) => e.toLowerCase();
+    return (email: string) => ({
+      documents: documents.filter((d) => d.employeeEmail && em(d.employeeEmail) === em(email)),
+      academics: academics.filter((a) => em(a.employeeEmail) === em(email)),
+      acknowledgements: policyAcknowledgements.filter((a) => em(a.employeeEmail) === em(email)),
+    });
+  }, [documents, academics, policyAcknowledgements]);
 
   function handle(p: Promise<ActionResult>) {
     setError(null);
@@ -35,212 +133,344 @@ export function EmployeesClient({ employees, canManage }: { employees: Employee[
         </div>
       ) : null}
 
-      {canManage ? (
-        <section className="rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm">
-          <h2 className="font-display text-lg font-semibold text-kastros-forest">Add team member</h2>
-          <p className="mt-1 text-sm text-kastros-sage">Includes family compliance, onboarding, contact, and probation details.</p>
-          <form className="mt-4 grid gap-3 sm:grid-cols-2" action={(fd) => handle(addEmployee(fd))}>
-            <label className="text-sm">
-              <span className="text-kastros-sage">Full name</span>
-              <input
-                name="name"
-                required
-                className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="text-sm">
-              <span className="text-kastros-sage">Father&apos;s name</span>
-              <input name="fatherName" required className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
-            </label>
-            <label className="text-sm">
-              <span className="text-kastros-sage">Work email</span>
-              <input
-                name="email"
-                type="email"
-                required
-                className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="text-sm">
-              <span className="text-kastros-sage">Title</span>
-              <input name="title" required className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
-            </label>
-            <label className="text-sm">
-              <span className="text-kastros-sage">Department</span>
-              <input name="department" required className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
-            </label>
-            <label className="text-sm">
-              <span className="text-kastros-sage">Location</span>
-              <input name="location" required className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
-            </label>
-            <label className="text-sm">
-              <span className="text-kastros-sage">Employment type</span>
-              <select name="employmentType" defaultValue="Permanent" className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm">
-                <option>Permanent</option>
-                <option>Temporary</option>
-                <option>Contractual</option>
-                <option>Intern</option>
-              </select>
-            </label>
-            <label className="text-sm">
-              <span className="text-kastros-sage">Joining date</span>
-              <input name="joiningDate" type="date" required className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
-            </label>
-            <label className="text-sm">
-              <span className="text-kastros-sage">Probation months</span>
-              <input name="probationMonths" type="number" min={1} defaultValue={3} className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
-            </label>
-            <label className="text-sm">
-              <span className="text-kastros-sage">Company phone</span>
-              <input name="companyPhone" className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
-            </label>
-            <label className="text-sm">
-              <span className="text-kastros-sage">Personal phone</span>
-              <input name="personalPhone" className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
-            </label>
-            <label className="text-sm">
-              <span className="text-kastros-sage">Emergency contact name</span>
-              <input name="emergencyContactName" className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
-            </label>
-            <label className="text-sm">
-              <span className="text-kastros-sage">Emergency contact relation</span>
-              <input name="emergencyContactRelation" className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
-            </label>
-            <label className="text-sm">
-              <span className="text-kastros-sage">Emergency contact phone</span>
-              <input name="emergencyContactPhone" className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
-            </label>
-            <label className="text-sm">
-              <span className="text-kastros-sage">Family relation name</span>
-              <input name="familyRelationName" className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
-            </label>
-            <label className="text-sm">
-              <span className="text-kastros-sage">Family relation type</span>
-              <input name="familyRelationType" className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
-            </label>
-            <label className="text-sm">
-              <span className="text-kastros-sage">Family firm / employer</span>
-              <input name="familyRelationFirm" className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm" />
-            </label>
-            <label className="text-sm">
-              <span className="text-kastros-sage">Linked to traders/merchandisers?</span>
-              <select name="familyLinked" defaultValue="no" className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm">
-                <option value="no">No</option>
-                <option value="yes">Yes</option>
-              </select>
-            </label>
-            <label className="text-sm sm:col-span-2">
-              <span className="text-kastros-sage">Reports to (manager email, optional)</span>
-              <input
-                name="reportsToEmail"
-                type="email"
-                className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm"
-                placeholder="marcus.manager@kastros.demo"
-              />
-            </label>
-            <div className="sm:col-span-2">
-              <button
-                type="submit"
-                disabled={pending}
-                className="rounded-xl bg-kastros-forest px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-              >
-                {pending ? "Saving…" : "Create employee"}
-              </button>
-            </div>
-          </form>
-        </section>
-      ) : null}
+      <p className="text-sm text-kastros-sage">
+        Each profile shows core HR data, emergency and family disclosures, qualifications, onboarding documents on file, and policy
+        acknowledgements. Register new scans under Documents and attach them to the correct personnel file.
+      </p>
 
-      <section className="rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm">
-        <h2 className="font-display text-lg font-semibold text-kastros-forest">Directory</h2>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[1100px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-kastros-sand text-xs uppercase tracking-wide text-kastros-sage">
-                <th className="pb-3 pr-3 font-medium">Name</th>
-                <th className="pb-3 pr-3 font-medium">Email</th>
-                {!canManage ? <th className="pb-3 pr-3 font-medium">Title/Dept</th> : null}
-                {!canManage ? <th className="pb-3 pr-3 font-medium">Employment</th> : null}
-                {!canManage ? <th className="pb-3 pr-3 font-medium">Status</th> : null}
-                {!canManage ? <th className="pb-3 pr-3 font-medium">Probation</th> : null}
-                {!canManage ? <th className="pb-3 font-medium">Compliance / Contacts</th> : null}
-                {canManage ? <th className="pb-3 pr-3 font-medium">Edit</th> : null}
-                {canManage ? <th className="pb-3 font-medium"> </th> : null}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-kastros-sand">
-              {employees.map((e) =>
-                canManage ? (
-                  <tr key={e.id} className="align-top text-kastros-ink">
-                    <td className="py-3 pr-3 font-medium">{e.name}</td>
-                    <td className="py-3 pr-3 text-kastros-sage">{e.email}</td>
-                    <td className="py-3 pr-3" colSpan={2}>
-                      <form className="space-y-2" action={(fd) => handle(updateEmployee(fd))}>
-                        <input type="hidden" name="id" value={e.id} />
-                        <input name="title" defaultValue={e.title} className="w-full rounded-lg border border-kastros-sand px-2 py-1 text-xs" />
-                        <input name="department" defaultValue={e.department} className="w-full rounded-lg border border-kastros-sand px-2 py-1 text-xs" />
-                        <input name="location" defaultValue={e.location} className="w-full rounded-lg border border-kastros-sand px-2 py-1 text-xs" />
-                        <select name="status" defaultValue={e.status} className="w-full rounded-lg border border-kastros-sand px-2 py-1 text-xs">
-                          <option>Active</option>
-                          <option>On leave</option>
-                          <option>Offboarding</option>
-                        </select>
-                        <input
-                          name="reportsToEmail"
-                          defaultValue={e.reportsToEmail ?? ""}
-                          className="w-full rounded-lg border border-kastros-sand px-2 py-1 text-xs"
-                          placeholder="Manager email"
-                        />
-                        <button type="submit" disabled={pending} className="rounded-lg bg-kastros-forest px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">
-                          Save
-                        </button>
-                      </form>
-                    </td>
-                    <td className="py-3">
-                      <form action={(fd) => handle(deleteEmployee(fd))}>
-                        <input type="hidden" name="id" value={e.id} />
-                        <button type="submit" disabled={pending} className="text-xs font-semibold text-red-700 hover:underline disabled:opacity-50">
-                          Remove
-                        </button>
-                      </form>
-                    </td>
-                  </tr>
-                ) : (
-                  <tr key={e.id} className="text-kastros-ink">
-                    <td className="py-3 pr-3 font-medium">{e.name}</td>
-                    <td className="py-3 pr-3 text-kastros-sage">{e.email}</td>
-                    <td className="py-3 pr-3 text-kastros-sage">
-                      <div>{e.title}</div>
-                      <div className="text-xs">{e.department}</div>
-                    </td>
-                    <td className="py-3 pr-3 text-kastros-sage">
-                      <div>{e.employmentType}</div>
-                      <div className="text-xs">{e.location}</div>
-                    </td>
-                    <td className="py-3 pr-3">
-                      <span className="inline-flex rounded-full bg-kastros-cream px-2 py-0.5 text-xs ring-1 ring-kastros-sand">{e.status}</span>
-                    </td>
-                    <td className="py-3 pr-3 text-xs text-kastros-sage">
-                      <div>DOJ: {e.joiningDate}</div>
-                      <div>Probation end: {e.probationCompletionDate}</div>
-                    </td>
-                    <td className="py-3 text-xs text-kastros-sage">
-                      <div>Company: {e.companyPhone || "—"} | Personal: {e.personalPhone || "—"}</div>
-                      <div>NOK: {e.emergencyContacts[0]?.name ?? "—"} ({e.emergencyContacts[0]?.phone ?? "—"})</div>
-                      <div>
-                        Family COI:{" "}
-                        {e.familyRelations.some((f) => f.linkedToTraderOrMerchandiser)
-                          ? "Potential conflict flagged"
-                          : "No declared links"}
-                      </div>
-                    </td>
-                  </tr>
-                ),
+      <div className="rounded-2xl border border-kastros-sand bg-white p-4 shadow-sm sm:p-5">
+        <form onSubmit={onSearchSubmit} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <label className="block min-w-[min(100%,220px)] flex-1 text-sm">
+            <span className="text-kastros-sage">Find by name</span>
+            <input
+              value={nameInput}
+              onChange={(ev) => setNameInput(ev.target.value)}
+              placeholder="e.g. Elena or rossi"
+              autoComplete="off"
+              className="mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm text-kastros-ink placeholder:text-kastros-sage/70"
+            />
+            <span className="mt-1 block text-xs text-kastros-sage">Matches display name or work email (press Enter or Search).</span>
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="submit"
+              className="rounded-xl bg-kastros-forest px-4 py-2.5 text-sm font-semibold text-white hover:opacity-95"
+            >
+              Search
+            </button>
+            <button
+              type="button"
+              onClick={clearSearch}
+              className="rounded-xl border border-kastros-sand bg-white px-4 py-2.5 text-sm font-semibold text-kastros-forest hover:bg-kastros-cream/50"
+            >
+              Clear
+            </button>
+          </div>
+          <label className="flex flex-col text-sm sm:ml-auto">
+            <span className="text-kastros-sage">Per page</span>
+            <select
+              value={pageSize}
+              onChange={(ev) => {
+                setPageSize(Number(ev.target.value));
+                setPage(1);
+              }}
+              className="mt-1 rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm"
+            >
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+            </select>
+          </label>
+        </form>
+        <p className="mt-4 text-sm text-kastros-sage">
+          {filteredEmployees.length === 0 ? (
+            <>
+              No people match this search.
+              {employees.length > 0 ? (
+                <>
+                  {" "}
+                  (<span className="tabular-nums">{employees.length}</span> in directory.)
+                </>
+              ) : null}
+            </>
+          ) : (
+            <>
+              Showing <span className="tabular-nums font-medium text-kastros-forest">{rangeStart}</span>–
+              <span className="tabular-nums font-medium text-kastros-forest">{rangeEnd}</span> of{" "}
+              <span className="tabular-nums font-medium text-kastros-forest">{filteredEmployees.length}</span>
+              {appliedQuery.trim() ? (
+                <>
+                  {" "}
+                  · matching &quot;{appliedQuery.trim()}&quot;
+                  {filteredEmployees.length < employees.length ? (
+                    <>
+                      {" "}
+                      (<span className="tabular-nums">{employees.length}</span> in full directory)
+                    </>
+                  ) : null}
+                </>
+              ) : (
+                <> in directory</>
               )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+            </>
+          )}
+        </p>
+      </div>
+
+      <div className="space-y-8">
+        {pagedEmployees.map((e) => {
+          const { documents: personDocs, academics: personAcademics, acknowledgements: personAcks } = byEmail(e.email);
+          return (
+            <article
+              key={e.id}
+              className="rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm ring-1 ring-kastros-forest/[0.02]"
+            >
+              <header className="flex flex-col gap-2 border-b border-kastros-sand pb-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="font-display text-xl font-semibold text-kastros-forest">{e.name}</h2>
+                  <p className="mt-0.5 text-sm text-kastros-sage">{e.email}</p>
+                </div>
+                <span className="inline-flex w-fit rounded-full bg-kastros-cream px-3 py-1 text-xs font-medium ring-1 ring-kastros-sand">
+                  {e.status}
+                </span>
+              </header>
+
+              <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                <DetailSection title="Personal & contact">
+                  <Dl
+                    rows={[
+                      { label: "Father's name", value: e.fatherName },
+                      { label: "Company phone", value: e.companyPhone || "—" },
+                      { label: "Personal phone", value: e.personalPhone || "—" },
+                    ]}
+                  />
+                  <div className="mt-4 border-t border-kastros-sand/60 pt-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">Emergency contacts</p>
+                    {e.emergencyContacts.length ? (
+                      <ul className="mt-2 space-y-2 text-sm text-kastros-ink">
+                        {e.emergencyContacts.map((c, i) => (
+                          <li key={`${c.phone}-${i}`} className="rounded-lg bg-white/60 px-2 py-1.5 ring-1 ring-kastros-sand/50">
+                            {c.name} ({c.relation}) — {c.phone}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-2 text-sm text-kastros-sage">None on file.</p>
+                    )}
+                  </div>
+                  <div className="mt-4 border-t border-kastros-sand/60 pt-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">Family / COI declarations</p>
+                    {e.familyRelations.length ? (
+                      <ul className="mt-2 space-y-2 text-sm text-kastros-ink">
+                        {e.familyRelations.map((f, i) => (
+                          <li key={`${f.name}-${i}`} className="rounded-lg bg-white/60 px-2 py-1.5 ring-1 ring-kastros-sand/50">
+                            <span className="font-medium">{f.name}</span> · {f.relation} · {f.firmOrEmployer}
+                            {f.linkedToTraderOrMerchandiser ? (
+                              <span className="ml-2 text-amber-800">(linked to traders / merchandisers)</span>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-2 text-sm text-kastros-sage">None declared.</p>
+                    )}
+                  </div>
+                </DetailSection>
+
+                <DetailSection title="Employment">
+                  <Dl
+                    rows={[
+                      { label: "Title", value: e.title },
+                      { label: "Department", value: e.department },
+                      { label: "Location", value: e.location },
+                      { label: "Employment type", value: e.employmentType },
+                      { label: "Date of joining", value: e.joiningDate },
+                      {
+                        label: "Probation",
+                        value: (
+                          <>
+                            {e.probationMonths} months · ends{" "}
+                            <span className="font-medium text-kastros-forest">{e.probationCompletionDate}</span>
+                          </>
+                        ),
+                      },
+                      { label: "Reports to", value: e.reportsToEmail ?? "—" },
+                    ]}
+                  />
+                </DetailSection>
+
+                <DetailSection title="Education & certifications">
+                  {personAcademics.length ? (
+                    <ul className="space-y-3 text-sm">
+                      {personAcademics.map((a) => (
+                        <li key={a.id} className="rounded-lg bg-white/60 px-3 py-2 ring-1 ring-kastros-sand/50">
+                          <span className="font-medium text-kastros-forest">{a.title}</span>{" "}
+                          <span className="text-kastros-sage">({a.type})</span>
+                          <div className="mt-1 text-xs text-kastros-sage">
+                            {a.institute} · {a.year}
+                            {a.attachmentName ? ` · ${a.attachmentName}` : ""}
+                          </div>
+                          {a.storedRef ? (
+                            <div className="mt-2">
+                              <a
+                                href={`/api/hr-file/${a.storedRef}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm font-semibold text-kastros-forest underline underline-offset-2"
+                              >
+                                View uploaded file
+                              </a>
+                            </div>
+                          ) : a.attachmentName ? (
+                            <p className="mt-2 text-xs text-kastros-sage">Registered file name only — no copy on this server yet.</p>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-kastros-sage">No academic records in the demo store for this person.</p>
+                  )}
+                </DetailSection>
+
+                <DetailSection title="Onboarding & personnel documents">
+                  {personDocs.length ? (
+                    <ul className="space-y-3 text-sm">
+                      {personDocs.map((d) => (
+                        <li key={d.id} className="rounded-lg bg-white/60 px-3 py-2 ring-1 ring-kastros-sand/50">
+                          <span className="font-medium text-kastros-forest">{d.name}</span>
+                          <div className="mt-1 text-xs text-kastros-sage">
+                            {d.sensitivity} · custodian: {d.owner} · registered by {d.createdByEmail}
+                          </div>
+                          {d.storedRef ? (
+                            <div className="mt-2">
+                              <a
+                                href={`/api/hr-file/${d.storedRef}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm font-semibold text-kastros-forest underline underline-offset-2"
+                              >
+                                View file
+                              </a>
+                            </div>
+                          ) : (
+                            <p className="mt-2 text-xs text-kastros-sage">Metadata only — no file stored for this row.</p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-kastros-sage">
+                      No personnel documents linked yet. Use Documents → personnel file to attach items received at arrival.
+                    </p>
+                  )}
+                </DetailSection>
+
+                <DetailSection title="Policy acknowledgements">
+                  {personAcks.length ? (
+                    <ul className="space-y-2 text-sm text-kastros-ink">
+                      {personAcks.map((a) => (
+                        <li key={a.id} className="rounded-lg bg-white/60 px-3 py-2 ring-1 ring-kastros-sand/50">
+                          <span className="font-medium">{policyTitle(policies, a.policyId)}</span>
+                          <span className="text-kastros-sage"> — </span>
+                          {new Date(a.acknowledgedAt).toLocaleString()}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-kastros-sage">No policy acknowledgements recorded for this person yet.</p>
+                  )}
+                </DetailSection>
+              </div>
+
+              {canManage ? (
+                <div className="mt-6 border-t border-kastros-sand pt-5">
+                  <h3 className="text-sm font-semibold text-kastros-forest">HR · quick edit</h3>
+                  <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-start">
+                    <form className="grow space-y-2 rounded-xl border border-kastros-sand bg-kastros-cream/25 p-4" action={(fd) => handle(updateEmployee(fd))}>
+                      <input type="hidden" name="id" value={e.id} />
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <label className="text-xs">
+                          Title
+                          <input name="title" defaultValue={e.title} className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm" />
+                        </label>
+                        <label className="text-xs">
+                          Department
+                          <input name="department" defaultValue={e.department} className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm" />
+                        </label>
+                        <label className="text-xs sm:col-span-2">
+                          Location
+                          <input name="location" defaultValue={e.location} className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm" />
+                        </label>
+                        <label className="text-xs">
+                          Status
+                          <select name="status" defaultValue={e.status} className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm">
+                            <option>Active</option>
+                            <option>On leave</option>
+                            <option>Offboarding</option>
+                          </select>
+                        </label>
+                        <label className="text-xs">
+                          Manager email
+                          <input
+                            name="reportsToEmail"
+                            defaultValue={e.reportsToEmail ?? ""}
+                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
+                            placeholder="optional"
+                          />
+                        </label>
+                      </div>
+                      <button type="submit" disabled={pending} className="rounded-lg bg-kastros-forest px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
+                        Save changes
+                      </button>
+                    </form>
+                    <form action={(fd) => handle(deleteEmployee(fd))}>
+                      <input type="hidden" name="id" value={e.id} />
+                      <button
+                        type="submit"
+                        disabled={pending}
+                        className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50"
+                      >
+                        Remove employee
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+
+      {filteredEmployees.length > 0 && totalPages > 1 ? (
+        <nav
+          className="flex flex-col items-stretch justify-between gap-3 rounded-2xl border border-kastros-sand bg-white px-4 py-4 shadow-sm sm:flex-row sm:items-center sm:px-5"
+          aria-label="People pagination"
+        >
+          <p className="text-sm text-kastros-sage">
+            Page <span className="tabular-nums font-semibold text-kastros-forest">{safePage}</span> of{" "}
+            <span className="tabular-nums font-semibold text-kastros-forest">{totalPages}</span>
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={safePage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="rounded-xl border border-kastros-sand bg-white px-4 py-2 text-sm font-semibold text-kastros-forest disabled:cursor-not-allowed disabled:opacity-40 hover:bg-kastros-cream/50"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={safePage >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="rounded-xl border border-kastros-sand bg-white px-4 py-2 text-sm font-semibold text-kastros-forest disabled:cursor-not-allowed disabled:opacity-40 hover:bg-kastros-cream/50"
+            >
+              Next
+            </button>
+          </div>
+        </nav>
+      ) : null}
     </div>
   );
 }

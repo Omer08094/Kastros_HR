@@ -21,6 +21,7 @@ export default async function DocumentsPage() {
         currentUserEmail={session.email}
         canAdd={canAdd}
         canDelete={canDelete}
+        linkableEmployees={store.employees.map((e) => ({ email: e.email, name: e.name })).sort((a, b) => a.name.localeCompare(b.name))}
       />
     </PageShell>
   );

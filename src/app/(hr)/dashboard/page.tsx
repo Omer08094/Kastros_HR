@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { PageShell } from "@/components/PageShell";
 import { Card } from "@/components/Card";
 import { getSession } from "@/lib/auth";
@@ -29,9 +30,13 @@ export default async function DashboardPage() {
       subtitle={`Signed in as ${ROLE_LABELS[session.role]} · ${session.email}`}
     >
       {probationAlerts.length ? (
-        <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <strong>Probation alert:</strong> {probationAlerts.length} employee(s) are within 10 days of probation completion. HR should trigger confirmation actions.
-        </div>
+        <Link
+          href="/onboarding#probation"
+          className="mb-5 block rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 transition hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-kastros-forest"
+        >
+          <strong>Probation alert:</strong> {probationAlerts.length} employee(s) are within 10 days of probation completion. HR should
+          trigger confirmation actions — <span className="font-semibold underline underline-offset-2">open probation tracker</span>.
+        </Link>
       ) : null}
       <div className="grid gap-5 lg:grid-cols-4">
         <Card eyebrow="People" title="Visible headcount">
@@ -51,6 +56,14 @@ export default async function DashboardPage() {
           <p className="mt-2 text-sm text-kastros-sage">HR admins update statuses.</p>
         </Card>
       </div>
+
+      <Card className="mt-6" eyebrow="Organization overview" title="What Kastros does">
+        <p className="text-sm leading-relaxed text-kastros-sage">
+          Similar to global commodity firms (e.g. LDC-style value-chain narrative), Kastros connects producers to destination
+          markets through sourcing, quality assurance, logistics, and trade execution. This section gives day-1 context for
+          anyone landing on the overview.
+        </p>
+      </Card>
 
       <div className="mt-6 grid gap-5 lg:grid-cols-3">
         <Card className="lg:col-span-2" eyebrow="Next steps" title="Try a realistic flow">

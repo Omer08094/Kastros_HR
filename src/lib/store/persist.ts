@@ -16,11 +16,46 @@ function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
+function normalizeStore(parsed: HrStore): HrStore {
+  const jobApplications = (parsed.jobApplications ?? []).map((a) => ({
+    ...a,
+    linkedIn: a.linkedIn ?? null,
+    currentCompany: a.currentCompany ?? null,
+    yearsExperience: a.yearsExperience ?? null,
+    salaryExpectation: a.salaryExpectation ?? null,
+    noticePeriod: a.noticePeriod ?? null,
+    coverLetter: a.coverLetter ?? null,
+    cvStoredRef: a.cvStoredRef ?? null,
+    cvOriginalName: a.cvOriginalName ?? null,
+  }));
+  return {
+    ...parsed,
+    jobApplications,
+    jobs: (parsed.jobs ?? []).map((j) => {
+      const countFromApps = jobApplications.filter((a) => a.jobId === j.id).length;
+      return {
+        ...j,
+        description: j.description ?? null,
+        applicantCount: countFromApps > 0 ? countFromApps : j.applicantCount ?? 0,
+      };
+    }),
+    documents: (parsed.documents ?? []).map((d) => ({
+      ...d,
+      employeeEmail: d.employeeEmail ?? null,
+      storedRef: d.storedRef ?? null,
+    })),
+    academics: (parsed.academics ?? []).map((a) => ({
+      ...a,
+      storedRef: a.storedRef ?? null,
+    })),
+  };
+}
+
 export async function readStore(): Promise<HrStore> {
   const path = storePath();
   try {
     const raw = await readFile(path, "utf8");
-    return JSON.parse(raw) as HrStore;
+    return normalizeStore(JSON.parse(raw) as HrStore);
   } catch {
     const initial = createInitialStore();
     await mkdir(dirname(path), { recursive: true });

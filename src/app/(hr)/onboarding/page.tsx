@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
 import { Card } from "@/components/Card";
+import { AddTeamMemberForm } from "@/components/hr/AddTeamMemberForm";
 import { getSession } from "@/lib/auth";
 import { ROLE_LABELS } from "@/lib/roles";
 import { readStore } from "@/lib/store/persist";
@@ -16,6 +17,7 @@ export default async function OnboardingPage() {
   const session = await getSession();
   if (!session) redirect("/login");
   const store = await readStore();
+  const canManage = session.role === "hr_admin";
   const upcomingProbation = store.employees.filter((e) => {
     const end = new Date(e.probationCompletionDate);
     const days = Math.ceil((end.getTime() - Date.now()) / (24 * 3600 * 1000));
@@ -55,14 +57,14 @@ export default async function OnboardingPage() {
           ))}
         </ol>
       </Card>
-      <Card className="mt-5" eyebrow="Organization overview" title="What Kastros does (new-hire orientation)">
-        <p className="text-sm leading-relaxed text-kastros-sage">
-          Similar to global commodity firms (e.g. LDC-style value-chain narrative), Kastros connects producers to destination
-          markets through sourcing, quality assurance, logistics, and trade execution. This section is intended as a day-1
-          context module for all new joiners.
-        </p>
-      </Card>
-      <Card className="mt-5" eyebrow="Probation tracker" title="Employees nearing completion (10-day window)">
+
+      {canManage ? (
+        <div className="mt-5">
+          <AddTeamMemberForm />
+        </div>
+      ) : null}
+
+      <Card className="mt-5 scroll-mt-24" eyebrow="Probation tracker" title="Employees nearing completion (10-day window)" id="probation">
         <ul className="space-y-2 text-sm text-kastros-ink">
           {upcomingProbation.length ? (
             upcomingProbation.map((e) => (

@@ -21,6 +21,7 @@ export function DocumentsClient({
   currentUserEmail,
   canAdd,
   canDelete,
+  linkableEmployees = [],
 }: {
   documents: DocumentRow[];
   policies: PolicyManual[];
@@ -28,6 +29,7 @@ export function DocumentsClient({
   currentUserEmail: string;
   canAdd: boolean;
   canDelete: boolean;
+  linkableEmployees?: Array<{ email: string; name: string }>;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -70,6 +72,24 @@ export function DocumentsClient({
                 <option>Restricted</option>
               </select>
             </label>
+            <label className="text-sm sm:col-span-2">
+              <span className="text-kastros-sage">Personnel file (optional)</span>
+              <select
+                name="employeeEmail"
+                className="mt-1 w-full rounded-xl border border-kastros-sand px-3 py-2 text-sm"
+                defaultValue=""
+              >
+                <option value="">Company-wide only (not tied to one person)</option>
+                {linkableEmployees.map((e) => (
+                  <option key={e.email} value={e.email}>
+                    {e.name} · {e.email}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-xs text-kastros-sage">
+                Link scans received at arrival to the right person; they also appear on People.
+              </span>
+            </label>
             <div className="sm:col-span-2">
               <button type="submit" disabled={pending} className="rounded-xl bg-kastros-forest px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
                 {pending ? "Saving…" : "Add document"}
@@ -87,17 +107,37 @@ export function DocumentsClient({
               <div>
                 <p className="font-medium text-kastros-forest">{d.name}</p>
                 <p className="text-xs text-kastros-sage">
-                  {d.owner} · {d.sensitivity} · created by {d.createdByEmail}
+                  {d.employeeEmail ? (
+                    <>
+                      On file for <span className="font-medium text-kastros-forest">{d.employeeEmail}</span>
+                      <span className="text-kastros-sage"> · </span>
+                    </>
+                  ) : (
+                    <>Company library · </>
+                  )}
+                  {d.owner} · {d.sensitivity} · registered by {d.createdByEmail}
                 </p>
               </div>
-              {canDelete ? (
-                <form action={(fd) => handle(deleteDocument(fd))}>
-                  <input type="hidden" name="id" value={d.id} />
-                  <button type="submit" disabled={pending} className="text-xs font-semibold text-red-700 hover:underline disabled:opacity-50">
-                    Delete
-                  </button>
-                </form>
-              ) : null}
+              <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-4">
+                {d.storedRef ? (
+                  <a
+                    href={`/api/hr-file/${d.storedRef}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-semibold text-kastros-forest underline"
+                  >
+                    View file
+                  </a>
+                ) : null}
+                {canDelete ? (
+                  <form action={(fd) => handle(deleteDocument(fd))}>
+                    <input type="hidden" name="id" value={d.id} />
+                    <button type="submit" disabled={pending} className="text-xs font-semibold text-red-700 hover:underline disabled:opacity-50">
+                      Delete
+                    </button>
+                  </form>
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>

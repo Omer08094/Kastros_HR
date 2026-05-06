@@ -5,14 +5,17 @@ export function Card({
   eyebrow,
   children,
   className = "",
+  id,
 }: {
   title?: string;
   eyebrow?: string;
   children: ReactNode;
   className?: string;
+  id?: string;
 }) {
   return (
     <section
+      id={id}
       className={`rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm ring-1 ring-kastros-forest/[0.02] ${className}`}
     >
       {eyebrow ? <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-kastros-gold">{eyebrow}</p> : null}

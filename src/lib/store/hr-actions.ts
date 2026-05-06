@@ -6,12 +6,18 @@ import { getSession } from "@/lib/auth";
 import { mutateStore, readStore } from "@/lib/store/persist";
 import { createInitialStore } from "@/lib/store/seed";
 import { canDecideLeave, isDirectReport, managerMayTouchTraining } from "@/lib/store/policy";
-import type { HrStore, LeaveStatus, PayrollAllowanceType } from "@/lib/store/types";
+import type { HrStore, JobApplication, LeaveStatus, PayrollAllowanceType } from "@/lib/store/types";
+import { deleteStoredFile, deleteStoredFiles, emptyUploadsDir, saveFormDataFile } from "@/lib/uploads";
 
 type ActionResult = { ok: true } | { error: string };
 
 function ok(): ActionResult {
   return { ok: true };
+}
+
+function optionalTrimmedField(formData: FormData, key: string): string | null {
+  const s = String(formData.get(key) ?? "").trim();
+  return s || null;
 }
 
 function audit(store: HrStore, actor: string, action: string): HrStore {
@@ -28,6 +34,7 @@ function probationDate(joiningDate: string, months: number): string {
 export async function resetDemoData(): Promise<ActionResult> {
   const session = await getSession();
   if (!session || session.role !== "hr_admin") return { error: "Only HR admins can reset demo data." };
+  await emptyUploadsDir();
   await mutateStore(() => ({ next: audit(createInitialStore(), session.email, "Reset demo dataset"), result: undefined }));
   revalidatePath("/", "layout");
   return ok();
@@ -56,11 +63,107 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
   const familyRelationFirm = String(formData.get("familyRelationFirm") ?? "").trim();
   const familyLinked = String(formData.get("familyLinked") ?? "no") === "yes";
 
+  const eduTitle = String(formData.get("eduTitle") ?? "").trim();
+  const eduInstitute = String(formData.get("eduInstitute") ?? "").trim();
+  const eduYear = String(formData.get("eduYear") ?? "").trim();
+  const certTitle = String(formData.get("certTitle") ?? "").trim();
+  const certIssuer = String(formData.get("certIssuer") ?? "").trim();
+  const certYear = String(formData.get("certYear") ?? "").trim();
+  const eduFile = formData.get("eduDocument");
+  const certFile = formData.get("certDocument");
+  const eduFallbackName = optionalTrimmedField(formData, "eduAttachmentName");
+  const certFallbackName = optionalTrimmedField(formData, "certAttachmentName");
+
+  const eduAny = !!(
+    eduTitle ||
+    eduInstitute ||
+    eduYear ||
+    eduFallbackName ||
+    (eduFile instanceof File && eduFile.size > 0)
+  );
+  const eduComplete = !!(eduTitle && eduInstitute && eduYear);
+  if (eduAny && !eduComplete) {
+    return { error: "Education: enter degree title, institution, and year together, or leave education fields empty." };
+  }
+
   if (!name || !fatherName || !email || !title || !location || !joiningDate) return { error: "Fill required fields." };
   const probationCompletionDate = probationDate(joiningDate, Number.isFinite(probationMonths) ? probationMonths : 3);
 
+  let eduSaved: Awaited<ReturnType<typeof saveFormDataFile>> = null;
+  let certSaved: Awaited<ReturnType<typeof saveFormDataFile>> = null;
+  try {
+    if (eduFile instanceof File && eduFile.size > 0) {
+      eduSaved = await saveFormDataFile(eduFile);
+    }
+    if (certFile instanceof File && certFile.size > 0) {
+      certSaved = await saveFormDataFile(certFile);
+    }
+  } catch {
+    await deleteStoredFiles([eduSaved?.ref, certSaved?.ref]);
+    return { error: "Could not save uploaded files." };
+  }
+
+  const eduAttachmentName = eduSaved?.originalName ?? eduFallbackName;
+  const certAttachmentName = certSaved?.originalName ?? certFallbackName;
+
   const result = await mutateStore<ActionResult>((store) => {
     if (store.employees.some((e) => e.email.toLowerCase() === email)) return { next: store, result: { error: "Email already exists." } };
+    const newAcademics: HrStore["academics"] = [];
+    const newDocs: HrStore["documents"] = [];
+    const auditExtras: string[] = [];
+
+    if (eduComplete) {
+      newAcademics.push({
+        id: `ac-${randomUUID()}`,
+        employeeEmail: email,
+        type: "Degree",
+        title: eduTitle,
+        institute: eduInstitute,
+        year: eduYear,
+        attachmentName: eduAttachmentName,
+        storedRef: eduSaved?.ref ?? null,
+      });
+      auditExtras.push("education record");
+      if (eduAttachmentName) {
+        newDocs.push({
+          id: `doc-${randomUUID()}`,
+          name: `Education · ${eduTitle} — ${eduAttachmentName}`,
+          owner: "People Ops",
+          sensitivity: "Internal",
+          createdByEmail: session.email,
+          employeeEmail: email,
+          storedRef: eduSaved?.ref ?? null,
+        });
+        auditExtras.push("education document");
+      }
+    }
+
+    if (certTitle) {
+      newAcademics.push({
+        id: `ac-${randomUUID()}`,
+        employeeEmail: email,
+        type: "Certification",
+        title: certTitle,
+        institute: certIssuer || "—",
+        year: certYear || new Date().getFullYear().toString(),
+        attachmentName: certAttachmentName,
+        storedRef: certSaved?.ref ?? null,
+      });
+      auditExtras.push("certification");
+      if (certAttachmentName) {
+        newDocs.push({
+          id: `doc-${randomUUID()}`,
+          name: `Certification · ${certTitle} — ${certAttachmentName}`,
+          owner: "People Ops",
+          sensitivity: "Internal",
+          createdByEmail: session.email,
+          employeeEmail: email,
+          storedRef: certSaved?.ref ?? null,
+        });
+        auditExtras.push("certification document");
+      }
+    }
+
     const next: HrStore = {
       ...store,
       employees: [
@@ -89,13 +192,20 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
           reportsToEmail,
         },
       ],
+      academics: [...newAcademics, ...store.academics],
+      documents: [...newDocs, ...store.documents],
     };
-    return { next: audit(next, session.email, `Created employee ${email}`), result: ok() };
+    const note = auditExtras.length ? ` (${auditExtras.join(", ")})` : "";
+    return { next: audit(next, session.email, `Created employee ${email}${note}`), result: ok() };
   });
-  if ("error" in result) return result;
+  if ("error" in result) {
+    await deleteStoredFiles([eduSaved?.ref, certSaved?.ref]);
+    return result;
+  }
   revalidatePath("/employees");
   revalidatePath("/dashboard");
   revalidatePath("/onboarding");
+  revalidatePath("/documents");
   return ok();
 }
 
@@ -130,13 +240,41 @@ export async function deleteEmployee(formData: FormData): Promise<ActionResult> 
   if (!session || session.role !== "hr_admin") return { error: "Forbidden." };
   const id = String(formData.get("id") ?? "");
   if (!id) return { error: "Missing id." };
+  const snapshot = await readStore();
+  const victim = snapshot.employees.find((e) => e.id === id);
+  if (!victim) return { error: "Not found." };
+  const emailLower = victim.email.toLowerCase();
+  const refSet = new Set<string>();
+  for (const d of snapshot.documents) {
+    if ((d.employeeEmail?.toLowerCase() ?? "") === emailLower && d.storedRef) refSet.add(d.storedRef);
+  }
+  for (const a of snapshot.academics) {
+    if (a.employeeEmail.toLowerCase() === emailLower && a.storedRef) refSet.add(a.storedRef);
+  }
+
   const result = await mutateStore<ActionResult>((store) => {
-    const victim = store.employees.find((e) => e.id === id);
-    if (!victim) return { next: store, result: { error: "Not found." } };
-    return { next: audit({ ...store, employees: store.employees.filter((e) => e.id !== id) }, session.email, `Deleted employee ${victim.email}`), result: ok() };
+    const v2 = store.employees.find((e) => e.id === id);
+    if (!v2) return { next: store, result: { error: "Not found." } };
+    const em = v2.email.toLowerCase();
+    const next: HrStore = {
+      ...store,
+      employees: store.employees.filter((e) => e.id !== id),
+      documents: store.documents.filter((d) => (d.employeeEmail?.toLowerCase() ?? "") !== em),
+      academics: store.academics.filter((a) => a.employeeEmail.toLowerCase() !== em),
+      policyAcknowledgements: store.policyAcknowledgements.filter((a) => a.employeeEmail.toLowerCase() !== em),
+      training: store.training.filter((t) => t.assigneeEmail.toLowerCase() !== em),
+      goals: store.goals.filter((g) => g.ownerEmail.toLowerCase() !== em),
+      reviews: store.reviews.filter((r) => r.employeeEmail.toLowerCase() !== em),
+      payrollEntries: store.payrollEntries.filter((p) => p.employeeEmail.toLowerCase() !== em),
+      leaveRequests: store.leaveRequests.filter((r) => r.requesterEmail.toLowerCase() !== em),
+    };
+    return { next: audit(next, session.email, `Deleted employee ${v2.email}`), result: ok() };
   });
   if ("error" in result) return result;
+  await deleteStoredFiles([...refSet]);
   revalidatePath("/employees");
+  revalidatePath("/dashboard");
+  revalidatePath("/documents");
   return ok();
 }
 
@@ -242,6 +380,7 @@ export async function addAcademicRecord(formData: FormData): Promise<ActionResul
             institute,
             year,
             attachmentName,
+            storedRef: null,
           },
         ],
       },
@@ -336,24 +475,17 @@ export async function createJob(formData: FormData): Promise<ActionResult> {
   const title = String(formData.get("title") ?? "").trim();
   const location = String(formData.get("location") ?? "").trim();
   const stage = String(formData.get("stage") ?? "").trim() || "Applied";
-  const applicantCount = Number(formData.get("applicantCount") ?? "0");
+  const description = String(formData.get("description") ?? "").trim() || null;
   if (!title || !location) return { error: "Fill required fields." };
   await mutateStore((store) => ({
-    next: audit({ ...store, jobs: [{ id: `job-${randomUUID()}`, title, location, stage, applicantCount: Number.isFinite(applicantCount) ? applicantCount : 0 }, ...store.jobs] }, session.email, `Created job ${title}`),
-    result: ok(),
-  }));
-  revalidatePath("/recruiting");
-  return ok();
-}
-
-export async function bumpApplicants(formData: FormData): Promise<ActionResult> {
-  const session = await getSession();
-  if (!session || !["hr_admin", "recruiter"].includes(session.role)) return { error: "Forbidden." };
-  const id = String(formData.get("id") ?? "");
-  const delta = Number(formData.get("delta") ?? "0");
-  if (!id || !Number.isFinite(delta)) return { error: "Invalid." };
-  await mutateStore((store) => ({
-    next: audit({ ...store, jobs: store.jobs.map((j) => (j.id === id ? { ...j, applicantCount: Math.max(0, j.applicantCount + delta) } : j)) }, session.email, `Adjusted applicants for ${id}`),
+    next: audit(
+      {
+        ...store,
+        jobs: [{ id: `job-${randomUUID()}`, title, location, stage, applicantCount: 0, description }, ...store.jobs],
+      },
+      session.email,
+      `Created job ${title}`,
+    ),
     result: ok(),
   }));
   revalidatePath("/recruiting");
@@ -365,12 +497,94 @@ export async function deleteJob(formData: FormData): Promise<ActionResult> {
   if (!session || !["hr_admin", "recruiter"].includes(session.role)) return { error: "Forbidden." };
   const id = String(formData.get("id") ?? "");
   if (!id) return { error: "Missing id." };
+  const storeBefore = await readStore();
+  const refs = storeBefore.jobApplications.filter((a) => a.jobId === id).map((a) => a.cvStoredRef);
   await mutateStore((store) => ({
-    next: audit({ ...store, jobs: store.jobs.filter((j) => j.id !== id) }, session.email, `Deleted job ${id}`),
+    next: audit(
+      {
+        ...store,
+        jobs: store.jobs.filter((j) => j.id !== id),
+        jobApplications: store.jobApplications.filter((a) => a.jobId !== id),
+      },
+      session.email,
+      `Deleted job ${id}`,
+    ),
     result: ok(),
   }));
+  await deleteStoredFiles(refs);
   revalidatePath("/recruiting");
   return ok();
+}
+
+const CV_MAX_BYTES = 5 * 1024 * 1024;
+const CV_TYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
+
+export async function submitJobApplication(formData: FormData): Promise<ActionResult> {
+  const jobId = String(formData.get("jobId") ?? "").trim();
+  const fullName = String(formData.get("fullName") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const phone = String(formData.get("phone") ?? "").trim();
+  const linkedIn = optionalTrimmedField(formData, "linkedIn");
+  const currentCompany = optionalTrimmedField(formData, "currentCompany");
+  const yearsExperience = optionalTrimmedField(formData, "yearsExperience");
+  const salaryExpectation = optionalTrimmedField(formData, "salaryExpectation");
+  const noticePeriod = optionalTrimmedField(formData, "noticePeriod");
+  const coverLetter = optionalTrimmedField(formData, "coverLetter");
+  if (!jobId || !fullName || !email || !phone) return { error: "Please complete all required fields." };
+
+  const file = formData.get("cv");
+  if (!(file instanceof File) || file.size === 0) return { error: "Please upload your CV (PDF or Word)." };
+  if (file.size > CV_MAX_BYTES) return { error: "CV must be 5MB or smaller." };
+  if (file.type && !CV_TYPES.has(file.type)) return { error: "CV must be a PDF or Word document." };
+
+  const saved = await saveFormDataFile(file);
+  if (!saved) return { error: "Could not upload file." };
+
+  const result = await mutateStore<ActionResult>((store) => {
+    const job = store.jobs.find((j) => j.id === jobId);
+    if (!job) {
+      void deleteStoredFile(saved.ref);
+      return { next: store, result: { error: "This role is no longer available." } };
+    }
+
+    const row: JobApplication = {
+      id: `ja-${randomUUID()}`,
+      jobId,
+      fullName,
+      email,
+      phone,
+      linkedIn,
+      currentCompany,
+      yearsExperience,
+      salaryExpectation,
+      noticePeriod,
+      coverLetter,
+      cvStoredRef: saved.ref,
+      cvOriginalName: saved.originalName,
+      submittedAt: new Date().toISOString(),
+    };
+
+    return {
+      next: audit(
+        {
+          ...store,
+          jobApplications: [row, ...store.jobApplications],
+          jobs: store.jobs.map((j) => (j.id === jobId ? { ...j, applicantCount: j.applicantCount + 1 } : j)),
+        },
+        "careers.kastros",
+        `Application: ${fullName} → ${job.title} (${jobId})`,
+      ),
+      result: ok(),
+    };
+  });
+
+  revalidatePath("/recruiting");
+  revalidatePath(`/apply/${jobId}`);
+  return result;
 }
 
 export async function addDocument(formData: FormData): Promise<ActionResult> {
@@ -379,12 +593,42 @@ export async function addDocument(formData: FormData): Promise<ActionResult> {
   const name = String(formData.get("name") ?? "").trim();
   const owner = String(formData.get("owner") ?? "").trim();
   const sensitivity = String(formData.get("sensitivity") ?? "").trim() || "Internal";
+  const employeeEmailRaw = String(formData.get("employeeEmail") ?? "").trim().toLowerCase();
   if (!name || !owner) return { error: "Fill required fields." };
-  await mutateStore((store) => ({
-    next: audit({ ...store, documents: [{ id: `doc-${randomUUID()}`, name, owner, sensitivity, createdByEmail: session.email }, ...store.documents] }, session.email, `Uploaded document metadata: ${name}`),
-    result: ok(),
-  }));
+
+  const result = await mutateStore<ActionResult>((store) => {
+    let employeeEmail: string | null = null;
+    if (employeeEmailRaw) {
+      const match = store.employees.find((e) => e.email.toLowerCase() === employeeEmailRaw);
+      if (!match) return { next: store, result: { error: "Employee email for document link must match a current employee." } };
+      employeeEmail = match.email;
+    }
+    return {
+      next: audit(
+        {
+          ...store,
+          documents: [
+          {
+            id: `doc-${randomUUID()}`,
+            name,
+            owner,
+            sensitivity,
+            createdByEmail: session.email,
+            employeeEmail,
+            storedRef: null,
+          },
+            ...store.documents,
+          ],
+        },
+        session.email,
+        `Uploaded document metadata: ${name}${employeeEmail ? ` (${employeeEmail})` : ""}`,
+      ),
+      result: ok(),
+    };
+  });
+  if ("error" in result) return result;
   revalidatePath("/documents");
+  revalidatePath("/employees");
   return ok();
 }
 
@@ -393,11 +637,15 @@ export async function deleteDocument(formData: FormData): Promise<ActionResult> 
   if (!session || session.role !== "hr_admin") return { error: "Only HR admins can delete documents." };
   const id = String(formData.get("id") ?? "");
   if (!id) return { error: "Missing id." };
+  const snapshot = await readStore();
+  const ref = snapshot.documents.find((d) => d.id === id)?.storedRef ?? null;
   await mutateStore((store) => ({
     next: audit({ ...store, documents: store.documents.filter((d) => d.id !== id) }, session.email, `Deleted document ${id}`),
     result: ok(),
   }));
+  await deleteStoredFile(ref);
   revalidatePath("/documents");
+  revalidatePath("/employees");
   return ok();
 }
 
@@ -425,6 +673,7 @@ export async function acknowledgePolicy(formData: FormData): Promise<ActionResul
     };
   });
   revalidatePath("/documents");
+  revalidatePath("/employees");
   return ok();
 }
 

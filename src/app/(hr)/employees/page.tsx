@@ -24,7 +24,14 @@ export default async function EmployeesPage() {
             : "Directory visibility for your role"
       }
     >
-      <EmployeesClient employees={rows} canManage={canManage} />
+      <EmployeesClient
+        employees={rows}
+        canManage={canManage}
+        documents={store.documents}
+        academics={store.academics}
+        policyAcknowledgements={store.policyAcknowledgements}
+        policies={store.policies}
+      />
     </PageShell>
   );
 }

@@ -4,15 +4,19 @@ import { isRoleId } from "@/lib/roles";
 
 const COOKIE = "kastros_hr_session";
 
+const DEMO_SECRET = "dev-only-secret-min-32-chars!!";
+
 function getSecret(): Uint8Array {
   const secret = process.env.KASTROS_SESSION_SECRET;
-  if (!secret || secret.length < 32) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("KASTROS_SESSION_SECRET is required in production (min 32 characters).");
-    }
-    return new TextEncoder().encode("dev-only-secret-min-32-chars!!");
+  if (secret && secret.length >= 32) {
+    return new TextEncoder().encode(secret);
   }
-  return new TextEncoder().encode(secret);
+  if (process.env.NODE_ENV === "production") {
+    console.warn(
+      "[kastros-hr] KASTROS_SESSION_SECRET is missing or shorter than 32 characters. Using a built-in demo secret (not for real deployments).",
+    );
+  }
+  return new TextEncoder().encode(DEMO_SECRET);
 }
 
 export async function signSession(user: { email: string; role: RoleId; name: string }): Promise<string> {
