@@ -6,6 +6,36 @@ function probationDate(joiningDate: string, months: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
+const JOB_APP_DEFAULTS = {
+  reviewStatus: "submitted" as const,
+  fatherName: null,
+  roleTitle: null,
+  intakeDepartment: null,
+  intakeLocation: null,
+  employmentType: null,
+  intakeJoiningDate: null,
+  intakeProbationMonths: null,
+  companyPhone: null,
+  emergencyContactName: null,
+  emergencyContactRelation: null,
+  emergencyContactPhone: null,
+  familyRelationName: null,
+  familyRelationType: null,
+  familyRelationFirm: null,
+  familyLinked: null,
+  reportsToEmail: null,
+  eduTitle: null,
+  eduInstitute: null,
+  eduYear: null,
+  eduStoredRef: null,
+  eduAttachmentName: null,
+  certTitle: null,
+  certIssuer: null,
+  certYear: null,
+  certStoredRef: null,
+  certAttachmentName: null,
+};
+
 export function createInitialStore(): HrStore {
   return {
     employees: [
@@ -198,6 +228,7 @@ export function createInitialStore(): HrStore {
     ],
     jobApplications: [
       {
+        ...JOB_APP_DEFAULTS,
         id: "ja-1",
         jobId: "job-1",
         fullName: "Alex Morgan",
@@ -214,6 +245,7 @@ export function createInitialStore(): HrStore {
         submittedAt: "2026-05-01T14:22:00.000Z",
       },
       {
+        ...JOB_APP_DEFAULTS,
         id: "ja-2",
         jobId: "job-1",
         fullName: "Samira Khan",
@@ -230,6 +262,7 @@ export function createInitialStore(): HrStore {
         submittedAt: "2026-05-02T09:05:00.000Z",
       },
       {
+        ...JOB_APP_DEFAULTS,
         id: "ja-3",
         jobId: "job-2",
         fullName: "Diego Alvarez",
@@ -246,6 +279,7 @@ export function createInitialStore(): HrStore {
         submittedAt: "2026-04-28T11:40:00.000Z",
       },
       {
+        ...JOB_APP_DEFAULTS,
         id: "ja-4",
         jobId: "job-3",
         fullName: "Ingrid Larsen",
@@ -262,6 +296,7 @@ export function createInitialStore(): HrStore {
         submittedAt: "2026-05-05T08:15:00.000Z",
       },
       {
+        ...JOB_APP_DEFAULTS,
         id: "ja-5",
         jobId: "job-3",
         fullName: "Paul Mensah",
@@ -286,7 +321,9 @@ export function createInitialStore(): HrStore {
         provider: "Internal",
         providerName: "Kastros HR",
         trainingMaterialPptx: "trade-compliance-q2.pptx",
-        attendanceMarked: true,
+        trainingMaterialStoredRef: null,
+        trainingMaterialOriginalName: null,
+        attendedEmails: ["elena.employee@kastros.demo"],
         due: "2026-05-25",
         status: "Required",
       },
@@ -297,7 +334,9 @@ export function createInitialStore(): HrStore {
         provider: "External",
         providerName: "Coursera",
         trainingMaterialPptx: null,
-        attendanceMarked: false,
+        trainingMaterialStoredRef: null,
+        trainingMaterialOriginalName: null,
+        attendedEmails: [],
         due: "2026-06-20",
         status: "Done",
       },
@@ -486,7 +525,7 @@ export function createInitialStore(): HrStore {
       month: "April 2026",
       employeesPaid: 236,
       exceptions: 0,
-      note: "Payroll computed from hours x rate plus allowances where applicable.",
+      note: "Gross = contract base + (hours × rate) + allowances where applicable.",
     },
     payrollEntries: [
       {
@@ -500,7 +539,7 @@ export function createInitialStore(): HrStore {
         ],
         hoursWorked: 168,
         hourlyRate: 12.75,
-        grossPay: 2367,
+        grossPay: 4567,
       },
     ],
     audit: [

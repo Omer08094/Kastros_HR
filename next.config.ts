@@ -37,9 +37,10 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: projectRoot,
   poweredByHeader: false,
   experimental: {
+    optimizePackageImports: ["lucide-react"],
     serverActions: {
-      /** Allow small onboarding document uploads (employee form). */
-      bodySizeLimit: "4mb",
+      /** Onboarding + training decks (pptx/pdf). */
+      bodySizeLimit: "12mb",
     },
   },
   async headers() {

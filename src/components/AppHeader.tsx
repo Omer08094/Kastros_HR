@@ -1,6 +1,7 @@
-import { Bell, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { headers } from "next/headers";
 import { signOut } from "@/app/(hr)/actions";
+import { HeaderNotifications } from "@/components/HeaderNotifications";
 import { ROLE_LABELS } from "@/lib/roles";
 import type { RoleId } from "@/lib/roles";
 import { isRoleId } from "@/lib/roles";
@@ -24,14 +25,7 @@ export async function AppHeader({ title, subtitle }: { title: string; subtitle?:
             {ROLE_LABELS[role as RoleId]}
           </span>
         ) : null}
-        <button
-          type="button"
-          className="relative hidden rounded-xl border border-kastros-sand bg-white p-2.5 text-kastros-sage shadow-sm transition hover:border-kastros-mist hover:text-kastros-forest sm:inline-flex"
-          aria-label="Notifications"
-        >
-          <Bell className="h-4 w-4" />
-          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-kastros-gold ring-2 ring-white" />
-        </button>
+        <HeaderNotifications userEmail={user} role={role} />
         <details className="relative">
           <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl border border-kastros-sand bg-white py-1.5 pl-3 pr-2 text-sm shadow-sm marker:hidden [&::-webkit-details-marker]:hidden">
             <span className="hidden max-w-[10rem] truncate text-kastros-ink sm:inline">{name}</span>

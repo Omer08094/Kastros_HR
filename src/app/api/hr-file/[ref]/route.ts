@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getSession } from "@/lib/auth";
 import { readStore } from "@/lib/store/persist";
-import { visibleEmployees } from "@/lib/store/policy";
+import { visibleEmployees, visibleTraining } from "@/lib/store/policy";
 import { uploadsDir } from "@/lib/uploads";
 
 type FileMeta = { originalName: string; contentType: string };
@@ -18,9 +18,13 @@ export async function GET(_req: Request, context: { params: Promise<{ ref: strin
   const doc = store.documents.find((d) => d.storedRef === ref);
   const ac = store.academics.find((a) => a.storedRef === ref);
   const appCv = store.jobApplications.find((a) => a.cvStoredRef === ref);
-  if (!doc && !ac && !appCv) return new Response("Not found", { status: 404 });
+  const trainingRow = store.training.find((t) => t.trainingMaterialStoredRef === ref);
+  if (!doc && !ac && !appCv && !trainingRow) return new Response("Not found", { status: 404 });
 
-  if (appCv) {
+  if (trainingRow) {
+    const allowed = visibleTraining(store, session).some((t) => t.id === trainingRow.id);
+    if (!allowed) return new Response("Forbidden", { status: 403 });
+  } else if (appCv) {
     if (!["hr_admin", "recruiter", "ceo"].includes(session.role)) {
       return new Response("Forbidden", { status: 403 });
     }

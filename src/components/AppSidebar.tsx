@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { memo } from "react";
 import { mainNav } from "@/lib/nav";
 
-export function AppSidebar({
+export const AppSidebar = memo(function AppSidebar({
   allowedHrefs,
   userEmail,
   userName,
@@ -66,4 +67,4 @@ export function AppSidebar({
       </div>
     </aside>
   );
-}
+});

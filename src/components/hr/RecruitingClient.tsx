@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { Card } from "@/components/Card";
 import type { JobApplication, JobPosting } from "@/lib/store/types";
-import { createJob, deleteJob } from "@/lib/store/hr-actions";
+import { approveJobApplication, createJob, deleteJob } from "@/lib/store/hr-actions";
 
 type ActionResult = { ok: true } | { error: string };
 
@@ -24,21 +24,23 @@ function formatSubmitted(iso: string) {
   }
 }
 
-function ApplicantsTable({ apps }: { apps: JobApplication[] }) {
+function ApplicantsTable({ apps, canMutate }: { apps: JobApplication[]; canMutate: boolean }) {
   if (apps.length === 0) {
     return <p className="text-sm text-kastros-sage">No submissions yet for this role.</p>;
   }
 
   return (
     <div className="mt-3 overflow-x-auto rounded-lg border border-kastros-sand/80 bg-white/80">
-      <table className="w-full min-w-[36rem] text-left text-sm">
+      <table className="w-full min-w-[52rem] text-left text-sm">
         <thead>
           <tr className="border-b border-kastros-sand text-xs uppercase tracking-wide text-kastros-sage">
             <th className="px-3 py-2.5 pr-3 font-medium">Name</th>
             <th className="px-3 py-2.5 pr-3 font-medium">Email</th>
             <th className="px-3 py-2.5 pr-3 font-medium">Phone</th>
             <th className="px-3 py-2.5 pr-3 font-medium">Submitted</th>
-            <th className="px-3 py-2.5 font-medium">CV</th>
+            <th className="px-3 py-2.5 pr-3 font-medium">CV</th>
+            <th className="px-3 py-2.5 pr-3 font-medium">Status</th>
+            {canMutate ? <th className="px-3 py-2.5 font-medium">Actions</th> : null}
           </tr>
         </thead>
         <tbody className="divide-y divide-kastros-sand text-kastros-ink">
@@ -92,6 +94,45 @@ function ApplicantsTable({ apps }: { apps: JobApplication[] }) {
                   <span className="text-kastros-sage">—</span>
                 )}
               </td>
+              <td className="px-3 py-2.5 pr-3 align-top">
+                <span
+                  className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                    a.reviewStatus === "approved"
+                      ? "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-100"
+                      : "bg-white text-kastros-sage ring-1 ring-kastros-sand"
+                  }`}
+                >
+                  {a.reviewStatus === "approved" ? "Approved" : "Submitted"}
+                </span>
+              </td>
+              {canMutate ? (
+                <td className="px-3 py-2.5 align-top">
+                  <div className="flex flex-col gap-2">
+                    {a.reviewStatus !== "approved" ? (
+                      <form
+                        action={async (fd) => {
+                          await approveJobApplication(fd);
+                        }}
+                      >
+                        <input type="hidden" name="id" value={a.id} />
+                        <button
+                          type="submit"
+                          className="rounded-lg bg-kastros-forest px-3 py-1.5 text-xs font-semibold text-white hover:opacity-95"
+                        >
+                          Approve
+                        </button>
+                      </form>
+                    ) : (
+                      <Link
+                        href={`/onboarding?applicationId=${encodeURIComponent(a.id)}`}
+                        className="inline-flex justify-center rounded-lg border border-kastros-gold/40 bg-kastros-cream px-3 py-1.5 text-center text-xs font-semibold text-kastros-forest hover:bg-kastros-cream/80"
+                      >
+                        Onboard
+                      </Link>
+                    )}
+                  </div>
+                </td>
+              ) : null}
             </tr>
           ))}
         </tbody>
@@ -272,7 +313,7 @@ export function RecruitingClient({
                       Open application portal
                     </Link>
                   </div>
-                  <ApplicantsTable apps={apps} />
+                  <ApplicantsTable apps={apps} canMutate={canMutate} />
                 </div>
               );
             })}

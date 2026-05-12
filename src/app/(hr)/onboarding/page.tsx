@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
+import type { EmployeeIntakeDefaults } from "@/components/hr/employee-intake-fields";
 import { PageShell } from "@/components/PageShell";
 import { Card } from "@/components/Card";
 import { AddTeamMemberForm } from "@/components/hr/AddTeamMemberForm";
+import { mapJobApplicationToOnboardingDefaults } from "@/lib/job-application-onboarding";
 import { getSession } from "@/lib/auth";
 import { ROLE_LABELS } from "@/lib/roles";
 import { readStore } from "@/lib/store/persist";
@@ -13,16 +15,32 @@ const steps = [
   { title: "Desk orientation & markets intro", owner: "Manager", state: "Scheduled" as const },
 ];
 
-export default async function OnboardingPage() {
+type PageProps = { searchParams: Promise<{ applicationId?: string }> };
+
+export default async function OnboardingPage({ searchParams }: PageProps) {
   const session = await getSession();
   if (!session) redirect("/login");
+  const sp = await searchParams;
   const store = await readStore();
-  const canManage = session.role === "hr_admin";
+  const canAddTeamMember = session.role === "hr_admin" || session.role === "recruiter";
   const upcomingProbation = store.employees.filter((e) => {
     const end = new Date(e.probationCompletionDate);
     const days = Math.ceil((end.getTime() - Date.now()) / (24 * 3600 * 1000));
     return days >= 0 && days <= 10;
   });
+
+  let applicationDraft: EmployeeIntakeDefaults | undefined;
+  let draftBanner: "ok" | "missing" | null = null;
+  if (canAddTeamMember && sp.applicationId) {
+    const app = store.jobApplications.find((x) => x.id === sp.applicationId);
+    const job = app ? store.jobs.find((j) => j.id === app.jobId) : undefined;
+    if (app && job && app.reviewStatus === "approved") {
+      applicationDraft = mapJobApplicationToOnboardingDefaults(app, job);
+      draftBanner = "ok";
+    } else {
+      draftBanner = "missing";
+    }
+  }
 
   return (
     <PageShell title="Onboarding" subtitle={`Playbook visibility for ${ROLE_LABELS[session.role]}`}>
@@ -58,9 +76,21 @@ export default async function OnboardingPage() {
         </ol>
       </Card>
 
-      {canManage ? (
-        <div className="mt-5">
-          <AddTeamMemberForm />
+      {canAddTeamMember ? (
+        <div className="mt-5 space-y-4">
+          {draftBanner === "ok" && applicationDraft?.email ? (
+            <div className="rounded-xl border border-kastros-gold/35 bg-kastros-cream/90 px-4 py-3 text-sm text-kastros-forest ring-1 ring-kastros-gold/20">
+              Prefilled from an <strong>approved</strong> application ({applicationDraft.email}). Review the fields and click{" "}
+              <strong>Create employee</strong> — education files from the portal are not copied; re-attach if needed.
+            </div>
+          ) : null}
+          {draftBanner === "missing" ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              Could not load application <code className="rounded bg-white px-1 text-xs">{sp.applicationId}</code>. Approve the candidate in{" "}
+              <strong>Recruiting</strong> first, then use <strong>Onboard</strong>.
+            </div>
+          ) : null}
+          <AddTeamMemberForm defaults={applicationDraft} />
         </div>
       ) : null}
 

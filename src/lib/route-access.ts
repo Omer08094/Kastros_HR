@@ -5,7 +5,7 @@ import type { RoleId } from "@/lib/roles";
 export const ROUTE_ACCESS: Record<string, RoleId[]> = {
   "/dashboard": ["employee", "manager", "recruiter", "hr_admin", "payroll", "security_admin", "ceo"],
   "/employees": ["manager", "recruiter", "hr_admin", "payroll", "ceo"],
-  "/onboarding": ["manager", "hr_admin", "ceo"],
+  "/onboarding": ["manager", "recruiter", "hr_admin", "ceo"],
   "/org": ["manager", "recruiter", "hr_admin", "payroll", "ceo"],
   "/recruiting": ["recruiter", "hr_admin"],
   "/leave": ["employee", "manager", "hr_admin", "ceo"],

@@ -4,6 +4,22 @@ import { randomUUID } from "node:crypto";
 
 export type SavedUpload = { ref: string; originalName: string; contentType: string };
 
+/** PPTX/PDF training decks only; validated by extension (browser MIME is often missing). */
+const TRAINING_UPLOAD_EXT = /\.(pdf|pptx|ppt)$/i;
+
+export function isAllowedTrainingMaterialFile(file: File): boolean {
+  if (!(file instanceof File) || file.size === 0) return false;
+  return TRAINING_UPLOAD_EXT.test(file.name || "");
+}
+
+/** Library / personnel scans: common office formats. */
+const LIBRARY_DOC_EXT = /\.(pdf|doc|docx|ppt|pptx|png|jpe?g|webp)$/i;
+
+export function isAllowedLibraryDocumentFile(file: File): boolean {
+  if (!(file instanceof File) || file.size === 0) return false;
+  return LIBRARY_DOC_EXT.test(file.name || "");
+}
+
 export function uploadsDir(): string {
   return join(process.cwd(), "data", "uploads");
 }

@@ -59,6 +59,8 @@ export type JobPosting = {
   description: string | null;
 };
 
+export type JobApplicationReviewStatus = "submitted" | "approved";
+
 export type JobApplication = {
   id: string;
   jobId: string;
@@ -75,6 +77,35 @@ export type JobApplication = {
   cvStoredRef: string | null;
   cvOriginalName: string | null;
   submittedAt: string;
+  /** Recruiting workflow — only approved candidates should use Onboard → prefilled form */
+  reviewStatus: JobApplicationReviewStatus;
+  /** Snapshot of applicant answers matching Add team member fields */
+  fatherName: string | null;
+  roleTitle: string | null;
+  intakeDepartment: string | null;
+  intakeLocation: string | null;
+  employmentType: EmploymentType | null;
+  intakeJoiningDate: string | null;
+  intakeProbationMonths: number | null;
+  companyPhone: string | null;
+  emergencyContactName: string | null;
+  emergencyContactRelation: string | null;
+  emergencyContactPhone: string | null;
+  familyRelationName: string | null;
+  familyRelationType: string | null;
+  familyRelationFirm: string | null;
+  familyLinked: boolean | null;
+  reportsToEmail: string | null;
+  eduTitle: string | null;
+  eduInstitute: string | null;
+  eduYear: string | null;
+  eduStoredRef: string | null;
+  eduAttachmentName: string | null;
+  certTitle: string | null;
+  certIssuer: string | null;
+  certYear: string | null;
+  certStoredRef: string | null;
+  certAttachmentName: string | null;
 };
 
 export type TrainingRow = {
@@ -83,8 +114,13 @@ export type TrainingRow = {
   name: string;
   provider: "Internal" | "External";
   providerName: string;
+  /** Optional label when no file is uploaded (legacy / display only). */
   trainingMaterialPptx: string | null;
-  attendanceMarked: boolean;
+  /** Binary under data/uploads/{ref}; view via /api/hr-file/{ref} */
+  trainingMaterialStoredRef: string | null;
+  trainingMaterialOriginalName: string | null;
+  /** Employees who attended (HR-marked session attendance). */
+  attendedEmails: string[];
   due: string;
   status: "Required" | "Done";
 };

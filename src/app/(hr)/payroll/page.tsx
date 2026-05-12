@@ -9,11 +9,15 @@ export default async function PayrollPage() {
   if (!session) redirect("/login");
 
   const store = await readStore();
-  const canEdit = session.role === "hr_admin" || session.role === "payroll";
-
   return (
-    <PageShell title="Payroll" subtitle="Base salary + multi-allowance + hours x rate payroll formula">
-      <PayrollClient snapshot={store.payroll} entries={store.payrollEntries} employees={store.employees} canEdit={canEdit} />
+    <PageShell title="Payroll" subtitle="HR Admin · CEO · payslips & ledger · Payroll specialists read-only">
+      <PayrollClient
+        snapshot={store.payroll}
+        entries={store.payrollEntries}
+        employees={store.employees}
+        canManage={session.role === "hr_admin" || session.role === "ceo"}
+        canViewSlips={session.role === "hr_admin" || session.role === "ceo" || session.role === "payroll"}
+      />
     </PageShell>
   );
 }

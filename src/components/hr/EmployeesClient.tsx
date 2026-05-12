@@ -9,7 +9,9 @@ import type {
   PolicyAcknowledgement,
   PolicyManual,
 } from "@/lib/store/types";
-import { deleteEmployee, updateEmployee } from "@/lib/store/hr-actions";
+import { deleteEmployee, deleteDocument, updateEmployee } from "@/lib/store/hr-actions";
+import { AppointmentLetterDialog } from "@/components/hr/AppointmentLetterDialog";
+import { CorporateCardDialog } from "@/components/hr/CorporateCardDialog";
 
 type ActionResult = { ok: true } | { error: string };
 
@@ -68,6 +70,8 @@ export function EmployeesClient({
   const [appliedQuery, setAppliedQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
+  const [letterFor, setLetterFor] = useState<Employee | null>(null);
+  const [cardFor, setCardFor] = useState<Employee | null>(null);
 
   const filteredEmployees = useMemo(() => {
     const q = appliedQuery.trim().toLowerCase();
@@ -134,8 +138,8 @@ export function EmployeesClient({
       ) : null}
 
       <p className="text-sm text-kastros-sage">
-        Each profile shows core HR data, emergency and family disclosures, qualifications, onboarding documents on file, and policy
-        acknowledgements. Register new scans under Documents and attach them to the correct personnel file.
+        Each profile lists personnel documents below (click a row to open the file). Company-wide notices live under Documents · Company
+        library. Register personnel files from Documents → Register a document (personnel file).
       </p>
 
       <div className="rounded-2xl border border-kastros-sand bg-white p-4 shadow-sm sm:p-5">
@@ -231,9 +235,25 @@ export function EmployeesClient({
                   <h2 className="font-display text-xl font-semibold text-kastros-forest">{e.name}</h2>
                   <p className="mt-0.5 text-sm text-kastros-sage">{e.email}</p>
                 </div>
-                <span className="inline-flex w-fit rounded-full bg-kastros-cream px-3 py-1 text-xs font-medium ring-1 ring-kastros-sand">
-                  {e.status}
-                </span>
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setLetterFor(e)}
+                    className="rounded-xl border border-kastros-gold/35 bg-kastros-cream/80 px-3 py-1.5 text-xs font-semibold text-kastros-forest shadow-sm ring-1 ring-kastros-gold/20 hover:bg-kastros-cream"
+                  >
+                    Appointment letter
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCardFor(e)}
+                    className="rounded-xl border border-kastros-sand bg-white px-3 py-1.5 text-xs font-semibold text-kastros-forest shadow-sm hover:bg-kastros-cream/60"
+                  >
+                    Corporate card
+                  </button>
+                  <span className="inline-flex w-fit rounded-full bg-kastros-cream px-3 py-1 text-xs font-medium ring-1 ring-kastros-sand">
+                    {e.status}
+                  </span>
+                </div>
               </header>
 
               <div className="mt-5 grid gap-4 lg:grid-cols-2">
@@ -333,35 +353,53 @@ export function EmployeesClient({
                   )}
                 </DetailSection>
 
-                <DetailSection title="Onboarding & personnel documents">
+                <DetailSection title="Personnel documents">
                   {personDocs.length ? (
                     <ul className="space-y-3 text-sm">
                       {personDocs.map((d) => (
-                        <li key={d.id} className="rounded-lg bg-white/60 px-3 py-2 ring-1 ring-kastros-sand/50">
-                          <span className="font-medium text-kastros-forest">{d.name}</span>
-                          <div className="mt-1 text-xs text-kastros-sage">
-                            {d.sensitivity} · custodian: {d.owner} · registered by {d.createdByEmail}
-                          </div>
+                        <li key={d.id} className="rounded-lg bg-white/60 ring-1 ring-kastros-sand/50">
                           {d.storedRef ? (
-                            <div className="mt-2">
-                              <a
-                                href={`/api/hr-file/${d.storedRef}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm font-semibold text-kastros-forest underline underline-offset-2"
-                              >
-                                View file
-                              </a>
-                            </div>
+                            <a
+                              href={`/api/hr-file/${d.storedRef}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block rounded-lg px-3 py-2 transition hover:bg-kastros-cream/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-kastros-forest"
+                            >
+                              <span className="font-medium text-kastros-forest">{d.name}</span>
+                              <span className="ml-2 text-xs font-semibold text-kastros-gold">Open attachment →</span>
+                              <div className="mt-1 text-xs text-kastros-sage">
+                                {d.sensitivity} · custodian: {d.owner} · registered by {d.createdByEmail}
+                              </div>
+                            </a>
                           ) : (
-                            <p className="mt-2 text-xs text-kastros-sage">Metadata only — no file stored for this row.</p>
+                            <div className="px-3 py-2">
+                              <span className="font-medium text-kastros-forest">{d.name}</span>
+                              <div className="mt-1 text-xs text-kastros-sage">
+                                {d.sensitivity} · custodian: {d.owner}
+                              </div>
+                              <p className="mt-2 text-xs text-kastros-sage">No file uploaded — registry entry only.</p>
+                            </div>
                           )}
+                          {canManage ? (
+                            <div className="border-t border-kastros-sand/60 px-3 py-2">
+                              <form action={(fd) => handle(deleteDocument(fd))}>
+                                <input type="hidden" name="id" value={d.id} />
+                                <button
+                                  type="submit"
+                                  disabled={pending}
+                                  className="text-xs font-semibold text-red-700 hover:underline disabled:opacity-50"
+                                >
+                                  Remove document record
+                                </button>
+                              </form>
+                            </div>
+                          ) : null}
                         </li>
                       ))}
                     </ul>
                   ) : (
                     <p className="text-sm text-kastros-sage">
-                      No personnel documents linked yet. Use Documents → personnel file to attach items received at arrival.
+                      No personnel documents linked yet. Register with a personnel file attachment on Documents, or uploads from onboarding.
                     </p>
                   )}
                 </DetailSection>
@@ -471,6 +509,17 @@ export function EmployeesClient({
           </div>
         </nav>
       ) : null}
+
+      {letterFor ? (
+        <AppointmentLetterDialog
+          open
+          employee={letterFor}
+          roster={employees}
+          onClose={() => setLetterFor(null)}
+        />
+      ) : null}
+
+      {cardFor ? <CorporateCardDialog open employee={cardFor} onClose={() => setCardFor(null)} /> : null}
     </div>
   );
 }

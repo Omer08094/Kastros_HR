@@ -13,7 +13,7 @@ export default async function DocumentsPage() {
   const canDelete = session.role === "hr_admin";
 
   return (
-    <PageShell title="Documents" subtitle="Scanned records + policy manual acknowledgements">
+    <PageShell title="Documents" subtitle="Company notices, shared library, and policy acknowledgements">
       <DocumentsClient
         documents={store.documents}
         policies={store.policies}
