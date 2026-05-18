@@ -10,7 +10,7 @@ export default async function RecruitingPage() {
   if (!session) redirect("/login");
 
   const store = await readStore();
-  const canMutate = session.role === "hr_admin" || session.role === "recruiter";
+  const canMutate = session.role === "hr_admin" || session.role === "ceo";
 
   const headersList = await headers();
   const host = headersList.get("host") ?? "localhost:3000";

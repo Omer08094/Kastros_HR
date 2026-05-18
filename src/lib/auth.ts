@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { cache } from "react";
-import { sessionCookieName, verifySession } from "@/lib/session";
+import { sessionCookieName } from "@/lib/session";
+import { verifySession } from "@/lib/session-server";
 import type { RoleId } from "@/lib/roles";
 
 export type Session = {

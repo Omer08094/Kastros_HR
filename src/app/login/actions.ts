@@ -3,16 +3,51 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { authenticate } from "@/lib/demo-accounts";
-import { sessionCookieName, signSession } from "@/lib/session";
+import type { RoleId } from "@/lib/roles";
+import { sessionCookieName } from "@/lib/session";
+import { signSession } from "@/lib/session-server";
 
 export type SignInState = { error?: string };
 
-export async function signIn(_prev: SignInState, formData: FormData): Promise<SignInState> {
+export async function verifyFirebaseToken(idToken: string): Promise<SignInState | void> {
+  try {
+    const { getAuth } = await import("firebase-admin/auth");
+    const auth = getAuth();
+    
+    // Verify the ID token passed from the client
+    const decoded = await auth.verifyIdToken(idToken);
+    const email = decoded.email;
+    if (!email) return { error: "No email associated with this account." };
+
+    // Use custom claim 'role' if present, otherwise default to employee
+    const role = (decoded.role as RoleId) || "employee";
+    const name = (decoded.name as string) || (decoded.display_name as string) || email;
+
+    // Create a local signed session JWT that can be verified in Edge Runtime (middleware)
+    const token = await signSession({ email, role, name });
+    
+    const jar = await cookies();
+    const isProd = process.env.NODE_ENV === "production";
+
+    jar.set(sessionCookieName, token, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: "strict",
+      path: "/",
+      maxAge: 60 * 60 * 8, // 8 hours
+    });
+  } catch (e: any) {
+    return { error: `Authentication failed: ${e.message}` };
+  }
+  redirect("/dashboard");
+}
+
+export async function signInDemo(formData: FormData): Promise<SignInState> {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
   if (!email || !password) {
-    return { error: "Enter your work email and password." };
+    return { error: "Enter your email and password." };
   }
 
   const user = authenticate(email, password);

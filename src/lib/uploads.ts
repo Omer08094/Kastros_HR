@@ -1,6 +1,7 @@
-import { mkdir, readdir, unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { randomUUID } from "node:crypto";
+import { mkdir, readdir, unlink, writeFile } from "fs/promises";
+import { join } from "path";
+import { randomUUID } from "crypto";
+import { storage } from "@/lib/firebase-admin";
 
 export type SavedUpload = { ref: string; originalName: string; contentType: string };
 
@@ -26,21 +27,52 @@ export function uploadsDir(): string {
 
 export async function saveFormDataFile(file: File): Promise<SavedUpload | null> {
   if (!(file instanceof File) || file.size === 0) return null;
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error(`File "${file.name || 'uploaded file'}" exceeds the 10MB size limit.`);
+  }
   const ref = randomUUID();
-  const dir = uploadsDir();
-  await mkdir(dir, { recursive: true });
-  const buf = Buffer.from(await file.arrayBuffer());
-  await writeFile(join(dir, ref), buf);
   const meta = {
     originalName: file.name || "document",
     contentType: file.type || "application/octet-stream",
   };
+  const buf = Buffer.from(await file.arrayBuffer());
+
+  if (storage) {
+    try {
+      const bucket = storage.bucket();
+      const fileRef = bucket.file(`uploads/${ref}`);
+      await fileRef.save(buf, {
+        metadata: {
+          contentType: meta.contentType,
+          metadata: { originalName: meta.originalName },
+        },
+      });
+      return { ref, ...meta };
+    } catch (e) {
+      console.error("[kastros-hr] Firebase Storage upload failed, falling back to local file.", e);
+    }
+  }
+
+  const dir = uploadsDir();
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, ref), buf);
   await writeFile(join(dir, `${ref}.meta.json`), JSON.stringify(meta), "utf8");
   return { ref, ...meta };
 }
 
 export async function deleteStoredFile(ref: string | null | undefined): Promise<void> {
   if (!ref || !/^[0-9a-f-]{36}$/i.test(ref)) return;
+  
+  if (storage) {
+    try {
+      const bucket = storage.bucket();
+      await bucket.file(`uploads/${ref}`).delete({ ignoreNotFound: true });
+      return;
+    } catch (e) {
+      console.error("[kastros-hr] Firebase Storage delete failed.", e);
+    }
+  }
+
   const dir = uploadsDir();
   await unlink(join(dir, ref)).catch(() => {});
   await unlink(join(dir, `${ref}.meta.json`)).catch(() => {});

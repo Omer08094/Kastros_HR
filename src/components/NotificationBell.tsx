@@ -28,7 +28,7 @@ function writeSeen(email: string, ids: Set<string>) {
 }
 
 const STRIPE: Record<HrNotificationKind, string> = {
-  approval: "bg-kastros-gold",
+  approval: "bg-kastros-brandGreen",
   recruiting: "bg-violet-500",
   learning: "bg-sky-500",
   policy: "bg-amber-600",
@@ -87,7 +87,7 @@ export function NotificationBell({
         {hydrated && unseenCount > 0 ? (
           <span
             aria-hidden
-            className="absolute right-2 top-2 h-2 w-2 rounded-full bg-kastros-gold ring-2 ring-white"
+            className="absolute right-2 top-2 h-2 w-2 rounded-full bg-kastros-brandGreen ring-2 ring-white"
           />
         ) : null}
       </summary>

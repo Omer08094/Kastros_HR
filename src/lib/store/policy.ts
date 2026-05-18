@@ -1,5 +1,5 @@
 import type { Session } from "@/lib/auth";
-import type { RoleId } from "@/lib/roles";
+import { hasExecAccess, type RoleId } from "@/lib/roles";
 import type { Employee, HrStore } from "@/lib/store/types";
 
 export function isDirectReport(store: HrStore, managerEmail: string, employeeEmail: string): boolean {
@@ -8,77 +8,40 @@ export function isDirectReport(store: HrStore, managerEmail: string, employeeEma
 }
 
 export function visibleEmployees(store: HrStore, session: Session): Employee[] {
-  if (session.role === "hr_admin" || session.role === "recruiter" || session.role === "payroll" || session.role === "ceo") {
-    return store.employees;
-  }
-  if (session.role === "manager") {
-    const self = store.employees.filter((e) => e.email.toLowerCase() === session.email.toLowerCase());
-    const team = store.employees.filter((e) => e.reportsToEmail?.toLowerCase() === session.email.toLowerCase());
-    return [...self, ...team].sort((a, b) => a.name.localeCompare(b.name));
-  }
+  if (hasExecAccess(session.role)) return store.employees;
   return store.employees.filter((e) => e.email.toLowerCase() === session.email.toLowerCase());
 }
 
 export function visibleLeaveRequests(store: HrStore, session: Session) {
-  if (session.role === "hr_admin" || session.role === "ceo") return store.leaveRequests;
-  if (session.role === "manager") {
-    return store.leaveRequests.filter(
-      (r) =>
-        r.requesterEmail.toLowerCase() === session.email.toLowerCase() ||
-        isDirectReport(store, session.email, r.requesterEmail),
-    );
-  }
+  if (hasExecAccess(session.role)) return store.leaveRequests;
   return store.leaveRequests.filter((r) => r.requesterEmail.toLowerCase() === session.email.toLowerCase());
 }
 
-export function canDecideLeave(store: HrStore, session: Session, requesterEmail: string): boolean {
-  if (session.role === "hr_admin") return true;
-  if (session.role === "ceo") return true;
-  if (session.role === "manager") return isDirectReport(store, session.email, requesterEmail);
-  return false;
+export function canDecideLeave(_store: HrStore, session: Session, _requesterEmail: string): boolean {
+  return hasExecAccess(session.role);
 }
 
 export function visibleGoals(store: HrStore, session: Session) {
-  if (session.role === "hr_admin" || session.role === "ceo") return store.goals;
-  if (session.role === "manager") {
-    const emails = new Set(visibleEmployees(store, session).map((e) => e.email.toLowerCase()));
-    return store.goals.filter((g) => emails.has(g.ownerEmail.toLowerCase()));
-  }
+  if (hasExecAccess(session.role)) return store.goals;
   return store.goals.filter((g) => g.ownerEmail.toLowerCase() === session.email.toLowerCase());
 }
 
 export function visibleTraining(store: HrStore, session: Session) {
-  if (session.role === "hr_admin" || session.role === "ceo") return store.training;
-  if (session.role === "manager") {
-    const emails = new Set(visibleEmployees(store, session).map((e) => e.email.toLowerCase()));
-    return store.training.filter((t) => emails.has(t.assigneeEmail.toLowerCase()));
-  }
+  if (hasExecAccess(session.role)) return store.training;
   return store.training.filter((t) => t.assigneeEmail.toLowerCase() === session.email.toLowerCase());
 }
 
 export function canMutateTrainingRow(session: Session, assigneeEmail: string): boolean {
-  if (session.role === "hr_admin") return true;
-  if (session.role === "manager" && assigneeEmail.toLowerCase() !== session.email.toLowerCase()) {
-    return true; // manager updating team row - caller must verify team in action
-  }
+  if (hasExecAccess(session.role)) return true;
   return assigneeEmail.toLowerCase() === session.email.toLowerCase();
 }
 
-export function managerMayTouchTraining(store: HrStore, session: Session, assigneeEmail: string): boolean {
-  if (session.role !== "manager") return false;
-  if (assigneeEmail.toLowerCase() === session.email.toLowerCase()) return true;
-  return isDirectReport(store, session.email, assigneeEmail);
+export function roleBadge(role: RoleId): string {
+  return ROLE_LABELS_INTERNAL[role];
 }
 
-export function roleBadge(role: RoleId): string {
-  const map: Record<RoleId, string> = {
-    employee: "Employee",
-    manager: "Manager",
-    recruiter: "Recruiter",
-    hr_admin: "HR admin",
-    payroll: "Payroll",
-    security_admin: "Security",
-    ceo: "CEO",
-  };
-  return map[role];
-}
+const ROLE_LABELS_INTERNAL: Record<RoleId, string> = {
+  employee: "Employee",
+  hr_admin: "HR Admin",
+  ceo: "CEO",
+};

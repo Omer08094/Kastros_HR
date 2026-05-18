@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { sessionCookieName, verifySession } from "@/lib/session";
+import { sessionCookieName } from "@/lib/session";
+import { verifySession } from "@/lib/session-server";
 import { roleMayAccessRoute } from "@/lib/route-access";
 
 const PUBLIC_PATHS = new Set(["/login"]);

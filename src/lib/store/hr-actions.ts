@@ -1,14 +1,41 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
+import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { mutateStore, readStore } from "@/lib/store/persist";
-import { payrollGrossPay } from "@/lib/store/payroll";
 import { createInitialStore } from "@/lib/store/seed";
-import { canDecideLeave, isDirectReport, managerMayTouchTraining } from "@/lib/store/policy";
-import type { EmploymentType, HrStore, JobApplication, LeaveStatus, PayrollAllowanceType } from "@/lib/store/types";
-import { deleteStoredFile, deleteStoredFiles, emptyUploadsDir, isAllowedLibraryDocumentFile, isAllowedTrainingMaterialFile, saveFormDataFile } from "@/lib/uploads";
+import { createEmployeeAuth } from "@/lib/firebase-auth";
+import { hasExecAccess } from "@/lib/roles";
+import {
+  approvedLeaveDaysUsedInYear,
+  buildAllocationsFromDefaults,
+  getAllocatedDays,
+  leaveDaysOverlappingYear,
+  requestMatchesCategory,
+} from "@/lib/leave-policy";
+import { canDecideLeave } from "@/lib/store/policy";
+import {
+  BUSINESS_UNITS,
+  currencyForBusinessUnit,
+  type BusinessUnit,
+  type CurrencyCode,
+  type Employee,
+  type EmploymentType,
+  type Gender,
+  type HrStore,
+  type JobApplication,
+  type LeaveStatus,
+  type MaritalStatus,
+} from "@/lib/store/types";
+import {
+  deleteStoredFile,
+  deleteStoredFiles,
+  emptyUploadsDir,
+  isAllowedLibraryDocumentFile,
+  isAllowedTrainingMaterialFile,
+  saveFormDataFile,
+} from "@/lib/uploads";
 
 type ActionResult = { ok: true } | { error: string };
 
@@ -19,6 +46,46 @@ function ok(): ActionResult {
 function optionalTrimmedField(formData: FormData, key: string): string | null {
   const s = String(formData.get(key) ?? "").trim();
   return s || null;
+}
+
+function optionalNumber(formData: FormData, key: string): number | null {
+  const raw = String(formData.get(key) ?? "").trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function optionalBusinessUnit(formData: FormData, key: string): BusinessUnit | null {
+  const v = String(formData.get(key) ?? "").trim();
+  return (BUSINESS_UNITS as readonly string[]).includes(v) ? (v as BusinessUnit) : null;
+}
+
+function optionalGender(formData: FormData, key: string): Gender | null {
+  const v = String(formData.get(key) ?? "").trim();
+  return (["Male", "Female", "Other", "Prefer not to say"] as const).includes(v as Gender)
+    ? (v as Gender)
+    : null;
+}
+
+function optionalMaritalStatus(formData: FormData, key: string): MaritalStatus | null {
+  const v = String(formData.get(key) ?? "").trim();
+  return (["Single", "Married", "Divorced", "Widowed"] as const).includes(v as MaritalStatus)
+    ? (v as MaritalStatus)
+    : null;
+}
+
+function nextEmployeeIdDisplay(store: HrStore, override: string | null): string {
+  if (override) return override;
+  // Existing prefix-style IDs (KST-####) → bump highest #### by 1, default starting at 1001.
+  let highest = 1000;
+  for (const e of store.employees) {
+    const m = /^KST-(\d{3,})$/i.exec(e.employeeIdDisplay ?? "");
+    if (m) {
+      const n = Number(m[1]);
+      if (Number.isFinite(n) && n > highest) highest = n;
+    }
+  }
+  return `KST-${highest + 1}`;
 }
 
 function audit(store: HrStore, actor: string, action: string): HrStore {
@@ -34,22 +101,60 @@ function probationDate(joiningDate: string, months: number): string {
 
 export async function resetDemoData(): Promise<ActionResult> {
   const session = await getSession();
-  if (!session || session.role !== "hr_admin") return { error: "Only HR admins can reset demo data." };
+  if (!session || !hasExecAccess(session.role)) return { error: "Only HR Admin or CEO can reset demo data." };
   await emptyUploadsDir();
   await mutateStore(() => ({ next: audit(createInitialStore(), session.email, "Reset demo dataset"), result: undefined }));
   revalidatePath("/", "layout");
   return ok();
 }
 
+/**
+ * CEO-only: update a Firebase Auth user's `role` custom claim.
+ * The target user must sign out and sign back in for the new role to take effect.
+ */
+export async function setEmployeeRole(formData: FormData): Promise<ActionResult> {
+  const session = await getSession();
+  if (!session || session.role !== "ceo") return { error: "Only the CEO can change user roles." };
+
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const role = String(formData.get("role") ?? "").trim();
+
+  if (!email) return { error: "Email is required." };
+  if (!["employee", "hr_admin", "ceo"].includes(role)) return { error: "Role must be employee, hr_admin, or ceo." };
+  if (email === session.email.toLowerCase()) return { error: "You cannot change your own role." };
+
+  try {
+    const { getAuth } = await import("firebase-admin/auth");
+    const auth = getAuth();
+    const user = await auth.getUserByEmail(email);
+    await auth.setCustomUserClaims(user.uid, { role });
+  } catch (e: any) {
+    const code: string = e?.code ?? "";
+    if (code === "auth/user-not-found") {
+      return { error: `No Firebase Auth account found for ${email}. The employee must log in at least once first.` };
+    }
+    return { error: e?.message ?? "Failed to update Firebase role." };
+  }
+
+  await mutateStore((store) => ({
+    next: audit(store, session.email, `Set Firebase role → ${role} for ${email}`),
+    result: undefined,
+  }));
+
+  revalidatePath("/dashboard");
+  return ok();
+}
+
 export async function addEmployee(formData: FormData): Promise<ActionResult> {
   const session = await getSession();
-  if (!session || !["hr_admin", "recruiter"].includes(session.role)) return { error: "Forbidden." };
+  if (!session || !hasExecAccess(session.role)) return { error: "Forbidden." };
   const name = String(formData.get("name") ?? "").trim();
   const fatherName = String(formData.get("fatherName") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const title = String(formData.get("title") ?? "").trim();
   const department = String(formData.get("department") ?? "").trim() || "General";
   const location = String(formData.get("location") ?? "").trim();
+  const businessUnit = optionalBusinessUnit(formData, "businessUnit");
   const employmentType = String(formData.get("employmentType") ?? "Permanent");
   const joiningDate = String(formData.get("joiningDate") ?? "").trim();
   const probationMonths = Number(formData.get("probationMonths") ?? "3");
@@ -64,6 +169,28 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
   const familyRelationFirm = String(formData.get("familyRelationFirm") ?? "").trim();
   const familyLinked = String(formData.get("familyLinked") ?? "no") === "yes";
 
+  /** New identity / employment fields */
+  const dateOfBirth = optionalTrimmedField(formData, "dateOfBirth");
+  const gender = optionalGender(formData, "gender");
+  const nationality = optionalTrimmedField(formData, "nationality");
+  const secondNationality = optionalTrimmedField(formData, "secondNationality");
+  const maritalStatus = optionalMaritalStatus(formData, "maritalStatus");
+  const religion = optionalTrimmedField(formData, "religion");
+  const cnicExpiry = optionalTrimmedField(formData, "cnicExpiry");
+  const address = optionalTrimmedField(formData, "address");
+  const designationNumber = optionalTrimmedField(formData, "designationNumber");
+  const officialNumber = optionalTrimmedField(formData, "officialNumber");
+  const dutyHours = optionalNumber(formData, "dutyHours");
+  const dutyDays = optionalNumber(formData, "dutyDays");
+  const hasCompanyVehicle = String(formData.get("hasCompanyVehicle") ?? "") === "1";
+  const vehicleNumber = hasCompanyVehicle ? optionalTrimmedField(formData, "vehicleNumber") : null;
+  const drivingLicenceNumber = hasCompanyVehicle
+    ? optionalTrimmedField(formData, "drivingLicenceNumber")
+    : null;
+  const drivingLicenceExpiry = hasCompanyVehicle
+    ? optionalTrimmedField(formData, "drivingLicenceExpiry")
+    : null;
+
   const eduTitle = String(formData.get("eduTitle") ?? "").trim();
   const eduInstitute = String(formData.get("eduInstitute") ?? "").trim();
   const eduYear = String(formData.get("eduYear") ?? "").trim();
@@ -72,6 +199,9 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
   const certYear = String(formData.get("certYear") ?? "").trim();
   const eduFile = formData.get("eduDocument");
   const certFile = formData.get("certDocument");
+  const profilePhotoFile = formData.get("profilePhoto");
+  const employeeIdDisplayOverride = optionalTrimmedField(formData, "employeeIdDisplay");
+  const cnic = optionalTrimmedField(formData, "cnic");
   const eduFallbackName = optionalTrimmedField(formData, "eduAttachmentName");
   const certFallbackName = optionalTrimmedField(formData, "certAttachmentName");
 
@@ -92,6 +222,7 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
 
   let eduSaved: Awaited<ReturnType<typeof saveFormDataFile>> = null;
   let certSaved: Awaited<ReturnType<typeof saveFormDataFile>> = null;
+  let photoSaved: Awaited<ReturnType<typeof saveFormDataFile>> = null;
   try {
     if (eduFile instanceof File && eduFile.size > 0) {
       eduSaved = await saveFormDataFile(eduFile);
@@ -99,13 +230,48 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
     if (certFile instanceof File && certFile.size > 0) {
       certSaved = await saveFormDataFile(certFile);
     }
-  } catch {
-    await deleteStoredFiles([eduSaved?.ref, certSaved?.ref]);
-    return { error: "Could not save uploaded files." };
+    if (profilePhotoFile instanceof File && profilePhotoFile.size > 0) {
+      if (!isAllowedLibraryDocumentFile(profilePhotoFile)) {
+        await deleteStoredFiles([eduSaved?.ref, certSaved?.ref]);
+        return { error: "Profile photo: use PNG, JPG, or WebP." };
+      }
+      photoSaved = await saveFormDataFile(profilePhotoFile);
+    }
+  } catch (e: any) {
+    await deleteStoredFiles([eduSaved?.ref, certSaved?.ref, photoSaved?.ref]);
+    return { error: e?.message || "Could not save uploaded files." };
   }
 
   const eduAttachmentName = eduSaved?.originalName ?? eduFallbackName;
   const certAttachmentName = certSaved?.originalName ?? certFallbackName;
+
+  // Create Firebase Auth user for the new employee
+  let authResult;
+  try {
+    authResult = await createEmployeeAuth(email, name, "employee");
+  } catch (e: any) {
+    return { error: `Failed to create Firebase Auth user: ${e?.message || e}` };
+  }
+  const firebaseUid = authResult.uid;
+
+  const salutationRaw = String(formData.get("salutation") ?? "").trim();
+  const salutationOpts = ["Mr.", "Mrs.", "Ms.", "Dr.", "Eng.", "Prof."];
+  const salutation = salutationOpts.includes(salutationRaw) ? (salutationRaw as Employee["salutation"]) : null;
+  const subDepartment = optionalTrimmedField(formData, "subDepartment");
+
+  // Multi-education rows: eduDegree[], eduInstitution[], eduYear[]
+  const eduDegrees = formData.getAll("eduDegree").map((v) => String(v).trim()).filter(Boolean);
+  const eduInstitutions = formData.getAll("eduInstitution").map((v) => String(v).trim());
+  const eduYears = formData.getAll("eduYear").map((v) => String(v).trim());
+  const educationEntries: Employee["education"] = eduDegrees.map((deg, i) => ({
+    degree: deg,
+    institution: eduInstitutions[i] ?? "",
+    year: eduYears[i] ?? "",
+  }));
+
+  const hasGratuity = String(formData.get("hasGratuity") ?? "") === "1";
+  const hasEobi = String(formData.get("hasEobi") ?? "") === "1";
+  const hasProvidentFund = String(formData.get("hasProvidentFund") ?? "") === "1";
 
   const result = await mutateStore<ActionResult>((store) => {
     if (store.employees.some((e) => e.email.toLowerCase() === email)) return { next: store, result: { error: "Email already exists." } };
@@ -165,34 +331,80 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
       }
     }
 
+    const newEmployee: Employee = {
+      id: `emp-${randomUUID()}`,
+      employeeIdDisplay: nextEmployeeIdDisplay(store, employeeIdDisplayOverride),
+      salutation,
+      name,
+      fatherName,
+      email,
+      gender,
+      dateOfBirth,
+      nationality,
+      secondNationality,
+      maritalStatus,
+      religion,
+      cnic,
+      cnicExpiry,
+      address,
+      title,
+      designationNumber,
+      officialNumber,
+      location,
+      businessUnit,
+      status: "Active",
+      department,
+      subDepartment,
+      employmentType: ["Permanent", "Temporary", "Contractual", "Intern", "Trainee"].includes(employmentType)
+        ? (employmentType as EmploymentType)
+        : "Permanent",
+      joiningDate,
+      probationMonths: Number.isFinite(probationMonths) ? probationMonths : 3,
+      probationCompletionDate,
+      dutyHours,
+      dutyDays,
+      companyPhone,
+      personalPhone,
+      emergencyContacts: emergencyContactName
+        ? [{ name: emergencyContactName, relation: emergencyContactRelation || "Next of kin", phone: emergencyContactPhone }]
+        : [],
+      familyRelations: familyRelationName
+        ? [
+            {
+              name: familyRelationName,
+              relation: familyRelationType || "Relative",
+              firmOrEmployer: familyRelationFirm || "N/A",
+              linkedToTraderOrMerchandiser: familyLinked,
+            },
+          ]
+        : [],
+      reportsToEmail,
+      hasCompanyVehicle,
+      vehicleNumber,
+      drivingLicenceNumber,
+      drivingLicenceExpiry,
+      licences: [],
+      education: educationEntries,
+      hasGratuity,
+      hasEobi,
+      hasProvidentFund,
+      firebaseUid,
+      photoStoredRef: photoSaved?.ref ?? null,
+    };
+
+    const year = new Date().getFullYear();
+    const seedAllocations = buildAllocationsFromDefaults(store, [email], year);
+    const allocKey = (a: { employeeEmail: string; categoryId: string; year: number }) =>
+      `${a.employeeEmail.toLowerCase()}:${a.categoryId}:${a.year}`;
+    const allocMap = new Map(store.employeeLeaveAllocations.map((a) => [allocKey(a), a]));
+    for (const row of seedAllocations) {
+      allocMap.set(allocKey(row), row);
+    }
+
     const next: HrStore = {
       ...store,
-      employees: [
-        ...store.employees,
-        {
-          id: `emp-${randomUUID()}`,
-          name,
-          fatherName,
-          email,
-          title,
-          location,
-          status: "Active",
-          department,
-          employmentType: ["Permanent", "Temporary", "Contractual", "Intern"].includes(employmentType) ? (employmentType as "Permanent" | "Temporary" | "Contractual" | "Intern") : "Permanent",
-          joiningDate,
-          probationMonths: Number.isFinite(probationMonths) ? probationMonths : 3,
-          probationCompletionDate,
-          companyPhone,
-          personalPhone,
-          emergencyContacts: emergencyContactName
-            ? [{ name: emergencyContactName, relation: emergencyContactRelation || "Next of kin", phone: emergencyContactPhone }]
-            : [],
-          familyRelations: familyRelationName
-            ? [{ name: familyRelationName, relation: familyRelationType || "Relative", firmOrEmployer: familyRelationFirm || "N/A", linkedToTraderOrMerchandiser: familyLinked }]
-            : [],
-          reportsToEmail,
-        },
-      ],
+      employees: [...store.employees, newEmployee],
+      employeeLeaveAllocations: [...allocMap.values()],
       academics: [...newAcademics, ...store.academics],
       documents: [...newDocs, ...store.documents],
     };
@@ -200,7 +412,7 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
     return { next: audit(next, session.email, `Created employee ${email}${note}`), result: ok() };
   });
   if ("error" in result) {
-    await deleteStoredFiles([eduSaved?.ref, certSaved?.ref]);
+    await deleteStoredFiles([eduSaved?.ref, certSaved?.ref, photoSaved?.ref]);
     return result;
   }
   revalidatePath("/employees");
@@ -210,27 +422,126 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
   return ok();
 }
 
+
+
 export async function updateEmployee(formData: FormData): Promise<ActionResult> {
   const session = await getSession();
-  if (!session || session.role !== "hr_admin") return { error: "Forbidden." };
+  if (!session || !hasExecAccess(session.role)) return { error: "Forbidden." };
   const id = String(formData.get("id") ?? "");
   const title = String(formData.get("title") ?? "").trim();
   const location = String(formData.get("location") ?? "").trim();
   const department = String(formData.get("department") ?? "").trim() || "General";
-  const status = String(formData.get("status") ?? "") as "Active" | "On leave" | "Offboarding";
+  const status = String(formData.get("status") ?? "") as "Active" | "On leave" | "Offboarding" | "Separated";
   const reportsToEmailRaw = String(formData.get("reportsToEmail") ?? "").trim();
   const reportsToEmail = reportsToEmailRaw ? reportsToEmailRaw.toLowerCase() : null;
+  const employmentTypeRaw = String(formData.get("employmentType") ?? "Permanent");
+  const employmentType: EmploymentType = ["Permanent", "Temporary", "Contractual", "Intern", "Trainee"].includes(employmentTypeRaw)
+    ? (employmentTypeRaw as EmploymentType)
+    : "Permanent";
+  const businessUnit = optionalBusinessUnit(formData, "businessUnit");
+  const employeeIdDisplay = optionalTrimmedField(formData, "employeeIdDisplay");
+  const cnic = optionalTrimmedField(formData, "cnic");
+  const cnicExpiry = optionalTrimmedField(formData, "cnicExpiry");
+  const dateOfBirth = optionalTrimmedField(formData, "dateOfBirth");
+  const gender = optionalGender(formData, "gender");
+  const nationality = optionalTrimmedField(formData, "nationality");
+  const secondNationality = optionalTrimmedField(formData, "secondNationality");
+  const maritalStatus = optionalMaritalStatus(formData, "maritalStatus");
+  const religion = optionalTrimmedField(formData, "religion");
+  const address = optionalTrimmedField(formData, "address");
+  const designationNumber = optionalTrimmedField(formData, "designationNumber");
+  const officialNumber = optionalTrimmedField(formData, "officialNumber");
+  const dutyHours = optionalNumber(formData, "dutyHours");
+  const dutyDays = optionalNumber(formData, "dutyDays");
+  const hasCompanyVehicle = String(formData.get("hasCompanyVehicle") ?? "") === "1";
+  const vehicleNumber = hasCompanyVehicle ? optionalTrimmedField(formData, "vehicleNumber") : null;
+  const drivingLicenceNumber = hasCompanyVehicle ? optionalTrimmedField(formData, "drivingLicenceNumber") : null;
+  const drivingLicenceExpiry = hasCompanyVehicle ? optionalTrimmedField(formData, "drivingLicenceExpiry") : null;
+  const clearPhoto = String(formData.get("clearProfilePhoto") ?? "") === "1";
+  const photoFile = formData.get("profilePhoto");
+  const salutationRaw2 = String(formData.get("salutation") ?? "").trim();
+  const salutationOpts2 = ["Mr.", "Mrs.", "Ms.", "Dr.", "Eng.", "Prof."];
+  const salutation2 = salutationOpts2.includes(salutationRaw2) ? (salutationRaw2 as Employee["salutation"]) : null;
+  const subDepartment2 = optionalTrimmedField(formData, "subDepartment");
+  const hasGratuity2 = String(formData.get("hasGratuity") ?? "") === "1";
+  const hasEobi2 = String(formData.get("hasEobi") ?? "") === "1";
+  const hasProvidentFund2 = String(formData.get("hasProvidentFund") ?? "") === "1";
+
   if (!id || !title || !location) return { error: "Missing fields." };
-  if (!["Active", "On leave", "Offboarding"].includes(status)) return { error: "Invalid status." };
+  if (!["Active", "On leave", "Offboarding", "Separated"].includes(status)) return { error: "Invalid status." };
+
+  const snapshot = await readStore();
+  const current = snapshot.employees.find((e) => e.id === id);
+  if (!current) return { error: "Not found." };
+
+  let nextPhotoRef = current.photoStoredRef;
+  let uploadedRef: string | null = null;
+  try {
+    if (photoFile instanceof File && photoFile.size > 0) {
+      if (!isAllowedLibraryDocumentFile(photoFile)) return { error: "Profile photo: use PNG, JPG, or WebP." };
+      const saved = await saveFormDataFile(photoFile);
+      if (saved) {
+        uploadedRef = saved.ref;
+        nextPhotoRef = saved.ref;
+      }
+    }
+    if (clearPhoto) {
+      nextPhotoRef = null;
+    }
+  } catch (e: any) {
+    await deleteStoredFile(uploadedRef);
+    return { error: e?.message || "Could not save profile photo." };
+  }
 
   const result = await mutateStore<ActionResult>((store) => {
     const idx = store.employees.findIndex((e) => e.id === id);
     if (idx < 0) return { next: store, result: { error: "Not found." } };
+    const prev = store.employees[idx];
+    if (!prev) return { next: store, result: { error: "Not found." } };
     const copy = structuredClone(store.employees);
-    copy[idx] = { ...copy[idx], title, location, department, status, reportsToEmail };
+    copy[idx] = {
+      ...prev,
+      salutation: salutation2,
+      title,
+      location,
+      department,
+      subDepartment: subDepartment2,
+      status,
+      reportsToEmail,
+      employmentType,
+      businessUnit,
+      employeeIdDisplay,
+      cnic,
+      cnicExpiry,
+      dateOfBirth,
+      gender,
+      nationality,
+      secondNationality,
+      maritalStatus,
+      religion,
+      address,
+      designationNumber,
+      officialNumber,
+      dutyHours,
+      dutyDays,
+      hasCompanyVehicle,
+      vehicleNumber,
+      drivingLicenceNumber,
+      drivingLicenceExpiry,
+      hasGratuity: hasGratuity2,
+      hasEobi: hasEobi2,
+      hasProvidentFund: hasProvidentFund2,
+      photoStoredRef: nextPhotoRef,
+    };
     return { next: audit({ ...store, employees: copy }, session.email, `Updated employee ${copy[idx].email}`), result: ok() };
   });
-  if ("error" in result) return result;
+  if ("error" in result) {
+    await deleteStoredFile(uploadedRef);
+    return result;
+  }
+  if (current.photoStoredRef && current.photoStoredRef !== nextPhotoRef) {
+    await deleteStoredFile(current.photoStoredRef);
+  }
   revalidatePath("/employees");
   revalidatePath("/dashboard");
   return ok();
@@ -238,7 +549,7 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
 
 export async function deleteEmployee(formData: FormData): Promise<ActionResult> {
   const session = await getSession();
-  if (!session || session.role !== "hr_admin") return { error: "Forbidden." };
+  if (!session || !hasExecAccess(session.role)) return { error: "Forbidden." };
   const id = String(formData.get("id") ?? "");
   if (!id) return { error: "Missing id." };
   const snapshot = await readStore();
@@ -246,6 +557,7 @@ export async function deleteEmployee(formData: FormData): Promise<ActionResult> 
   if (!victim) return { error: "Not found." };
   const emailLower = victim.email.toLowerCase();
   const refSet = new Set<string>();
+  if (victim.photoStoredRef) refSet.add(victim.photoStoredRef);
   for (const d of snapshot.documents) {
     if ((d.employeeEmail?.toLowerCase() ?? "") === emailLower && d.storedRef) refSet.add(d.storedRef);
   }
@@ -288,30 +600,51 @@ export async function deleteEmployee(formData: FormData): Promise<ActionResult> 
 export async function createLeaveRequest(formData: FormData): Promise<ActionResult> {
   const session = await getSession();
   if (!session) return { error: "Unauthorized." };
-  if (!["employee", "manager", "hr_admin", "ceo"].includes(session.role)) return { error: "Role not allowed." };
-  const kind = String(formData.get("kind") ?? "").trim();
+  if (!["employee", "hr_admin", "ceo"].includes(session.role)) return { error: "Role not allowed." };
+  const categoryId = String(formData.get("categoryId") ?? "").trim() || null;
+  const kindRaw = String(formData.get("kind") ?? "").trim();
   const start = String(formData.get("start") ?? "").trim();
   const end = String(formData.get("end") ?? "").trim();
   const note = String(formData.get("note") ?? "").trim() || null;
-  if (!kind || !start || !end) return { error: "Fill required fields." };
-  if (kind.toLowerCase().includes("annual")) {
-    const a = new Date(start);
-    const b = new Date(end);
-    const days = Math.floor((b.getTime() - a.getTime()) / (24 * 3600 * 1000)) + 1;
-    if (days > 15) return { error: "Annual leave exceeds configured 12-15 day policy window." };
+  if ((!categoryId && !kindRaw) || !start || !end) return { error: "Fill required fields." };
+
+  const store = await readStore();
+  const category = categoryId ? store.leaveCategories.find((c) => c.id === categoryId && c.isActive) : null;
+  const kind = category?.name ?? kindRaw;
+  if (!kind) return { error: "Select a leave type." };
+
+  const year = new Date(start).getFullYear();
+  const requestedDays = leaveDaysOverlappingYear(start, end, year);
+
+  if (category && requestedDays > 0) {
+    const allocated = getAllocatedDays(store, session.email, category.id, year);
+    const used = approvedLeaveDaysUsedInYear(store.leaveRequests, session.email, category, year);
+    let pending = 0;
+    for (const r of store.leaveRequests) {
+      if (r.requesterEmail.toLowerCase() !== session.email.toLowerCase()) continue;
+      if (r.status !== "PendingHR" && r.status !== "PendingCEO") continue;
+      if (!requestMatchesCategory(r, category)) continue;
+      pending += leaveDaysOverlappingYear(r.start, r.end, year);
+    }
+    if (used + pending + requestedDays > allocated) {
+      return {
+        error: `Insufficient ${category.name} balance. Allocated: ${allocated}, used: ${used}, pending: ${pending}, requested: ${requestedDays}.`,
+      };
+    }
   }
 
-  await mutateStore((store) => {
-    const requester = store.employees.find((e) => e.email.toLowerCase() === session.email.toLowerCase());
+  await mutateStore((s) => {
+    const requester = s.employees.find((e) => e.email.toLowerCase() === session.email.toLowerCase());
     const isDirectCeoReport = !!requester?.reportsToEmail && requester.reportsToEmail.toLowerCase() === "ceo@kastros.demo";
     const status: LeaveStatus = isDirectCeoReport || session.role === "ceo" ? "PendingCEO" : "PendingHR";
     const next: HrStore = {
-      ...store,
+      ...s,
       leaveRequests: [
         {
           id: `lv-${randomUUID()}`,
           requesterEmail: session.email,
           kind,
+          categoryId: category?.id ?? null,
           start,
           end,
           status,
@@ -320,7 +653,7 @@ export async function createLeaveRequest(formData: FormData): Promise<ActionResu
           ceoDecisionByEmail: null,
           note,
         },
-        ...store.leaveRequests,
+        ...s.leaveRequests,
       ],
     };
     return { next: audit(next, session.email, `Requested leave (${kind})`), result: ok() };
@@ -344,12 +677,12 @@ export async function decideLeaveRequest(formData: FormData): Promise<ActionResu
     const nextReq: HrStore["leaveRequests"] = s.leaveRequests.map((r) => {
       if (r.id !== id) return r;
       if (r.status === "PendingHR") {
-        if (!["hr_admin", "manager"].includes(session.role) || !canDecideLeave(store, session, r.requesterEmail)) return r;
+        if (!hasExecAccess(session.role) || !canDecideLeave(store, session, r.requesterEmail)) return r;
         if (decision === "Denied") return { ...r, status: "Denied" as LeaveStatus, decidedByEmail: session.email, hrDecisionByEmail: session.email };
         return { ...r, status: "PendingCEO", hrDecisionByEmail: session.email, decidedByEmail: session.email };
       }
       if (r.status === "PendingCEO") {
-        if (session.role !== "ceo") return r;
+        if (!hasExecAccess(session.role)) return r;
         return { ...r, status: decision as LeaveStatus, ceoDecisionByEmail: session.email, decidedByEmail: session.email };
       }
       return r;
@@ -365,7 +698,7 @@ export async function decideLeaveRequest(formData: FormData): Promise<ActionResu
 
 export async function addAcademicRecord(formData: FormData): Promise<ActionResult> {
   const session = await getSession();
-  if (!session || !["hr_admin", "recruiter"].includes(session.role)) return { error: "Forbidden." };
+  if (!session || !hasExecAccess(session.role)) return { error: "Forbidden." };
   const employeeEmail = String(formData.get("employeeEmail") ?? "").trim().toLowerCase();
   const type = String(formData.get("type") ?? "Degree");
   const title = String(formData.get("title") ?? "").trim();
@@ -402,7 +735,7 @@ export async function addAcademicRecord(formData: FormData): Promise<ActionResul
 
 export async function addTrainingRow(formData: FormData): Promise<ActionResult> {
   const session = await getSession();
-  if (!session || session.role !== "hr_admin") return { error: "Only HR can assign training." };
+  if (!session || !hasExecAccess(session.role)) return { error: "Only HR Admin or CEO can assign training." };
   const assigneeEmail = String(formData.get("assigneeEmail") ?? "").trim().toLowerCase();
   const name = String(formData.get("name") ?? "").trim();
   const provider = String(formData.get("provider") ?? "Internal") === "External" ? "External" : "Internal";
@@ -431,8 +764,8 @@ export async function addTrainingRow(formData: FormData): Promise<ActionResult> 
         trainingMaterialOriginalName = saved.originalName;
         trainingMaterialPptx = null;
       }
-    } catch {
-      return { error: "Could not save uploaded file." };
+    } catch (e: any) {
+      return { error: e?.message || "Could not save uploaded file." };
     }
   }
 
@@ -477,9 +810,8 @@ export async function setTrainingStatus(formData: FormData): Promise<ActionResul
   const row = store.training.find((t) => t.id === id);
   if (!row) return { error: "Not found." };
   const self = row.assigneeEmail.toLowerCase() === session.email.toLowerCase();
-  const hr = session.role === "hr_admin";
-  const mgr = session.role === "manager" && managerMayTouchTraining(store, session, row.assigneeEmail);
-  if (!hr && !self && !mgr) return { error: "Forbidden." };
+  const exec = hasExecAccess(session.role);
+  if (!exec && !self) return { error: "Forbidden." };
   await mutateStore((s) => ({
     next: audit(
       { ...s, training: s.training.map((t) => (t.id === id ? { ...t, status } : t)) },
@@ -494,7 +826,7 @@ export async function setTrainingStatus(formData: FormData): Promise<ActionResul
 
 export async function markTrainingAttendance(formData: FormData): Promise<ActionResult> {
   const session = await getSession();
-  if (!session || session.role !== "hr_admin") return { error: "Only HR can mark attendance." };
+  if (!session || !hasExecAccess(session.role)) return { error: "Only HR Admin or CEO can mark attendance." };
   const id = String(formData.get("id") ?? "");
   if (!id) return { error: "Missing id." };
   const attendedRaw = formData.getAll("attended").map((v) => String(v).trim().toLowerCase()).filter(Boolean);
@@ -522,7 +854,7 @@ export async function markTrainingAttendance(formData: FormData): Promise<Action
 
 export async function createJob(formData: FormData): Promise<ActionResult> {
   const session = await getSession();
-  if (!session || !["hr_admin", "recruiter"].includes(session.role)) return { error: "Forbidden." };
+  if (!session || !hasExecAccess(session.role)) return { error: "Forbidden." };
   const title = String(formData.get("title") ?? "").trim();
   const location = String(formData.get("location") ?? "").trim();
   const stage = String(formData.get("stage") ?? "").trim() || "Applied";
@@ -545,7 +877,7 @@ export async function createJob(formData: FormData): Promise<ActionResult> {
 
 export async function deleteJob(formData: FormData): Promise<ActionResult> {
   const session = await getSession();
-  if (!session || !["hr_admin", "recruiter"].includes(session.role)) return { error: "Forbidden." };
+  if (!session || !hasExecAccess(session.role)) return { error: "Forbidden." };
   const id = String(formData.get("id") ?? "");
   if (!id) return { error: "Missing id." };
   const storeBefore = await readStore();
@@ -576,7 +908,7 @@ const CV_TYPES = new Set([
 
 export async function approveJobApplication(formData: FormData): Promise<ActionResult> {
   const session = await getSession();
-  if (!session || !["hr_admin", "recruiter"].includes(session.role)) return { error: "Forbidden." };
+  if (!session || !hasExecAccess(session.role)) return { error: "Forbidden." };
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return { error: "Missing application." };
 
@@ -675,9 +1007,9 @@ export async function submitJobApplication(formData: FormData): Promise<ActionRe
     if (certFile instanceof File && certFile.size > 0) {
       certSaved = await saveFormDataFile(certFile);
     }
-  } catch {
-    await deleteStoredFiles([saved.ref, eduSaved?.ref, certSaved?.ref]);
-    return { error: "Could not save uploaded files." };
+  } catch (e: any) {
+    await deleteStoredFiles([saved?.ref, eduSaved?.ref, certSaved?.ref]);
+    return { error: e?.message || "Could not save uploaded files." };
   }
 
   const eduAttachmentName = eduSaved?.originalName ?? null;
@@ -761,7 +1093,7 @@ export async function submitJobApplication(formData: FormData): Promise<ActionRe
 
 export async function addDocument(formData: FormData): Promise<ActionResult> {
   const session = await getSession();
-  if (!session || !["hr_admin", "recruiter"].includes(session.role)) return { error: "Forbidden." };
+  if (!session || !hasExecAccess(session.role)) return { error: "Forbidden." };
   const name = String(formData.get("name") ?? "").trim();
   const owner = String(formData.get("owner") ?? "").trim();
   const sensitivity = String(formData.get("sensitivity") ?? "").trim() || "Internal";
@@ -823,7 +1155,7 @@ export async function addDocument(formData: FormData): Promise<ActionResult> {
 
 export async function deleteDocument(formData: FormData): Promise<ActionResult> {
   const session = await getSession();
-  if (!session || session.role !== "hr_admin") return { error: "Only HR admins can delete documents." };
+  if (!session || !hasExecAccess(session.role)) return { error: "Only HR Admin or CEO can delete documents." };
   const id = String(formData.get("id") ?? "");
   if (!id) return { error: "Missing id." };
   const snapshot = await readStore();
@@ -912,12 +1244,8 @@ export async function upsertGoal(formData: FormData): Promise<ActionResult> {
   const progressPct = Math.min(100, Math.max(0, Number(formData.get("progressPct") ?? "0")));
   const ownerEmailRaw = String(formData.get("ownerEmail") ?? "").trim().toLowerCase();
   if (!title) return { error: "Title required." };
-  const store = await readStore();
   let ownerEmail = ownerEmailRaw || session.email.toLowerCase();
-  if (session.role === "manager" && ownerEmail !== session.email.toLowerCase() && !isDirectReport(store, session.email, ownerEmail)) {
-    return { error: "Managers can only manage their direct reports." };
-  }
-  if (!["manager", "hr_admin"].includes(session.role) && ownerEmail !== session.email.toLowerCase()) return { error: "Forbidden." };
+  if (!hasExecAccess(session.role) && ownerEmail !== session.email.toLowerCase()) return { error: "Forbidden." };
   if (id) {
     await mutateStore((s) => ({
       next: audit({ ...s, goals: s.goals.map((g) => (g.id === id ? { ...g, title, cycle, progressPct, ownerEmail } : g)) }, session.email, `Updated goal ${id}`),
@@ -948,7 +1276,7 @@ export async function deleteGoal(formData: FormData): Promise<ActionResult> {
 
 export async function addPerformanceReview(formData: FormData): Promise<ActionResult> {
   const session = await getSession();
-  if (!session || !["manager", "hr_admin"].includes(session.role)) return { error: "Only manager/HR can add review records." };
+  if (!session || !hasExecAccess(session.role)) return { error: "Only HR Admin or CEO can add review records." };
   const employeeEmail = String(formData.get("employeeEmail") ?? "").trim().toLowerCase();
   const department = String(formData.get("department") ?? "").trim();
   const criteriaType = String(formData.get("criteriaType") ?? "Technical");
@@ -956,8 +1284,6 @@ export async function addPerformanceReview(formData: FormData): Promise<ActionRe
   const comments = String(formData.get("comments") ?? "").trim();
   const cycle = String(formData.get("cycle") ?? "H1 2026").trim();
   if (!employeeEmail || !department) return { error: "Missing fields." };
-  const store = await readStore();
-  if (session.role === "manager" && !isDirectReport(store, session.email, employeeEmail)) return { error: "Managers can review direct reports only." };
   await mutateStore((s) => ({
     next: audit(
       {
@@ -966,7 +1292,7 @@ export async function addPerformanceReview(formData: FormData): Promise<ActionRe
           {
             id: `rev-${randomUUID()}`,
             employeeEmail,
-            managerEmail: session.role === "manager" ? session.email : String(formData.get("managerEmail") ?? "").trim().toLowerCase() || session.email,
+            managerEmail: String(formData.get("managerEmail") ?? "").trim().toLowerCase() || session.email,
             department,
             criteriaType: criteriaType === "Leadership" || criteriaType === "Operations" ? criteriaType : "Technical",
             grade: grade === "A" || grade === "B" || grade === "C" || grade === "D" ? grade : "C",
@@ -982,126 +1308,5 @@ export async function addPerformanceReview(formData: FormData): Promise<ActionRe
     result: ok(),
   }));
   revalidatePath("/performance");
-  return ok();
-}
-
-export async function upsertPayrollEntry(formData: FormData): Promise<ActionResult> {
-  const session = await getSession();
-  if (!session || !["hr_admin", "ceo"].includes(session.role)) return { error: "Only HR Admin and CEO can edit payroll lines." };
-  const entryId = String(formData.get("entryId") ?? "").trim();
-  const employeeEmail = String(formData.get("employeeEmail") ?? "").trim().toLowerCase();
-  const month = String(formData.get("month") ?? "").trim();
-  const baseSalary = Number(formData.get("baseSalary") ?? "0");
-  const hoursWorked = Number(formData.get("hoursWorked") ?? "0");
-  const hourlyRate = Number(formData.get("hourlyRate") ?? "0");
-  const allowanceTypes = formData.getAll("allowanceType").map((v) => String(v));
-  const allowanceAmounts = formData.getAll("allowanceAmount").map((v) => Number(v));
-  if (!employeeEmail || !month) return { error: "Missing employee/month." };
-  if (!Number.isFinite(baseSalary) || !Number.isFinite(hoursWorked) || !Number.isFinite(hourlyRate)) return { error: "Invalid numeric fields." };
-  const allowances = allowanceTypes
-    .map((type, i) => ({ type, amount: allowanceAmounts[i] ?? 0 }))
-    .filter((x) => Number.isFinite(x.amount) && x.amount > 0)
-    .map((x) => ({ type: (["Fuel", "Transport", "SIM/Mobile", "Laptop", "Other"].includes(x.type) ? x.type : "Other") as PayrollAllowanceType, amount: x.amount }));
-  const grossPay = payrollGrossPay({ baseSalary, hoursWorked, hourlyRate, allowances });
-
-  const result = await mutateStore<ActionResult>((s) => {
-    if (entryId) {
-      const row = s.payrollEntries.find((p) => p.id === entryId);
-      if (!row) return { next: s, result: { error: "Payroll line not found." } };
-      const match = s.employees.find((e) => e.email.toLowerCase() === employeeEmail);
-      if (!match) return { next: s, result: { error: "Employee must exist in directory." } };
-      const nextEntries = s.payrollEntries.map((p) =>
-        p.id === entryId ? { ...p, employeeEmail: match.email, month, baseSalary, hoursWorked, hourlyRate, allowances, grossPay } : p,
-      );
-      return {
-        next: audit({ ...s, payrollEntries: nextEntries }, session.email, `Updated payroll line ${entryId}`),
-        result: ok(),
-      };
-    }
-
-    const match = s.employees.find((e) => e.email.toLowerCase() === employeeEmail);
-    if (!match) return { next: s, result: { error: "Employee must exist in directory." } };
-
-    const existing = s.payrollEntries.find((p) => p.employeeEmail.toLowerCase() === match.email.toLowerCase() && p.month === month);
-    const nextEntries = existing
-      ? s.payrollEntries.map((p) =>
-          p.id === existing.id ? { ...p, employeeEmail: match.email, month, baseSalary, hoursWorked, hourlyRate, allowances, grossPay } : p,
-        )
-      : [
-          {
-            id: `pay-${randomUUID()}`,
-            employeeEmail: match.email,
-            month,
-            baseSalary,
-            allowances,
-            hoursWorked,
-            hourlyRate,
-            grossPay,
-          },
-          ...s.payrollEntries,
-        ];
-    return {
-      next: audit({ ...s, payrollEntries: nextEntries }, session.email, `Upsert payroll entry ${match.email} ${month}`),
-      result: ok(),
-    };
-  });
-  if ("error" in result) return result;
-  revalidatePath("/payroll");
-  return ok();
-}
-
-export async function deletePayrollEntry(formData: FormData): Promise<ActionResult> {
-  const session = await getSession();
-  if (!session || !["hr_admin", "ceo"].includes(session.role)) return { error: "Only HR Admin and CEO can delete payroll lines." };
-  const id = String(formData.get("id") ?? "").trim();
-  if (!id) return { error: "Missing id." };
-  await mutateStore((s) => ({
-    next: audit({ ...s, payrollEntries: s.payrollEntries.filter((p) => p.id !== id) }, session.email, `Deleted payroll line ${id}`),
-    result: ok(),
-  }));
-  revalidatePath("/payroll");
-  return ok();
-}
-
-/** Sets every payroll line's month label to the current snapshot month (amounts unchanged). */
-export async function syncPayrollEntryMonthsToSnapshot(): Promise<ActionResult> {
-  const session = await getSession();
-  if (!session || !["hr_admin", "ceo"].includes(session.role)) return { error: "Only HR Admin and CEO can sync period labels." };
-  await mutateStore((s) => ({
-    next: audit(
-      { ...s, payrollEntries: s.payrollEntries.map((p) => ({ ...p, month: s.payroll.month })) },
-      session.email,
-      `Payroll lines month → ${s.payroll.month}`,
-    ),
-    result: ok(),
-  }));
-  revalidatePath("/payroll");
-  return ok();
-}
-
-export async function updatePayrollSnapshot(formData: FormData): Promise<ActionResult> {
-  const session = await getSession();
-  if (!session || !["hr_admin", "ceo"].includes(session.role)) return { error: "Only HR Admin and CEO can edit pay period settings." };
-  const month = String(formData.get("month") ?? "").trim();
-  const employeesPaid = Number(formData.get("employeesPaid") ?? "0");
-  const exceptions = Number(formData.get("exceptions") ?? "0");
-  const note = String(formData.get("note") ?? "").trim();
-  if (!month) return { error: "Month required." };
-  await mutateStore((store) => {
-    const nextPayroll = {
-      month,
-      employeesPaid: Number.isFinite(employeesPaid) ? employeesPaid : store.payroll.employeesPaid,
-      exceptions: Number.isFinite(exceptions) ? exceptions : store.payroll.exceptions,
-      note: note || store.payroll.note,
-    };
-    const monthChanged = month !== store.payroll.month.trim();
-    const nextEntries = monthChanged ? store.payrollEntries.map((p) => ({ ...p, month })) : store.payrollEntries;
-    const action = monthChanged ? `Pay period → ${month}; aligned ${nextEntries.length} payroll line${nextEntries.length !== 1 ? "s" : ""}` : "Updated payroll run summary";
-    return {
-      next: audit({ ...store, payroll: nextPayroll, payrollEntries: nextEntries }, session.email, action),
-      result: ok(),
-    };
-  });
-  revalidatePath("/payroll");
   return ok();
 }

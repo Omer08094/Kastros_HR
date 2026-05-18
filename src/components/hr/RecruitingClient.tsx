@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { Card } from "@/components/Card";
+import { LinkedInJobKitDialog } from "@/components/hr/LinkedInJobKitDialog";
 import type { JobApplication, JobPosting } from "@/lib/store/types";
 import { approveJobApplication, createJob, deleteJob } from "@/lib/store/hr-actions";
 
@@ -125,7 +126,7 @@ function ApplicantsTable({ apps, canMutate }: { apps: JobApplication[]; canMutat
                     ) : (
                       <Link
                         href={`/onboarding?applicationId=${encodeURIComponent(a.id)}`}
-                        className="inline-flex justify-center rounded-lg border border-kastros-gold/40 bg-kastros-cream px-3 py-1.5 text-center text-xs font-semibold text-kastros-forest hover:bg-kastros-cream/80"
+                        className="inline-flex justify-center rounded-lg border border-kastros-brandBlue/22 bg-kastros-cream px-3 py-1.5 text-center text-xs font-semibold text-kastros-forest hover:bg-kastros-cream/80"
                       >
                         Onboard
                       </Link>
@@ -155,6 +156,7 @@ export function RecruitingClient({
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [linkedInKitJob, setLinkedInKitJob] = useState<JobPosting | null>(null);
 
   const byJob = useMemo(() => {
     const m = new Map<string, JobApplication[]>();
@@ -188,7 +190,8 @@ export function RecruitingClient({
       {canMutate ? (
         <Card title="New requisition" eyebrow="Hiring">
           <p className="text-sm text-kastros-sage">
-            Create the role, then share the public apply link from the pipeline or applications section below.
+            Create the role, then use <strong className="text-kastros-ink">LinkedIn post kit</strong> on any row to download a
+            branded image, polished post text, and the apply link.
           </p>
           <form className="mt-4 grid gap-3 sm:grid-cols-2" action={(fd) => handle(createJob(fd))}>
             <label className="text-sm sm:col-span-2">
@@ -238,7 +241,12 @@ export function RecruitingClient({
                   <th className="pb-3 pr-3 font-medium">Stage</th>
                   <th className="pb-3 pr-3 font-medium">Applicants</th>
                   <th className="pb-3 pr-3 font-medium">Candidate portal</th>
-                  {canMutate ? <th className="pb-3 font-medium">Actions</th> : null}
+                  {canMutate ? (
+                    <>
+                      <th className="pb-3 pr-3 font-medium">LinkedIn</th>
+                      <th className="pb-3 font-medium">Actions</th>
+                    </>
+                  ) : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-kastros-sand">
@@ -264,18 +272,29 @@ export function RecruitingClient({
                         </span>
                       </td>
                       {canMutate ? (
-                        <td className="py-3">
-                          <form action={(fd) => handle(deleteJob(fd))}>
-                            <input type="hidden" name="id" value={j.id} />
+                        <>
+                          <td className="py-3 pr-3">
                             <button
-                              type="submit"
-                              disabled={pending}
-                              className="rounded-lg px-2 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-200 disabled:opacity-50"
+                              type="button"
+                              onClick={() => setLinkedInKitJob(j)}
+                              className="rounded-lg bg-kastros-forest px-3 py-1.5 text-xs font-semibold text-white hover:opacity-95"
                             >
-                              Delete
+                              Post kit
                             </button>
-                          </form>
-                        </td>
+                          </td>
+                          <td className="py-3">
+                            <form action={(fd) => handle(deleteJob(fd))}>
+                              <input type="hidden" name="id" value={j.id} />
+                              <button
+                                type="submit"
+                                disabled={pending}
+                                className="rounded-lg px-2 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-200 disabled:opacity-50"
+                              >
+                                Delete
+                              </button>
+                            </form>
+                          </td>
+                        </>
                       ) : null}
                     </tr>
                   );
@@ -304,14 +323,25 @@ export function RecruitingClient({
                         {j.location} · {j.applicantCount} submitted
                       </p>
                     </div>
-                    <Link
-                      href={applyPath}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex shrink-0 justify-center rounded-xl bg-kastros-forest px-4 py-2 text-center text-sm font-semibold text-white"
-                    >
-                      Open application portal
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href={applyPath}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex shrink-0 justify-center rounded-xl bg-kastros-forest px-4 py-2 text-center text-sm font-semibold text-white"
+                      >
+                        Open application portal
+                      </Link>
+                      {canMutate ? (
+                        <button
+                          type="button"
+                          onClick={() => setLinkedInKitJob(j)}
+                          className="inline-flex shrink-0 justify-center rounded-xl border border-kastros-brandBlue/25 bg-kastros-cream px-4 py-2 text-center text-sm font-semibold text-kastros-forest"
+                        >
+                          LinkedIn post kit
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                   <ApplicantsTable apps={apps} canMutate={canMutate} />
                 </div>
@@ -320,6 +350,13 @@ export function RecruitingClient({
           </div>
         )}
       </Card>
+
+      <LinkedInJobKitDialog
+        job={linkedInKitJob}
+        applyFullUrl={linkedInKitJob ? `${applyOrigin}/apply/${linkedInKitJob.id}` : ""}
+        open={!!linkedInKitJob}
+        onClose={() => setLinkedInKitJob(null)}
+      />
     </div>
   );
 }

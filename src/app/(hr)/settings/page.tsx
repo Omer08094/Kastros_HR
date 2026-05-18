@@ -1,14 +1,18 @@
 import { redirect } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
 import { Card } from "@/components/Card";
+import { LeavePolicySettings } from "@/components/hr/LeavePolicySettings";
 import { SettingsClient } from "@/components/hr/SettingsClient";
+import { readStore } from "@/lib/store/persist";
 import { getSession } from "@/lib/auth";
+import { hasExecAccess } from "@/lib/roles";
 
 export default async function SettingsPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const canReset = session.role === "hr_admin";
+  const canReset = hasExecAccess(session.role);
+  const store = await readStore();
 
   return (
     <PageShell title="Settings" subtitle="Company profile and dangerous operations (demo)">
@@ -48,6 +52,12 @@ export default async function SettingsPage() {
           </ul>
         </Card>
       </div>
+
+      {canReset ? (
+        <Card className="mt-5" eyebrow="HR admin" title="Leave policy">
+          <LeavePolicySettings categories={store.leaveCategories} />
+        </Card>
+      ) : null}
 
       <Card className="mt-5" eyebrow="Danger zone" title="Demo dataset">
         <SettingsClient canReset={canReset} />

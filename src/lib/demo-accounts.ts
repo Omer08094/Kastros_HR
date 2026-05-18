@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "crypto";
 import type { RoleId } from "@/lib/roles";
 import { isRoleId } from "@/lib/roles";
 
@@ -28,34 +28,10 @@ export const DEMO_USERS: DemoUser[] = [
     name: "Elena Rossi",
   },
   {
-    email: "marcus.manager@kastros.demo",
-    password: "Demo!Marcus2026",
-    role: "manager",
-    name: "Marcus Okonkwo",
-  },
-  {
-    email: "priya.recruiter@kastros.demo",
-    password: "Demo!Priya2026",
-    role: "recruiter",
-    name: "Priya Nair",
-  },
-  {
     email: "amelia.hr@kastros.demo",
     password: "Demo!Amelia2026",
     role: "hr_admin",
     name: "Amelia Chen",
-  },
-  {
-    email: "jonas.payroll@kastros.demo",
-    password: "Demo!Jonas2026",
-    role: "payroll",
-    name: "Jonas Berg",
-  },
-  {
-    email: "security.admin@kastros.demo",
-    password: "Demo!SecOps2026",
-    role: "security_admin",
-    name: "Noah Sato",
   },
   {
     email: "ceo@kastros.demo",

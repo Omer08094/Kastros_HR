@@ -12,9 +12,13 @@ const config: Config = {
           mist: "#84A98C",
           cream: "#F4F1EA",
           sand: "#E8E3D8",
-          gold: "#C9A227",
           amber: "#D4A574",
           ink: "#0D1F1C",
+          /** Wordmark palette (kastros.co / logo) */
+          brandBlue: "#2B3990",
+          brandBlueDeep: "#243d6b",
+          brandGreen: "#006837",
+          brandGreenDark: "#005530",
         },
       },
       fontFamily: {

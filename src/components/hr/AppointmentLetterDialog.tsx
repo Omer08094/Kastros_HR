@@ -1,13 +1,16 @@
 "use client";
 
 import { Printer, X } from "lucide-react";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Employee } from "@/lib/store/types";
 
+import { BRAND_LOGO } from "@/lib/brand-assets";
 import { printInnerHtmlInIframe } from "@/lib/print-in-iframe";
 
-/** Drop your official letterhead scan here (full page, ~A4). Omit to use text-only layout. */
-export const APPOINTMENT_LETTER_TEMPLATE_PATH = "/appointment-letter-template.png";
+function employmentTypeLabel(t: Employee["employmentType"] | null | undefined): string {
+  const v = t && ["Permanent", "Temporary", "Contractual", "Intern"].includes(t) ? t : "Permanent";
+  return v.toLowerCase();
+}
 
 function printAppointmentLetterInIframe() {
   const source = document.getElementById("appointment-letter-print-root");
@@ -15,8 +18,9 @@ function printAppointmentLetterInIframe() {
   printInnerHtmlInIframe(source.innerHTML, { title: "Appointment letter" });
 }
 
-function formatLongDate(isoOrDisplay: string): string {
-  const raw = isoOrDisplay.trim();
+function formatLongDate(isoOrDisplay: string | null | undefined): string {
+  const raw = typeof isoOrDisplay === "string" ? isoOrDisplay.trim() : "";
+  if (!raw) return "—";
   const parsed = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(`${raw}T12:00:00`) : new Date(raw);
   if (!Number.isNaN(parsed.getTime())) {
     return parsed.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
@@ -35,29 +39,43 @@ function AppointmentLetterBody({
   employee,
   roster,
   issuedOn,
+  logoSrc,
+  salary,
+  salaryCurrency,
 }: {
   employee: Employee;
   roster: Employee[];
   issuedOn: string;
+  logoSrc: string;
+  salary?: number | null;
+  salaryCurrency?: string | null;
 }) {
   const reportsTo = resolveReportsToLabel(employee.reportsToEmail, roster);
 
-  return (
-    <div className="relative w-full max-w-[min(100%,34rem)] bg-white text-kastros-ink shadow-inner print:max-w-[210mm]">
-      {/* Letterhead image — optional; enable “Background graphics” in print if it disappears */}
-      <div
-        className="pointer-events-none absolute inset-0 bg-cover bg-top bg-no-repeat opacity-[0.14] print:opacity-[0.95]"
-        style={{ backgroundImage: `url(${APPOINTMENT_LETTER_TEMPLATE_PATH})` }}
-        aria-hidden
-      />
+  /** Wordmark leaf green (Kastros logo) */
+  const brandGreen = "#006837";
 
+  return (
+    <div
+      className="relative w-full max-w-[min(100%,34rem)] bg-white shadow-inner print:max-w-[210mm]"
+      style={{ color: brandGreen }}
+    >
       <div className="relative z-[1] px-6 pb-8 pt-6 print:px-[14mm] print:pb-[16mm] print:pt-[14mm] sm:px-8 sm:pt-8">
-        <header className="border-b border-kastros-sand pb-3 font-display print:border-kastros-sand">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-kastros-gold">Appointment letter</p>
-          <p className="mt-2 text-sm text-kastros-sage">{issuedOn}</p>
+        <header className="border-b border-[#006837]/20 pb-4 font-display print:border-[#006837]/25">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {logoSrc ? (
+              <img src={logoSrc} alt="Kastros" className="h-10 w-auto max-w-[200px] object-contain object-left print:h-[12mm]" />
+            ) : (
+              <span className="font-display text-lg font-semibold text-[#2B3990]">Kastros</span>
+            )}
+            <div className="text-left sm:text-right">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#006837]">Appointment letter</p>
+              <p className="mt-1 text-sm text-[#006837]/85">{issuedOn}</p>
+            </div>
+          </div>
         </header>
 
-        <div className="mt-6 space-y-4 text-sm leading-relaxed text-kastros-ink print:mt-8 print:space-y-5 print:font-display print:text-[15px]">
+        <div className="mt-6 space-y-4 text-sm leading-relaxed print:mt-8 print:space-y-5 print:font-display print:text-[15px] [&_strong]:font-semibold [&_strong]:text-[#005530]">
           <p>Dear {employee.name},</p>
 
           <p>
@@ -67,9 +85,9 @@ function AppointmentLetterBody({
           </p>
 
           <p>
-            Your employment is offered on an <strong>{employee.employmentType.toLowerCase()}</strong> basis, with a
+            Your employment is offered on an <strong>{employmentTypeLabel(employee.employmentType)}</strong> basis, with a
             commencement date of <strong>{formatLongDate(employee.joiningDate)}</strong>.{" "}
-            {employee.probationMonths > 0 ? (
+            {(employee.probationMonths ?? 0) > 0 ? (
               <>
                 The probationary period is <strong>{employee.probationMonths}</strong> month
                 {employee.probationMonths === 1 ? "" : "s"}, anticipated to conclude on{" "}
@@ -85,6 +103,20 @@ function AppointmentLetterBody({
             <strong>{employee.companyPhone?.trim() ? employee.companyPhone : "as communicated separately"}</strong>.
           </p>
 
+          {salary != null && salary > 0 ? (
+            <p>
+              Your gross monthly salary is{" "}
+              <strong>
+                {new Intl.NumberFormat(undefined, {
+                  style: "currency",
+                  currency: salaryCurrency ?? "USD",
+                  maximumFractionDigits: 2,
+                }).format(salary)}
+              </strong>{" "}
+              per month, subject to applicable deductions as per company policy and law.
+            </p>
+          ) : null}
+
           <p>
             This letter is issued as a general confirmation for internal records. Compensation, benefits, confidentiality,
             and conduct expectations remain governed by Kastros policies, your contract where applicable, and applicable
@@ -96,9 +128,9 @@ function AppointmentLetterBody({
           <p className="pt-2">Yours sincerely,</p>
 
           <div className="pt-10">
-            <div className="h-px w-48 bg-kastros-ink/70 print:bg-black" />
-            <p className="mt-3 text-sm font-semibold text-kastros-forest">Authorized signatory</p>
-            <p className="text-sm text-kastros-sage">Human Resources · Kastros</p>
+            <div className="h-px w-48 bg-[#006837]/45 print:bg-[#006837]" />
+            <p className="mt-3 text-sm font-semibold text-[#006837]">Authorized signatory</p>
+            <p className="text-sm text-[#006837]/80">Human Resources · Kastros</p>
           </div>
         </div>
       </div>
@@ -111,12 +143,23 @@ export function AppointmentLetterDialog({
   roster,
   open,
   onClose,
+  salary,
+  salaryCurrency,
 }: {
   employee: Employee;
   roster: Employee[];
   open: boolean;
   onClose: () => void;
+  salary?: number | null;
+  salaryCurrency?: string | null;
 }) {
+  const [origin, setOrigin] = useState("");
+  useEffect(() => {
+    setOrigin(typeof window !== "undefined" ? window.location.origin : "");
+  }, []);
+
+  const logoSrc = origin ? `${origin}${BRAND_LOGO}` : "";
+
   const issuedOn = new Date().toLocaleDateString(undefined, {
     year: "numeric",
     month: "long",
@@ -161,8 +204,7 @@ export function AppointmentLetterDialog({
           <div>
             <p className="font-display text-sm font-semibold text-kastros-forest">Appointment letter preview</p>
             <p className="mt-0.5 max-w-xl text-[11px] leading-snug text-kastros-sage sm:text-xs">
-              Generic wording for now — replace <code className="rounded bg-kastros-cream px-1 py-0.5 text-[0.65rem]">public/appointment-letter-template.png</code>{" "}
-              with your scan for branded layout; use Print → Background graphics if the letterhead does not appear.
+              Letterhead uses the Kastros logo from <code className="rounded bg-kastros-cream px-1 py-0.5 text-[0.65rem]">public/brand/kastros-logo.png</code>.
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
@@ -198,7 +240,7 @@ export function AppointmentLetterDialog({
 
         <div className="flex min-h-0 flex-1 justify-center overflow-y-auto overscroll-contain rounded-2xl border border-kastros-sand/80 bg-kastros-cream/40 p-3 shadow-inner sm:p-4">
           <div id="appointment-letter-print-root">
-            <AppointmentLetterBody employee={employee} roster={roster} issuedOn={issuedOn} />
+            <AppointmentLetterBody employee={employee} roster={roster} issuedOn={issuedOn} logoSrc={logoSrc} salary={salary} salaryCurrency={salaryCurrency} />
           </div>
         </div>
       </div>

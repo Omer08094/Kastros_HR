@@ -1,9 +1,10 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile } from "fs/promises";
+import { join } from "path";
 import { getSession } from "@/lib/auth";
 import { readStore } from "@/lib/store/persist";
 import { visibleEmployees, visibleTraining } from "@/lib/store/policy";
 import { uploadsDir } from "@/lib/uploads";
+import { storage } from "@/lib/firebase-admin";
 
 type FileMeta = { originalName: string; contentType: string };
 
@@ -25,11 +26,11 @@ export async function GET(_req: Request, context: { params: Promise<{ ref: strin
     const allowed = visibleTraining(store, session).some((t) => t.id === trainingRow.id);
     if (!allowed) return new Response("Forbidden", { status: 403 });
   } else if (appCv) {
-    if (!["hr_admin", "recruiter", "ceo"].includes(session.role)) {
+    if (!["hr_admin", "ceo"].includes(session.role)) {
       return new Response("Forbidden", { status: 403 });
     }
   } else if (doc && doc.employeeEmail === null) {
-    if (!["hr_admin", "recruiter", "ceo"].includes(session.role)) {
+    if (!["hr_admin", "ceo"].includes(session.role)) {
       return new Response("Forbidden", { status: 403 });
     }
   } else {
@@ -37,6 +38,31 @@ export async function GET(_req: Request, context: { params: Promise<{ ref: strin
     const visible = visibleEmployees(store, session);
     if (!visible.some((e) => e.email.toLowerCase() === email)) {
       return new Response("Forbidden", { status: 403 });
+    }
+  }
+
+  if (storage) {
+    try {
+      const bucket = storage.bucket();
+      const fileRef = bucket.file(`uploads/${ref}`);
+      const [exists] = await fileRef.exists();
+      if (exists) {
+        const [metadata] = await fileRef.getMetadata();
+        const customMeta = metadata.metadata || {};
+        const originalName = customMeta.originalName || "document";
+        const contentType = metadata.contentType || "application/octet-stream";
+        
+        const [body] = await fileRef.download();
+        return new Response(new Uint8Array(body), {
+          headers: {
+            "Content-Type": contentType,
+            "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(originalName)}`,
+            "Cache-Control": "private, no-store",
+          },
+        });
+      }
+    } catch (e) {
+      console.error("[kastros-hr] Failed to read from Firebase Storage, trying local.", e);
     }
   }
 

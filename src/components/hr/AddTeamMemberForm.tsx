@@ -15,7 +15,17 @@ async function runAction(p: Promise<ActionResult>, onOk: () => void): Promise<st
   return null;
 }
 
-export function AddTeamMemberForm({ defaults }: { defaults?: EmployeeIntakeDefaults }) {
+export function AddTeamMemberForm({
+  defaults,
+  departments = [],
+  subDepartments = [],
+  employees = [],
+}: {
+  defaults?: EmployeeIntakeDefaults;
+  departments?: string[];
+  subDepartments?: { id: string; name: string; departmentId: string }[];
+  employees?: { email: string; name: string }[];
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +48,7 @@ export function AddTeamMemberForm({ defaults }: { defaults?: EmployeeIntakeDefau
         </div>
       ) : null}
       <form className="mt-4 grid gap-3 sm:grid-cols-2" action={(fd) => handle(addEmployee(fd))}>
-        <EmployeeIntakeFields defaults={defaults} showSubtitle={false} />
+        <EmployeeIntakeFields defaults={defaults} showSubtitle={false} departments={departments} subDepartments={subDepartments} employees={employees} />
         <div className="sm:col-span-2">
           <button
             type="submit"

@@ -17,19 +17,19 @@ export default async function SecurityPage() {
         <Card eyebrow="Posture" title="Platform controls">
           <ul className="space-y-3 text-sm text-kastros-ink">
             <li className="flex gap-2">
-              <span className="text-kastros-gold" aria-hidden>
+              <span className="text-kastros-brandGreen" aria-hidden>
                 ●
               </span>
               HTTP-only, SameSite=Strict session cookie (signed JWT)
             </li>
             <li className="flex gap-2">
-              <span className="text-kastros-gold" aria-hidden>
+              <span className="text-kastros-brandGreen" aria-hidden>
                 ●
               </span>
               RBAC enforced in middleware + server actions
             </li>
             <li className="flex gap-2">
-              <span className="text-kastros-gold" aria-hidden>
+              <span className="text-kastros-brandGreen" aria-hidden>
                 ●
               </span>
               Security headers (HSTS, CSP, XFO DENY, nosniff)

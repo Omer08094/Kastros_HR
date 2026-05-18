@@ -11,7 +11,7 @@ export default async function TrainingPage() {
 
   const store = await readStore();
   const rows = visibleTraining(store, session);
-  const canAssign = session.role === "hr_admin";
+  const canAssign = session.role === "hr_admin" || session.role === "ceo";
 
   return (
     <PageShell title="Learning" subtitle="Internal and external training, materials, and attendance">

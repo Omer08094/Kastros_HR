@@ -26,10 +26,21 @@ function policyTitle(policies: PolicyManual[], policyId: string) {
   return policies.find((p) => p.id === policyId)?.title ?? policyId;
 }
 
+/** Returns "expired", "soon" if within 90 days, or null. */
+function cnicExpiryStatus(date: string | null | undefined): "expired" | "soon" | null {
+  if (!date) return null;
+  const ts = Date.parse(date.length <= 10 ? `${date}T12:00:00Z` : date);
+  if (Number.isNaN(ts)) return null;
+  const diffDays = Math.floor((ts - Date.now()) / 86400000);
+  if (diffDays < 0) return "expired";
+  if (diffDays <= 90) return "soon";
+  return null;
+}
+
 function DetailSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="rounded-xl border border-kastros-sand/80 bg-kastros-cream/30 p-4">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-kastros-gold">{title}</h3>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-kastros-brandGreen">{title}</h3>
       <div className="mt-3">{children}</div>
     </div>
   );
@@ -224,6 +235,8 @@ export function EmployeesClient({
 
       <div className="space-y-8">
         {pagedEmployees.map((e) => {
+          const emergencyContacts = e.emergencyContacts ?? [];
+          const familyRelations = e.familyRelations ?? [];
           const { documents: personDocs, academics: personAcademics, acknowledgements: personAcks } = byEmail(e.email);
           return (
             <article
@@ -239,7 +252,7 @@ export function EmployeesClient({
                   <button
                     type="button"
                     onClick={() => setLetterFor(e)}
-                    className="rounded-xl border border-kastros-gold/35 bg-kastros-cream/80 px-3 py-1.5 text-xs font-semibold text-kastros-forest shadow-sm ring-1 ring-kastros-gold/20 hover:bg-kastros-cream"
+                    className="rounded-xl border border-kastros-brandBlue/22 bg-kastros-cream/80 px-3 py-1.5 text-xs font-semibold text-kastros-forest shadow-sm ring-1 ring-kastros-brandGreen/20 hover:bg-kastros-cream"
                   >
                     Appointment letter
                   </button>
@@ -256,7 +269,78 @@ export function EmployeesClient({
                 </div>
               </header>
 
+              {e.cnicExpiry && cnicExpiryStatus(e.cnicExpiry) ? (
+                <div
+                  className={`mt-4 rounded-xl px-3 py-2 text-xs font-medium ${
+                    cnicExpiryStatus(e.cnicExpiry) === "expired"
+                      ? "bg-red-50 text-red-800 ring-1 ring-red-200"
+                      : "bg-amber-50 text-amber-900 ring-1 ring-amber-200"
+                  }`}
+                >
+                  CNIC {cnicExpiryStatus(e.cnicExpiry) === "expired" ? "expired" : "expires soon"} ({e.cnicExpiry}).
+                </div>
+              ) : null}
+              {e.drivingLicenceExpiry && cnicExpiryStatus(e.drivingLicenceExpiry) ? (
+                <div
+                  className={`mt-2 rounded-xl px-3 py-2 text-xs font-medium ${
+                    cnicExpiryStatus(e.drivingLicenceExpiry) === "expired"
+                      ? "bg-red-50 text-red-800 ring-1 ring-red-200"
+                      : "bg-amber-50 text-amber-900 ring-1 ring-amber-200"
+                  }`}
+                >
+                  Driving licence {cnicExpiryStatus(e.drivingLicenceExpiry) === "expired" ? "expired" : "expires soon"} ({e.drivingLicenceExpiry}).
+                </div>
+              ) : null}
+
               <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                <DetailSection title="Identity">
+                  <Dl
+                    rows={[
+                      { label: "Gender", value: e.gender ?? "—" },
+                      { label: "Date of birth", value: e.dateOfBirth ?? "—" },
+                      {
+                        label: "Nationality",
+                        value: e.secondNationality
+                          ? `${e.nationality ?? "—"} / ${e.secondNationality}`
+                          : e.nationality ?? "—",
+                      },
+                      { label: "Marital status", value: e.maritalStatus ?? "—" },
+                      { label: "Religion", value: e.religion ?? "—" },
+                      { label: "CNIC", value: e.cnic ?? "—" },
+                      { label: "CNIC expiry", value: e.cnicExpiry ?? "—" },
+                      { label: "Address", value: e.address ?? "—" },
+                    ]}
+                  />
+                </DetailSection>
+
+                <DetailSection title="Working schedule & vehicle">
+                  <Dl
+                    rows={[
+                      { label: "Business unit", value: e.businessUnit ?? "—" },
+                      { label: "Designation #", value: e.designationNumber ?? "—" },
+                      { label: "Official #", value: e.officialNumber ?? "—" },
+                      { label: "Duty hours", value: e.dutyHours != null ? `${e.dutyHours} hrs/wk` : "—" },
+                      { label: "Duty days", value: e.dutyDays != null ? `${e.dutyDays} days/wk` : "—" },
+                      { label: "Company vehicle", value: e.hasCompanyVehicle ? "Yes" : "No" },
+                      { label: "Vehicle #", value: e.vehicleNumber ?? "—" },
+                      { label: "Driving licence #", value: e.drivingLicenceNumber ?? "—" },
+                      { label: "Licence expiry", value: e.drivingLicenceExpiry ?? "—" },
+                    ]}
+                  />
+                  {e.licences.length > 0 ? (
+                    <div className="mt-4 border-t border-kastros-sand/60 pt-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">Other licences</p>
+                      <ul className="mt-2 space-y-1 text-xs text-kastros-ink">
+                        {e.licences.map((l) => (
+                          <li key={l.id} className="rounded-lg bg-white/60 px-2 py-1.5 ring-1 ring-kastros-sand/50">
+                            <span className="font-medium">{l.type}</span> · {l.number} · expires {l.expiresOn ?? "—"}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </DetailSection>
+
                 <DetailSection title="Personal & contact">
                   <Dl
                     rows={[
@@ -267,9 +351,9 @@ export function EmployeesClient({
                   />
                   <div className="mt-4 border-t border-kastros-sand/60 pt-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">Emergency contacts</p>
-                    {e.emergencyContacts.length ? (
+                    {emergencyContacts.length ? (
                       <ul className="mt-2 space-y-2 text-sm text-kastros-ink">
-                        {e.emergencyContacts.map((c, i) => (
+                        {emergencyContacts.map((c, i) => (
                           <li key={`${c.phone}-${i}`} className="rounded-lg bg-white/60 px-2 py-1.5 ring-1 ring-kastros-sand/50">
                             {c.name} ({c.relation}) — {c.phone}
                           </li>
@@ -281,9 +365,9 @@ export function EmployeesClient({
                   </div>
                   <div className="mt-4 border-t border-kastros-sand/60 pt-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">Family / COI declarations</p>
-                    {e.familyRelations.length ? (
+                    {familyRelations.length ? (
                       <ul className="mt-2 space-y-2 text-sm text-kastros-ink">
-                        {e.familyRelations.map((f, i) => (
+                        {familyRelations.map((f, i) => (
                           <li key={`${f.name}-${i}`} className="rounded-lg bg-white/60 px-2 py-1.5 ring-1 ring-kastros-sand/50">
                             <span className="font-medium">{f.name}</span> · {f.relation} · {f.firmOrEmployer}
                             {f.linkedToTraderOrMerchandiser ? (
@@ -304,7 +388,26 @@ export function EmployeesClient({
                       { label: "Title", value: e.title },
                       { label: "Department", value: e.department },
                       { label: "Location", value: e.location },
-                      { label: "Employment type", value: e.employmentType },
+                      { label: "Employment type", value: e.employmentType ?? "—" },
+                      { label: "Employee ID (card)", value: e.employeeIdDisplay?.trim() || "—" },
+                      { label: "CNIC", value: e.cnic?.trim() || "—" },
+                      ...(e.photoStoredRef
+                        ? [
+                            {
+                              label: "Profile photo",
+                              value: (
+                                <a
+                                  href={`/api/hr-file/${e.photoStoredRef}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-semibold text-kastros-forest underline underline-offset-2"
+                                >
+                                  View photo
+                                </a>
+                              ),
+                            },
+                          ]
+                        : []),
                       { label: "Date of joining", value: e.joiningDate },
                       {
                         label: "Probation",
@@ -366,7 +469,7 @@ export function EmployeesClient({
                               className="block rounded-lg px-3 py-2 transition hover:bg-kastros-cream/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-kastros-forest"
                             >
                               <span className="font-medium text-kastros-forest">{d.name}</span>
-                              <span className="ml-2 text-xs font-semibold text-kastros-gold">Open attachment →</span>
+                              <span className="ml-2 text-xs font-semibold text-kastros-brandGreen">Open attachment →</span>
                               <div className="mt-1 text-xs text-kastros-sage">
                                 {d.sensitivity} · custodian: {d.owner} · registered by {d.createdByEmail}
                               </div>
@@ -424,8 +527,11 @@ export function EmployeesClient({
               {canManage ? (
                 <div className="mt-6 border-t border-kastros-sand pt-5">
                   <h3 className="text-sm font-semibold text-kastros-forest">HR · quick edit</h3>
-                  <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-start">
-                    <form className="grow space-y-2 rounded-xl border border-kastros-sand bg-kastros-cream/25 p-4" action={(fd) => handle(updateEmployee(fd))}>
+                  <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start">
+                    <form
+                      className="min-w-0 grow space-y-2 rounded-xl border border-kastros-sand bg-kastros-cream/25 p-4 sm:min-w-[320px]"
+                      action={(fd) => handle(updateEmployee(fd))}
+                    >
                       <input type="hidden" name="id" value={e.id} />
                       <div className="grid gap-2 sm:grid-cols-2">
                         <label className="text-xs">
@@ -441,6 +547,184 @@ export function EmployeesClient({
                           <input name="location" defaultValue={e.location} className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm" />
                         </label>
                         <label className="text-xs">
+                          Employment type
+                          <select
+                            name="employmentType"
+                            defaultValue={e.employmentType ?? "Permanent"}
+                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
+                          >
+                            <option>Permanent</option>
+                            <option>Temporary</option>
+                            <option>Contractual</option>
+                            <option>Intern</option>
+                            <option>Trainee</option>
+                          </select>
+                        </label>
+                        <label className="text-xs">
+                          Business unit
+                          <select
+                            name="businessUnit"
+                            defaultValue={e.businessUnit ?? ""}
+                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
+                          >
+                            <option value="">—</option>
+                            <option value="UAE">UAE</option>
+                            <option value="Karachi">Karachi</option>
+                            <option value="Multan">Multan</option>
+                          </select>
+                        </label>
+                        <label className="text-xs">
+                          Designation #
+                          <input
+                            name="designationNumber"
+                            defaultValue={e.designationNumber ?? ""}
+                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <label className="text-xs">
+                          Official #
+                          <input
+                            name="officialNumber"
+                            defaultValue={e.officialNumber ?? ""}
+                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <label className="text-xs">
+                          Duty hours / wk
+                          <input
+                            type="number"
+                            min={0}
+                            name="dutyHours"
+                            defaultValue={e.dutyHours ?? ""}
+                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <label className="text-xs">
+                          Duty days / wk
+                          <input
+                            type="number"
+                            min={0}
+                            max={7}
+                            name="dutyDays"
+                            defaultValue={e.dutyDays ?? ""}
+                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <label className="text-xs">
+                          Date of birth
+                          <input
+                            type="date"
+                            name="dateOfBirth"
+                            defaultValue={e.dateOfBirth ?? ""}
+                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <label className="text-xs">
+                          Gender
+                          <select
+                            name="gender"
+                            defaultValue={e.gender ?? ""}
+                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
+                          >
+                            <option value="">—</option>
+                            <option>Male</option>
+                            <option>Female</option>
+                            <option>Other</option>
+                            <option>Prefer not to say</option>
+                          </select>
+                        </label>
+                        <label className="text-xs">
+                          Nationality
+                          <input
+                            name="nationality"
+                            defaultValue={e.nationality ?? ""}
+                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <label className="text-xs">
+                          Second nationality
+                          <input
+                            name="secondNationality"
+                            defaultValue={e.secondNationality ?? ""}
+                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <label className="text-xs">
+                          Marital status
+                          <select
+                            name="maritalStatus"
+                            defaultValue={e.maritalStatus ?? ""}
+                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
+                          >
+                            <option value="">—</option>
+                            <option>Single</option>
+                            <option>Married</option>
+                            <option>Divorced</option>
+                            <option>Widowed</option>
+                          </select>
+                        </label>
+                        <label className="text-xs">
+                          Religion
+                          <input
+                            name="religion"
+                            defaultValue={e.religion ?? ""}
+                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <label className="text-xs">
+                          CNIC expiry
+                          <input
+                            type="date"
+                            name="cnicExpiry"
+                            defaultValue={e.cnicExpiry ?? ""}
+                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <label className="text-xs sm:col-span-2">
+                          Address
+                          <textarea
+                            name="address"
+                            defaultValue={e.address ?? ""}
+                            rows={2}
+                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <label className="text-xs sm:col-span-2 inline-flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            name="hasCompanyVehicle"
+                            value="1"
+                            defaultChecked={e.hasCompanyVehicle}
+                            className="rounded border-kastros-sand"
+                          />
+                          Company vehicle assigned
+                        </label>
+                        <label className="text-xs">
+                          Vehicle #
+                          <input
+                            name="vehicleNumber"
+                            defaultValue={e.vehicleNumber ?? ""}
+                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <label className="text-xs">
+                          Driving licence #
+                          <input
+                            name="drivingLicenceNumber"
+                            defaultValue={e.drivingLicenceNumber ?? ""}
+                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <label className="text-xs">
+                          Driving licence expiry
+                          <input
+                            type="date"
+                            name="drivingLicenceExpiry"
+                            defaultValue={e.drivingLicenceExpiry ?? ""}
+                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <label className="text-xs">
                           Status
                           <select name="status" defaultValue={e.status} className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm">
                             <option>Active</option>
@@ -449,6 +733,19 @@ export function EmployeesClient({
                           </select>
                         </label>
                         <label className="text-xs">
+                          Employee ID (for ID card)
+                          <input
+                            name="employeeIdDisplay"
+                            defaultValue={e.employeeIdDisplay ?? ""}
+                            placeholder="e.g. KST-1001"
+                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <label className="text-xs">
+                          CNIC / national ID
+                          <input name="cnic" defaultValue={e.cnic ?? ""} className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm" />
+                        </label>
+                        <label className="text-xs sm:col-span-2">
                           Manager email
                           <input
                             name="reportsToEmail"
@@ -457,6 +754,21 @@ export function EmployeesClient({
                             placeholder="optional"
                           />
                         </label>
+                        <label className="text-xs sm:col-span-2">
+                          Profile photo (ID card)
+                          <input
+                            type="file"
+                            name="profilePhoto"
+                            accept="image/png,image/jpeg,image/webp"
+                            className="mt-1 w-full text-xs file:mr-2 file:rounded-lg file:border file:border-kastros-sand file:bg-white file:px-2 file:py-1"
+                          />
+                        </label>
+                        {e.photoStoredRef ? (
+                          <label className="flex items-center gap-2 text-xs text-kastros-sage sm:col-span-2">
+                            <input type="checkbox" name="clearProfilePhoto" value="1" className="rounded border-kastros-sand" />
+                            Remove profile photo
+                          </label>
+                        ) : null}
                       </div>
                       <button type="submit" disabled={pending} className="rounded-lg bg-kastros-forest px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
                         Save changes
@@ -473,6 +785,7 @@ export function EmployeesClient({
                       </button>
                     </form>
                   </div>
+
                 </div>
               ) : null}
             </article>

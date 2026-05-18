@@ -9,11 +9,11 @@ export default async function DocumentsPage() {
   if (!session) redirect("/login");
 
   const store = await readStore();
-  const canAdd = session.role === "hr_admin" || session.role === "recruiter";
-  const canDelete = session.role === "hr_admin";
+  const canAdd = session.role === "hr_admin" || session.role === "ceo";
+  const canDelete = session.role === "hr_admin" || session.role === "ceo";
 
   return (
-    <PageShell title="Documents" subtitle="Company notices, shared library, and policy acknowledgements">
+    <PageShell title="Documents" subtitle="Company notices, shared library, policy acknowledgements, and Conflict of Interest">
       <DocumentsClient
         documents={store.documents}
         policies={store.policies}
@@ -22,6 +22,8 @@ export default async function DocumentsPage() {
         canAdd={canAdd}
         canDelete={canDelete}
         linkableEmployees={store.employees.map((e) => ({ email: e.email, name: e.name })).sort((a, b) => a.name.localeCompare(b.name))}
+        coiDocs={store.coiDocs}
+        coiSubmissions={store.coiSubmissions}
       />
     </PageShell>
   );

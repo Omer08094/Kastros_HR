@@ -1,7 +1,7 @@
 import type { EmployeeIntakeDefaults } from "@/components/hr/employee-intake-fields";
 import type { JobApplication, JobPosting } from "@/lib/store/types";
 
-/** Defaults for “Add team member” when opened from an approved application. */
+/** Defaults for "Add team member" when opened from an approved application. */
 export function mapJobApplicationToOnboardingDefaults(app: JobApplication, job: JobPosting): EmployeeIntakeDefaults {
   const emp = app.employmentType && ["Permanent", "Temporary", "Contractual", "Intern"].includes(app.employmentType) ? app.employmentType : undefined;
 
@@ -25,11 +25,5 @@ export function mapJobApplicationToOnboardingDefaults(app: JobApplication, job: 
     familyRelationFirm: app.familyRelationFirm ?? "",
     familyLinked: app.familyLinked === true ? "yes" : "no",
     reportsToEmail: app.reportsToEmail ?? "",
-    eduTitle: app.eduTitle ?? "",
-    eduInstitute: app.eduInstitute ?? "",
-    eduYear: app.eduYear ?? "",
-    certTitle: app.certTitle ?? "",
-    certIssuer: app.certIssuer ?? "",
-    certYear: app.certYear ?? "",
   };
 }

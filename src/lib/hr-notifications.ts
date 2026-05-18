@@ -26,7 +26,8 @@ function iso(d: Date): string {
   return d.toISOString();
 }
 
-function parseDay(s: string): Date | null {
+function parseDay(s: string | undefined | null): Date | null {
+  if (!s) return null;
   const t = Date.parse(s.length <= 10 ? `${s}T12:00:00Z` : s);
   return Number.isNaN(t) ? null : new Date(t);
 }
@@ -39,10 +40,6 @@ function daysFromToday(day: Date, today: Date): number {
 
 function employeeByEmail(store: HrStore, email: string): Employee | undefined {
   return store.employees.find((e) => e.email === email);
-}
-
-function directReports(store: HrStore, managerEmail: string): Employee[] {
-  return store.employees.filter((e) => e.reportsToEmail === managerEmail);
 }
 
 function approvedReadyToHireApps(apps: JobApplication[]): JobApplication[] {
@@ -77,7 +74,7 @@ export function deriveHrNotifications(
         href: "/leave",
         at: iso(now),
         kind: "approval",
-      }, ["hr_admin"]);
+      }, ["hr_admin", "ceo"]);
     }
     if (r.status === "PendingCEO") {
       push({
@@ -87,7 +84,7 @@ export function deriveHrNotifications(
         href: "/leave",
         at: iso(now),
         kind: "approval",
-      }, ["ceo"]);
+      }, ["hr_admin", "ceo"]);
     }
     if (r.requesterEmail === email && (r.status === "PendingHR" || r.status === "PendingCEO")) {
       push({
@@ -100,21 +97,6 @@ export function deriveHrNotifications(
       });
     }
 
-    /** Manager visibility — many HRIS surfaces “team pending” items for line managers. */
-    if (
-      role === "manager" &&
-      directReports(store, email).some((rep) => rep.email === r.requesterEmail) &&
-      (r.status === "PendingHR" || r.status === "PendingCEO")
-    ) {
-      push({
-        id: `leave-team:${r.id}`,
-        title: "Direct report has leave in approval",
-        detail: `${findName(store, r.requesterEmail)} · ${r.kind} (${r.start}→${r.end})`,
-        href: "/leave",
-        at: iso(now),
-        kind: "team",
-      }, ["manager"]);
-    }
   }
 
   /** Candidate pipeline alerts — applicant tracking systems surface new submissions prominently. */
@@ -128,7 +110,7 @@ export function deriveHrNotifications(
       href: "/recruiting",
       at: a.submittedAt.endsWith("Z") ? a.submittedAt : iso(parseDay(a.submittedAt) ?? now),
       kind: "recruiting",
-    }, ["hr_admin", "recruiter"]);
+    }, ["hr_admin", "ceo"]);
   }
 
   /** Ready-for-hire / onboarding handoff — common “next step” nudge in SMB HR suites. */
@@ -142,41 +124,72 @@ export function deriveHrNotifications(
       href: "/onboarding",
       at: a.submittedAt,
       kind: "people",
-    }, ["manager", "recruiter", "hr_admin", "ceo"]);
+    }, ["hr_admin", "ceo"]);
   }
 
-  /** Probation / contract milestones — date-based reminders (OrangeHR-style lifecycle alerts). */
+  /** Probation milestones — alert HR at 5 days, 2 days, and on the day. */
   for (const e of store.employees) {
     if (e.status !== "Active") continue;
     const end = parseDay(e.probationCompletionDate);
     if (!end) continue;
     const days = daysFromToday(end, today);
-    if (days >= 0 && days <= 30) {
+    if (days === 0 || days === 2 || days === 5) {
       const label =
         days === 0
-          ? "Probation completes today"
-          : days <= 14
-            ? `Probation ends in ${days} day${days === 1 ? "" : "s"}`
-            : `Probation ending ${e.probationCompletionDate}`;
+          ? `Probation ends TODAY`
+          : `Probation ends in ${days} days`;
       push({
-        id: `probation:${e.id}`,
+        id: `probation-${days}d:${e.id}`,
         title: `${label}: ${e.name}`,
-        detail: `${e.title} · ${e.department}`,
+        detail: `${e.title} · ${e.department} · ends ${e.probationCompletionDate}`,
         href: "/employees",
         at: iso(end),
         kind: "people",
-      }, ["hr_admin", "ceo", "payroll"]);
+      }, ["hr_admin", "ceo"]);
+    }
+  }
 
-      if (e.reportsToEmail === email) {
-        push({
-          id: `probation-mgr:${e.id}`,
-          title: `${label} (your report)`,
-          detail: `${e.name} · ${e.title}`,
-          href: "/employees",
-          at: iso(end),
-          kind: "team",
-        }, ["manager"]);
-      }
+  /** Date-of-birth birthday alerts (annual, to HR). */
+  for (const e of store.employees) {
+    if (!e.dateOfBirth || e.status === "Separated") continue;
+    const dob = parseDay(e.dateOfBirth);
+    if (!dob) continue;
+    // Build this year's birthday date
+    const birthdayThisYear = new Date(Date.UTC(today.getUTCFullYear(), dob.getUTCMonth(), dob.getUTCDate()));
+    const daysUntil = daysFromToday(birthdayThisYear, today);
+    if (daysUntil === 0 || daysUntil === 7) {
+      push({
+        id: `dob:${e.id}:${today.getUTCFullYear()}`,
+        title: daysUntil === 0 ? `🎂 Birthday today: ${e.name}` : `Upcoming birthday in ${daysUntil} days: ${e.name}`,
+        detail: `${e.title} · ${e.department}`,
+        href: "/employees",
+        at: iso(birthdayThisYear),
+        kind: "people",
+      }, ["hr_admin", "ceo"]);
+    }
+  }
+
+  /** 1-year employment anniversary alerts (to HR). */
+  for (const e of store.employees) {
+    if (!e.joiningDate || e.status === "Separated") continue;
+    const join = parseDay(e.joiningDate);
+    if (!join) continue;
+    // Anniversary must be ≥ 1 full year
+    const yearsServed = today.getUTCFullYear() - join.getUTCFullYear();
+    if (yearsServed < 1) continue;
+    const anniversaryThisYear = new Date(Date.UTC(today.getUTCFullYear(), join.getUTCMonth(), join.getUTCDate()));
+    const daysUntil = daysFromToday(anniversaryThisYear, today);
+    if (daysUntil === 0 || daysUntil === 3 || daysUntil === 7) {
+      push({
+        id: `anniv:${e.id}:${today.getUTCFullYear()}`,
+        title: daysUntil === 0
+          ? `🏆 ${yearsServed}-year anniversary today: ${e.name}`
+          : `Anniversary in ${daysUntil} days: ${e.name} (${yearsServed} yr${yearsServed === 1 ? "" : "s"})`,
+        detail: `${e.title} · joined ${e.joiningDate}`,
+        href: "/employees",
+        at: iso(anniversaryThisYear),
+        kind: "people",
+      }, ["hr_admin", "ceo"]);
     }
   }
 
@@ -197,25 +210,8 @@ export function deriveHrNotifications(
         at: iso(join),
         kind: "people",
       },
-      ["recruiter", "hr_admin"],
+      ["hr_admin", "ceo"],
     );
-
-    if (e.reportsToEmail === email) {
-      push(
-        {
-          id: `join-mgr:${e.id}`,
-          title:
-            until === 0
-              ? `Your new report starts today: ${e.name}`
-              : `New report joins in ${until} day${until === 1 ? "" : "s"}: ${e.name}`,
-          detail: `${e.title} · ${e.location}`,
-          href: "/onboarding",
-          at: iso(join),
-          kind: "team",
-        },
-        ["manager"],
-      );
-    }
   }
 
   /** Training LMS-style due dates — overdue / due-soon surfaced on dashboards (ZenHR, etc.). */
@@ -257,7 +253,7 @@ export function deriveHrNotifications(
 
   /** HR cases — restricted workflows stay in “requires action” trays. */
   for (const c of store.cases) {
-    if (c.restrictedTo.length > 0) {
+    if (c.restrictedTo && c.restrictedTo.length > 0) {
       const allowed = new Set<string>(c.restrictedTo);
       if (!allowed.has(role)) continue;
     }
@@ -272,18 +268,6 @@ export function deriveHrNotifications(
     });
   }
 
-  /** Payroll exceptions — surfaced to payroll + HR stakeholders in most payroll modules. */
-  if (typeof store.payroll.exceptions === "number" && store.payroll.exceptions > 0) {
-    push({
-      id: `payroll-ex:${store.payroll.month}`,
-      title: `${store.payroll.exceptions} payroll exception${store.payroll.exceptions !== 1 ? "s" : ""} (${store.payroll.month})`,
-      detail: store.payroll.note,
-      href: "/payroll",
-      at: iso(now),
-      kind: "payroll",
-    }, ["payroll", "hr_admin", "ceo"]);
-  }
-
   /** Cross-role snapshot — soft FYI akin to homepage widgets on many HR dashboards. */
   push(
     {
@@ -294,7 +278,7 @@ export function deriveHrNotifications(
       at: iso(now),
       kind: "people",
     },
-    ["employee", "manager", "recruiter", "hr_admin", "payroll", "security_admin", "ceo"],
+    ["employee", "hr_admin", "ceo"],
   );
 
   const sorted = [...items].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));

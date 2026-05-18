@@ -2,6 +2,7 @@ import dynamic from "next/dynamic";
 import { redirect } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
 import { getSession } from "@/lib/auth";
+import { hasExecAccess } from "@/lib/roles";
 import { readStore } from "@/lib/store/persist";
 import { visibleEmployees } from "@/lib/store/policy";
 
@@ -24,17 +25,15 @@ export default async function EmployeesPage() {
 
   const store = await readStore();
   const rows = visibleEmployees(store, session);
-  const canManage = session.role === "hr_admin";
+  const canManage = hasExecAccess(session.role);
 
   return (
     <PageShell
       title="People"
       subtitle={
         canManage
-          ? "Full directory control (HR admin)"
-          : session.role === "manager"
-            ? "Your team and your own profile"
-            : "Directory visibility for your role"
+          ? "Full directory control (HR Admin & CEO)"
+          : "Your profile — directory visibility is limited for employees"
       }
     >
       <EmployeesClient
