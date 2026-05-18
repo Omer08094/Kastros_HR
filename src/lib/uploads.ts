@@ -25,10 +25,15 @@ export function uploadsDir(): string {
   return join(process.cwd(), "data", "uploads");
 }
 
+/** Vercel serverless request bodies are typically capped ~4.5MB; local/dev allows 10MB. */
+const maxUploadBytes = process.env.VERCEL ? 4 * 1024 * 1024 : 10 * 1024 * 1024;
+
 export async function saveFormDataFile(file: File): Promise<SavedUpload | null> {
   if (!(file instanceof File) || file.size === 0) return null;
-  if (file.size > 10 * 1024 * 1024) {
-    throw new Error(`File "${file.name || 'uploaded file'}" exceeds the 10MB size limit.`);
+  if (file.size > maxUploadBytes) {
+    const mb = maxUploadBytes / (1024 * 1024);
+    const hint = process.env.VERCEL ? " On Vercel, keep files under the platform request limit." : "";
+    throw new Error(`File "${file.name || "uploaded file"}" exceeds the ${mb}MB size limit.${hint}`);
   }
   const ref = randomUUID();
   const meta = {

@@ -32,6 +32,9 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
+/** Vercel caps this by plan (e.g. 10s Hobby); higher tiers allow longer Firebase Admin + Firestore work. */
+export const maxDuration = 60;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${dmSans.variable} ${fraunces.variable}`}>

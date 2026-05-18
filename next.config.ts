@@ -5,6 +5,9 @@ import { fileURLToPath } from "url";
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const isDev = process.env.NODE_ENV !== "production";
+/** Vercel serverless has a ~4.5MB request body ceiling (Hobby); keep under that to avoid opaque 413s. */
+const isVercel = Boolean(process.env.VERCEL);
+const uploadBodyLimit = isVercel ? "4mb" : "20mb";
 
 /**
  * CSP is easy to mis-tune with Next.js dev tooling (Fast Refresh, webpack style paths).
@@ -42,13 +45,15 @@ const securityHeadersBase = [
 const nextConfig: NextConfig = {
   /** Avoid wrong monorepo/root detection when another package-lock exists higher in the tree (e.g. user home). */
   outputFileTracingRoot: projectRoot,
+  /** Native deps + large bundle: trace correctly on Vercel serverless. */
+  serverExternalPackages: ["firebase-admin"],
   poweredByHeader: false,
   experimental: {
-    middlewareClientMaxBodySize: "20mb",
+    middlewareClientMaxBodySize: uploadBodyLimit,
     optimizePackageImports: ["lucide-react"],
     serverActions: {
-      /** Onboarding + training decks (pptx/pdf). */
-      bodySizeLimit: "20mb",
+      /** Onboarding + training decks (pptx/pdf); capped on Vercel to match platform limits. */
+      bodySizeLimit: uploadBodyLimit,
     },
   },
   async headers() {
