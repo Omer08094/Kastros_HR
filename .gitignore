@@ -23,6 +23,9 @@
 # Firebase service account keys — never commit
 *firebase-adminsdk*.json
 .env*.local
+# Secret drops with nonstandard names (keep out of git)
+env.localomer.download
+env.exampleomer.example
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

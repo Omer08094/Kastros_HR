@@ -17,8 +17,10 @@ const csp = [
   /** blob: covers some dev/prod style injection paths; unsafe-inline keeps App Router + Tailwind predictable */
   "style-src 'self' 'unsafe-inline' blob:",
   "font-src 'self'",
-  "img-src 'self' data: blob:",
-  "connect-src 'self'",
+  "img-src 'self' data: blob: https://*.googleapis.com https://*.gstatic.com",
+  /** Firebase Auth / Firestore / Storage client SDKs call *.googleapis.com; Google IdP flows may use frames. */
+  "connect-src 'self' https://*.googleapis.com https://*.gstatic.com wss://*.googleapis.com",
+  "frame-src 'self' https://*.firebaseapp.com https://accounts.google.com https://*.google.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
