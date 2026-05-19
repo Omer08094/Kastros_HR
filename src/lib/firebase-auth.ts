@@ -1,5 +1,4 @@
-import "@/lib/firebase-admin";
-import { getAuth } from "firebase-admin/auth";
+import { getAdminAuth } from "@/lib/firebase-admin";
 import type { UserRecord } from "firebase-admin/auth";
 import crypto from "crypto";
 
@@ -14,7 +13,7 @@ function authErrorCode(err: unknown): string {
  * Handles rare race where create hits `auth/email-already-exists` between check and create.
  */
 export async function createEmployeeAuth(email: string, displayName: string, role: string) {
-  const auth = getAuth();
+  const auth = getAdminAuth();
   const label = displayName.trim() || email;
   let user: UserRecord;
   let tempPassword: string | undefined;
@@ -49,6 +48,6 @@ export async function createEmployeeAuth(email: string, displayName: string, rol
 
 /** Verify a Firebase session cookie and return decoded token. */
 export async function verifySessionCookie(cookie: string) {
-  const auth = getAuth();
+  const auth = getAdminAuth();
   return await auth.verifySessionCookie(cookie, true);
 }

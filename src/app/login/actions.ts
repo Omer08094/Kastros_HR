@@ -6,16 +6,14 @@ import { authenticate } from "@/lib/demo-accounts";
 import type { RoleId } from "@/lib/roles";
 import { isRoleId } from "@/lib/roles";
 import { sessionCookieName } from "@/lib/session";
+import { getAdminAuth } from "@/lib/firebase-admin";
 import { signSession } from "@/lib/session-server";
 
 export type SignInState = { error?: string };
 
 export async function verifyFirebaseToken(idToken: string): Promise<SignInState | void> {
   try {
-    const { getAuth } = await import("firebase-admin/auth");
-    const auth = getAuth();
-    
-    // Verify the ID token passed from the client
+    const auth = getAdminAuth();
     const decoded = await auth.verifyIdToken(idToken);
     const email = decoded.email;
     if (!email) return { error: "No email associated with this account." };

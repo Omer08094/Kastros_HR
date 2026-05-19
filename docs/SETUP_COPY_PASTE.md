@@ -47,7 +47,20 @@ FIREBASE_STORAGE_BUCKET
 
 **Do not add** `KASTROS_HR_EMAIL` / `KASTROS_HR_PASSWORD`.
 
-After saving all variables → **Deployments** → **Redeploy** latest deployment.
+### `FIREBASE_PRIVATE_KEY` on Vercel (important)
+
+Paste the **entire** private key as **one line**, with `\n` where line breaks were (same as `.env.local`).
+
+- Do **not** paste multiple real line breaks in the Vercel UI.
+- You can paste **with or without** surrounding `"` quotes.
+
+Example start of value:
+
+```
+-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQ...
+```
+
+After saving all variables → **Deployments** → **Redeploy** latest deployment (required after any env change).
 
 ---
 

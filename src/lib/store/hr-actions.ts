@@ -124,8 +124,8 @@ export async function setEmployeeRole(formData: FormData): Promise<ActionResult>
   if (email === session.email.toLowerCase()) return { error: "You cannot change your own role." };
 
   try {
-    const { getAuth } = await import("firebase-admin/auth");
-    const auth = getAuth();
+    const { getAdminAuth } = await import("@/lib/firebase-admin");
+    const auth = getAdminAuth();
     const user = await auth.getUserByEmail(email);
     await auth.setCustomUserClaims(user.uid, { role });
   } catch (e: any) {
