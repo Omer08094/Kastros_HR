@@ -29,7 +29,7 @@ export default async function SettingsPage() {
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-kastros-sage">Data residency</dt>
-              <dd className="text-right font-medium text-kastros-forest">Local JSON (demo)</dd>
+              <dd className="text-right font-medium text-kastros-forest">Firebase (Firestore)</dd>
             </div>
           </dl>
         </Card>
@@ -40,14 +40,13 @@ export default async function SettingsPage() {
               chars for JWT signing.
             </li>
             <li>
-              <code className="rounded bg-kastros-cream px-1.5 py-0.5 text-xs text-kastros-ink">KASTROS_HR_EMAIL</code> /{" "}
-              <code className="rounded bg-kastros-cream px-1.5 py-0.5 text-xs text-kastros-ink">KASTROS_HR_PASSWORD</code> /{" "}
-              <code className="rounded bg-kastros-cream px-1.5 py-0.5 text-xs text-kastros-ink">KASTROS_HR_ROLE</code> — optional
-              production bootstrap user.
+              <code className="rounded bg-kastros-cream px-1.5 py-0.5 text-xs text-kastros-ink">FIREBASE_*</code> /{" "}
+              <code className="rounded bg-kastros-cream px-1.5 py-0.5 text-xs text-kastros-ink">NEXT_PUBLIC_FIREBASE_*</code> — cloud
+              auth, database, and file storage.
             </li>
             <li>
-              <code className="rounded bg-kastros-cream px-1.5 py-0.5 text-xs text-kastros-ink">KASTROS_DEMO_USERS=true</code> — allow
-              bundled demo accounts when a bootstrap user is configured.
+              <code className="rounded bg-kastros-cream px-1.5 py-0.5 text-xs text-kastros-ink">KASTROS_DEMO_USERS=true</code> — local
+              testing only; enables bundled demo accounts (not for production).
             </li>
           </ul>
         </Card>

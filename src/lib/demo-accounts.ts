@@ -1,6 +1,5 @@
 import { createHash, timingSafeEqual } from "crypto";
 import type { RoleId } from "@/lib/roles";
-import { isRoleId } from "@/lib/roles";
 
 export type DemoUser = {
   email: string;
@@ -48,36 +47,15 @@ export const DEMO_USERS: DemoUser[] = [
   },
 ];
 
-function envUser(): DemoUser | null {
-  const email = process.env.KASTROS_HR_EMAIL?.trim();
-  const password = process.env.KASTROS_HR_PASSWORD ?? "";
-  if (!email || !password) return null;
-  const roleRaw = process.env.KASTROS_HR_ROLE?.trim() || "hr_admin";
-  const role = isRoleId(roleRaw) ? roleRaw : "hr_admin";
-  const name = process.env.KASTROS_HR_NAME?.trim() || "Configured user";
-  return { email, password, role, name };
-}
-
+/** Demo / env bootstrap logins are opt-in only (local testing). Production uses Firebase Auth. */
 function demoAccountsEnabled(): boolean {
-  if (process.env.KASTROS_DEMO_USERS === "true") return true;
-  if (process.env.KASTROS_DEMO_USERS === "false") return false;
-  return process.env.NODE_ENV !== "production";
+  return process.env.KASTROS_DEMO_USERS === "true";
 }
 
 export function authenticate(email: string, password: string): DemoUser | null {
+  if (!demoAccountsEnabled()) return null;
+
   const normalized = email.trim().toLowerCase();
-
-  const env = envUser();
-  if (env) {
-    if (safeDigestEqual(normalized, env.email.toLowerCase()) && safeDigestEqual(password, env.password)) {
-      return env;
-    }
-    if (!demoAccountsEnabled()) return null;
-  }
-
-  if (!demoAccountsEnabled() && process.env.NODE_ENV === "production") {
-    return null;
-  }
 
   for (const u of DEMO_USERS) {
     if (safeDigestEqual(normalized, u.email.toLowerCase()) && safeDigestEqual(password, u.password)) {

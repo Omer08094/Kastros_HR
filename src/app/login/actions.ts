@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { authenticate } from "@/lib/demo-accounts";
 import type { RoleId } from "@/lib/roles";
+import { isRoleId } from "@/lib/roles";
 import { sessionCookieName } from "@/lib/session";
 import { signSession } from "@/lib/session-server";
 
@@ -19,9 +20,13 @@ export async function verifyFirebaseToken(idToken: string): Promise<SignInState 
     const email = decoded.email;
     if (!email) return { error: "No email associated with this account." };
 
-    // Use custom claim 'role' if present, otherwise default to employee
-    const role = (decoded.role as RoleId) || "employee";
-    const name = (decoded.name as string) || (decoded.display_name as string) || email;
+    const roleRaw = decoded.role;
+    const role: RoleId =
+      typeof roleRaw === "string" && isRoleId(roleRaw) ? roleRaw : "employee";
+    const name =
+      (typeof decoded.name === "string" && decoded.name.trim()) ||
+      (typeof decoded.display_name === "string" && decoded.display_name.trim()) ||
+      email;
 
     // Create a local signed session JWT that can be verified in Edge Runtime (middleware)
     const token = await signSession({ email, role, name });

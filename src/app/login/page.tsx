@@ -50,11 +50,11 @@ export default function LoginPage() {
               A secure home for your team across markets.
             </h1>
             <p className="mt-5 max-w-xl text-base leading-relaxed text-white/80">
-              Role-based navigation, signed sessions, and a persisted demo dataset so you can rehearse approvals, hiring,
-              payroll snapshots, and audit trails the way each persona would experience them.
+              Role-based navigation, signed sessions, and cloud persistence through Firebase so your team can run
+              approvals, hiring, and HR operations from anywhere.
             </p>
             <ul className="mt-10 space-y-4 text-sm text-white/85">
-              {["RBAC across HR modules", "Signed JWT sessions", "Security headers", "Mutable demo store in /data"].map((item) => (
+              {["RBAC across HR modules", "Firebase Authentication", "Firestore-backed HR data", "Secure file storage"].map((item) => (
                 <li key={item} className="flex items-center gap-3">
                   <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-kastros-brandGreen shadow-[0_0_0_3px_rgba(0,104,55,0.35)]" aria-hidden />
                   {item}
@@ -78,11 +78,9 @@ export default function LoginPage() {
               </div>
               <LoginForm />
               <p className="mt-8 text-center text-xs leading-relaxed text-kastros-sage/90">
-                Protected by HTTP-only session cookies and strict transport in production. Configure{" "}
-                <code className="rounded bg-kastros-cream px-1 py-0.5 text-[0.7rem] text-kastros-ink">KASTROS_SESSION_SECRET</code>{" "}
-                (32+ chars) and optional <code className="rounded bg-kastros-cream px-1 py-0.5 text-[0.7rem] text-kastros-ink">KASTROS_HR_EMAIL</code> /{" "}
-                <code className="rounded bg-kastros-cream px-1 py-0.5 text-[0.7rem] text-kastros-ink">KASTROS_HR_PASSWORD</code> /{" "}
-                <code className="rounded bg-kastros-cream px-1 py-0.5 text-[0.7rem] text-kastros-ink">KASTROS_HR_ROLE</code>.
+                Protected by HTTP-only session cookies. Accounts are managed in Firebase Authentication — not in environment
+                variables. First-time setup: run <code className="rounded bg-kastros-cream px-1 py-0.5 text-[0.7rem] text-kastros-ink">npm run bootstrap:fresh</code>{" "}
+                (see <code className="rounded bg-kastros-cream px-1 py-0.5 text-[0.7rem] text-kastros-ink">docs/FIREBASE_AUTH.md</code>).
               </p>
             </div>
 

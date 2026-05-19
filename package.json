@@ -9,7 +9,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "bootstrap:fresh": "node scripts/bootstrap-fresh.js"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

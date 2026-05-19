@@ -25,7 +25,7 @@ export function LoginForm() {
       if (!isFirebaseWebConfigured) {
         const result = await signInDemo(formData);
         if (result?.error) {
-          setError("Invalid email or password.");
+          setError(result.error ?? "Invalid email or password.");
         }
         setPending(false);
         return;
@@ -33,12 +33,18 @@ export function LoginForm() {
 
       try {
         const userCredential = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
-        idToken = await userCredential.user.getIdToken();
-      } catch {
-        // If Firebase fails, try the demo fallback via server action
-        const result = await signInDemo(formData);
-        if (result?.error) {
+        idToken = await userCredential.user.getIdToken(true);
+      } catch (firebaseErr: unknown) {
+        const code =
+          typeof firebaseErr === "object" && firebaseErr !== null && "code" in firebaseErr
+            ? String((firebaseErr as { code: string }).code)
+            : "";
+        if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
           setError("Invalid email or password.");
+        } else if (code === "auth/too-many-requests") {
+          setError("Too many attempts. Wait a moment and try again.");
+        } else {
+          setError(firebaseErr instanceof Error ? firebaseErr.message : "Could not sign in with Firebase.");
         }
         setPending(false);
         return;
@@ -71,10 +77,10 @@ export function LoginForm() {
           autoComplete="username"
           required
           className="mt-2 w-full rounded-xl border border-kastros-sand bg-kastros-cream/60 px-4 py-3 text-sm text-kastros-ink shadow-inner transition placeholder:text-kastros-sage/50 focus:border-kastros-brandBlue focus:bg-white focus:outline-none focus:ring-2 focus:ring-kastros-brandGreen/30"
-          placeholder="HR-issued ID or demo account"
+          placeholder="you@company.com"
         />
         <p className="mt-1.5 text-xs text-kastros-sage">
-          Employees: use the email address and temporary password sent via email. Admins: demo accounts or env bootstrap user.
+          Use the work email and password from your HR onboarding email (Firebase Authentication).
         </p>
       </div>
       <div>
@@ -93,10 +99,9 @@ export function LoginForm() {
       </div>
       {!isFirebaseWebConfigured ? (
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
-          Firebase browser sign-in is off (missing <span className="font-mono">NEXT_PUBLIC_FIREBASE_API_KEY</span> /{" "}
-          <span className="font-mono">NEXT_PUBLIC_FIREBASE_PROJECT_ID</span> in <span className="font-mono">.env.local</span>). You can still
-          sign in with demo accounts or your <span className="font-mono">KASTROS_HR_*</span> bootstrap user. Add the web app keys from Firebase
-          Console and restart <span className="font-mono">next dev</span> to enable employee email/password via Firebase.
+          Firebase sign-in is not configured (set <span className="font-mono">NEXT_PUBLIC_FIREBASE_*</span> in{" "}
+          <span className="font-mono">.env.local</span> and redeploy). For local testing only, set{" "}
+          <span className="font-mono">KASTROS_DEMO_USERS=true</span> to enable bundled demo accounts.
         </p>
       ) : null}
       {error ? (
