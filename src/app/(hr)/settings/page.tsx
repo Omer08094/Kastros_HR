@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
 import { Card } from "@/components/Card";
 import { LeavePolicySettings } from "@/components/hr/LeavePolicySettings";
+import { SalaryAllowanceTypesSettings } from "@/components/hr/SalaryAllowanceTypesSettings";
 import { SettingsClient } from "@/components/hr/SettingsClient";
 import { readStore } from "@/lib/store/persist";
 import { getSession } from "@/lib/auth";
@@ -53,9 +54,14 @@ export default async function SettingsPage() {
       </div>
 
       {canReset ? (
-        <Card className="mt-5" eyebrow="HR admin" title="Leave policy">
-          <LeavePolicySettings categories={store.leaveCategories} />
-        </Card>
+        <>
+          <Card className="mt-5" eyebrow="HR admin" title="Salary allowances">
+            <SalaryAllowanceTypesSettings types={store.salaryAllowanceTypes} />
+          </Card>
+          <Card className="mt-5" eyebrow="HR admin" title="Leave policy">
+            <LeavePolicySettings categories={store.leaveCategories} />
+          </Card>
+        </>
       ) : null}
 
       <Card className="mt-5" eyebrow="Danger zone" title="Demo dataset">

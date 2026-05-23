@@ -13,7 +13,10 @@ import type {
   DocumentRow,
   EducationEntry,
   Employee,
+  EmployeeCompensation,
   EmployeeLetter,
+  EmployeeSalaryAllowanceLine,
+  SalaryAllowanceCatalogItem,
   ExpenseClaim,
   Gender,
   Goal,
@@ -35,14 +38,11 @@ import type {
   SubDepartmentRecord,
   TrainingRow,
   TransferRecord,
+  CurrencyCode,
 } from "@/lib/store/types";
-import {
-  BUSINESS_UNITS,
-  currencyForBusinessUnit,
-  CURRENCIES,
-} from "@/lib/store/types";
+import { BUSINESS_UNITS, CURRENCIES, currencyForBusinessUnit } from "@/lib/store/types";
 import { payrollGrossPay, payrollNetPay } from "@/lib/store/payroll";
-import { createInitialStore, DEFAULT_LEAVE_CATEGORIES } from "@/lib/store/seed";
+import { createInitialStore, DEFAULT_LEAVE_CATEGORIES, DEFAULT_SALARY_ALLOWANCE_TYPES } from "@/lib/store/seed";
 
 const storePath = () => join(process.cwd(), "data", "kastros-hr-demo.json");
 
@@ -159,6 +159,49 @@ function normalizeJobApplication(raw: JobApplication): JobApplication {
   };
 }
 
+function normalizeSalaryAllowanceCatalog(raw: unknown): SalaryAllowanceCatalogItem[] {
+  if (!Array.isArray(raw) || raw.length === 0) return DEFAULT_SALARY_ALLOWANCE_TYPES;
+  return raw
+    .filter((x): x is Record<string, unknown> => isPlainObject(x) && typeof x.id === "string")
+    .map((x) => ({
+      id: x.id as string,
+      name: typeof x.name === "string" && x.name.trim() ? x.name.trim() : "Allowance",
+      unit: x.unit === "liters" ? "liters" : "money",
+      isActive: x.isActive !== false,
+      sortOrder: numOrNull(x.sortOrder) ?? 0,
+    }));
+}
+
+function normalizeCompensation(raw: unknown, businessUnit: BusinessUnit | null): EmployeeCompensation | null {
+  if (!isPlainObject(raw)) return null;
+  const gross = numOrNull(raw.grossSalary);
+  const basic = numOrNull(raw.basicSalary);
+  if (gross == null && basic == null && !Array.isArray(raw.allowances)) return null;
+  const bu = normalizeBusinessUnit(raw.businessUnit) ?? businessUnit;
+  const currencyRaw = raw.currency;
+  const currency =
+    typeof currencyRaw === "string" && (CURRENCIES as readonly string[]).includes(currencyRaw)
+      ? (currencyRaw as CurrencyCode)
+      : currencyForBusinessUnit(bu);
+  const allowances: EmployeeSalaryAllowanceLine[] = Array.isArray(raw.allowances)
+    ? (raw.allowances as unknown[])
+        .filter((a): a is Record<string, unknown> => isPlainObject(a) && typeof a.typeId === "string")
+        .map((a) => ({
+          typeId: a.typeId as string,
+          amount: Math.max(0, numOrNull(a.amount) ?? 0),
+        }))
+        .filter((a) => a.amount > 0)
+    : [];
+  return {
+    grossSalary: Math.max(0, gross ?? 0),
+    basicSalary: Math.max(0, basic ?? 0),
+    currency,
+    allowances,
+    updatedAt: strOrNull(raw.updatedAt),
+    updatedByEmail: strOrNull(raw.updatedByEmail),
+  };
+}
+
 function normalizeEmployee(raw: Record<string, unknown>): Employee {
   const base = raw as unknown as Partial<Employee>;
   const emergencyContacts = Array.isArray(raw.emergencyContacts)
@@ -242,6 +285,7 @@ function normalizeEmployee(raw: Record<string, unknown>): Employee {
     hasProvidentFund: boolOr(raw.hasProvidentFund, false),
     firebaseUid,
     photoStoredRef,
+    compensation: normalizeCompensation(raw.compensation, normalizeBusinessUnit(raw.businessUnit)),
   };
 }
 
@@ -381,6 +425,8 @@ function normalizeStore(parsed: unknown): HrStore {
         }))
       : fb.businessUnits;
 
+  const salaryAllowanceTypes = normalizeSalaryAllowanceCatalog(p.salaryAllowanceTypes);
+
   const leaveCategories =
     Array.isArray(p.leaveCategories) && p.leaveCategories.length > 0
       ? normalizeArray<LeaveCategory>(p.leaveCategories, isObjWithId).map((c) => ({
@@ -403,6 +449,7 @@ function normalizeStore(parsed: unknown): HrStore {
 
   return {
     employees,
+    salaryAllowanceTypes,
     leaveCategories,
     employeeLeaveAllocations,
     leaveRequests,

@@ -1,4 +1,14 @@
-import type { BusinessUnitRecord, HrStore, LeaveCategory } from "@/lib/store/types";
+import type { BusinessUnitRecord, HrStore, LeaveCategory, SalaryAllowanceCatalogItem } from "@/lib/store/types";
+
+/** Default salary allowance types — HR can add or rename in Settings. */
+export const DEFAULT_SALARY_ALLOWANCE_TYPES: SalaryAllowanceCatalogItem[] = [
+  { id: "sal-allow-fuel", name: "Fuel allowance", unit: "liters", isActive: true, sortOrder: 1 },
+  { id: "sal-allow-mobile", name: "Cell phone allowance", unit: "money", isActive: true, sortOrder: 2 },
+  { id: "sal-allow-transport", name: "Transport allowance", unit: "money", isActive: true, sortOrder: 3 },
+  { id: "sal-allow-house", name: "House rent allowance", unit: "money", isActive: true, sortOrder: 4 },
+  { id: "sal-allow-medical", name: "Medical allowance", unit: "money", isActive: true, sortOrder: 5 },
+  { id: "sal-allow-special", name: "Special allowance", unit: "money", isActive: true, sortOrder: 6 },
+];
 
 /** Default leave types — HR can rename, add, or change standard days in Settings. */
 export const DEFAULT_LEAVE_CATEGORIES: LeaveCategory[] = [
@@ -30,6 +40,7 @@ const DEFAULT_POLICIES = [
 export function createInitialStore(): HrStore {
   return {
     employees: [],
+    salaryAllowanceTypes: DEFAULT_SALARY_ALLOWANCE_TYPES,
     leaveCategories: DEFAULT_LEAVE_CATEGORIES,
     employeeLeaveAllocations: [],
     leaveRequests: [],

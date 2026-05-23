@@ -94,10 +94,4 @@ export function EmptyState({ icon, title, description }: { icon?: ReactNode; tit
   );
 }
 
-export function formatCurrency(amount: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(amount);
-  } catch {
-    return `${currency} ${amount.toFixed(2)}`;
-  }
-}
+export { formatCurrency } from "@/lib/salary-format";

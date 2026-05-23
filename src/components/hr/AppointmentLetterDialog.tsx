@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Employee } from "@/lib/store/types";
 
 import { BRAND_LOGO } from "@/lib/brand-assets";
+import { formatCurrency } from "@/lib/salary-format";
 import { printInnerHtmlInIframe } from "@/lib/print-in-iframe";
 
 function employmentTypeLabel(t: Employee["employmentType"] | null | undefined): string {
@@ -107,11 +108,7 @@ function AppointmentLetterBody({
             <p>
               Your gross monthly salary is{" "}
               <strong>
-                {new Intl.NumberFormat(undefined, {
-                  style: "currency",
-                  currency: salaryCurrency ?? "USD",
-                  maximumFractionDigits: 2,
-                }).format(salary)}
+                {formatCurrency(salary, salaryCurrency ?? "USD")}
               </strong>{" "}
               per month, subject to applicable deductions as per company policy and law.
             </p>

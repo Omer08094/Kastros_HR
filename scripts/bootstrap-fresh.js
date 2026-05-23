@@ -46,9 +46,19 @@ const DEFAULT_POLICIES = [
   { id: "pol-2", title: "Code of Conduct", version: "v2026.2", printableUrl: "/policies/code-of-conduct-v2026.2.pdf" },
 ];
 
+const DEFAULT_SALARY_ALLOWANCE_TYPES = [
+  { id: "sal-allow-fuel", name: "Fuel allowance", unit: "liters", isActive: true, sortOrder: 1 },
+  { id: "sal-allow-mobile", name: "Cell phone allowance", unit: "money", isActive: true, sortOrder: 2 },
+  { id: "sal-allow-transport", name: "Transport allowance", unit: "money", isActive: true, sortOrder: 3 },
+  { id: "sal-allow-house", name: "House rent allowance", unit: "money", isActive: true, sortOrder: 4 },
+  { id: "sal-allow-medical", name: "Medical allowance", unit: "money", isActive: true, sortOrder: 5 },
+  { id: "sal-allow-special", name: "Special allowance", unit: "money", isActive: true, sortOrder: 6 },
+];
+
 function createEmptyStore() {
   return {
     employees: [],
+    salaryAllowanceTypes: DEFAULT_SALARY_ALLOWANCE_TYPES,
     leaveCategories: DEFAULT_LEAVE_CATEGORIES,
     employeeLeaveAllocations: [],
     leaveRequests: [],
@@ -141,6 +151,7 @@ function buildEmployee({ email, name, role, firebaseUid }) {
     hasProvidentFund: false,
     firebaseUid,
     photoStoredRef: null,
+    compensation: null,
   };
 }
 

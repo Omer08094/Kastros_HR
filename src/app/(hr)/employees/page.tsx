@@ -39,6 +39,7 @@ export default async function EmployeesPage() {
       <EmployeesClient
         employees={rows}
         canManage={canManage}
+        allowanceTypes={store.salaryAllowanceTypes}
         documents={store.documents}
         academics={store.academics}
         policyAcknowledgements={store.policyAcknowledgements}

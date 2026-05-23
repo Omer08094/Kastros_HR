@@ -37,8 +37,13 @@ import {
   type HrStore,
   type JobDescription,
   type LetterType,
+  type Employee,
+  type EmployeeCompensation,
   type EmployeeLeaveAllocation,
+  type EmployeeSalaryAllowanceLine,
   type LeaveCategory,
+  type SalaryAllowanceCatalogItem,
+  type SalaryAllowanceUnit,
   type SubDepartmentRecord,
   type TransferRecord,
   type TransferStatus,
@@ -65,6 +70,14 @@ function str(v: FormDataEntryValue | null): string {
 function num(v: FormDataEntryValue | null, fallback = 0): number {
   const n = Number(str(v));
   return Number.isFinite(n) ? n : fallback;
+}
+
+/** Parse salary fields that may include thousands separators (e.g. 100,000). */
+function parseMoneyField(v: FormDataEntryValue | null): number | null {
+  const s = str(v).replace(/,/g, "");
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
 function pickCurrency(raw: string, fallback: BusinessUnit | null = null): CurrencyCode {
@@ -705,5 +718,136 @@ export async function submitCoiDocument(formData: FormData): Promise<ActionResul
     result: ok(),
   }));
   revalidatePath("/documents");
+  return ok();
+}
+
+/* ------------------------------------------------------------------ */
+/* Salary — allowance catalog (Settings)                                */
+/* ------------------------------------------------------------------ */
+
+export async function upsertSalaryAllowanceType(formData: FormData): Promise<ActionResult> {
+  const auth = await requireExec();
+  if (!auth.ok) return { error: auth.error };
+  const { session } = auth;
+  const id = str(formData.get("id"));
+  const name = str(formData.get("name"));
+  const unitRaw = str(formData.get("unit"));
+  const unit: SalaryAllowanceUnit = unitRaw === "liters" ? "liters" : "money";
+  const sortOrder = num(formData.get("sortOrder"), 0);
+  if (!name) return { error: "Allowance name is required." };
+
+  await mutateStore((store) => {
+    const row: SalaryAllowanceCatalogItem = {
+      id: id || `sal-allow-${randomUUID()}`,
+      name,
+      unit,
+      isActive: true,
+      sortOrder,
+    };
+    const idx = id ? store.salaryAllowanceTypes.findIndex((t) => t.id === id) : -1;
+    const list =
+      idx >= 0
+        ? store.salaryAllowanceTypes.map((t, i) => (i === idx ? { ...t, ...row, id: t.id } : t))
+        : [...store.salaryAllowanceTypes, row];
+    return {
+      next: audit({ ...store, salaryAllowanceTypes: list }, session.email, `${idx >= 0 ? "Updated" : "Added"} salary allowance: ${name}`),
+      result: ok(),
+    };
+  });
+  revalidatePath("/settings");
+  revalidatePath("/employees");
+  return ok();
+}
+
+export async function deleteSalaryAllowanceType(formData: FormData): Promise<ActionResult> {
+  const auth = await requireExec();
+  if (!auth.ok) return { error: auth.error };
+  const { session } = auth;
+  const id = str(formData.get("id"));
+  if (!id) return { error: "Missing id." };
+  await mutateStore((store) => ({
+    next: audit(
+      {
+        ...store,
+        salaryAllowanceTypes: store.salaryAllowanceTypes.map((t) => (t.id === id ? { ...t, isActive: false } : t)),
+      },
+      session.email,
+      `Deactivated salary allowance type ${id}`,
+    ),
+    result: ok(),
+  }));
+  revalidatePath("/settings");
+  revalidatePath("/employees");
+  return ok();
+}
+
+/* ------------------------------------------------------------------ */
+/* Salary — per employee (People)                                       */
+/* ------------------------------------------------------------------ */
+
+export async function upsertEmployeeCompensation(formData: FormData): Promise<ActionResult> {
+  const auth = await requireExec();
+  if (!auth.ok) return { error: auth.error };
+  const { session } = auth;
+  const employeeId = str(formData.get("employeeId"));
+  if (!employeeId) return { error: "Missing employee." };
+
+  const clear = str(formData.get("clearCompensation")) === "1";
+  const grossSalary = parseMoneyField(formData.get("grossSalary"));
+  const basicSalary = parseMoneyField(formData.get("basicSalary"));
+
+  const typeIds = formData.getAll("allowanceTypeId").map((v) => str(v)).filter(Boolean);
+  const amounts = formData.getAll("allowanceAmount").map((v) => parseMoneyField(v));
+
+  await mutateStore((store) => {
+    const idx = store.employees.findIndex((e) => e.id === employeeId);
+    if (idx < 0) return { next: store, result: { error: "Employee not found." } };
+    const emp = store.employees[idx] as Employee;
+
+    if (clear) {
+      const employees = store.employees.map((e, i) =>
+        i === idx ? { ...e, compensation: null } : e,
+      );
+      return {
+        next: audit({ ...store, employees }, session.email, `Cleared salary for ${emp.email}`),
+        result: ok(),
+      };
+    }
+
+    if (grossSalary == null && basicSalary == null && typeIds.length === 0) {
+      return { next: store, result: { error: "Enter gross salary, basic salary, or at least one allowance." } };
+    }
+
+    const catalog = store.salaryAllowanceTypes.filter((t) => t.isActive);
+    const seen = new Set<string>();
+    const allowances: EmployeeSalaryAllowanceLine[] = [];
+    for (let i = 0; i < typeIds.length; i++) {
+      const typeId = typeIds[i];
+      if (!typeId || seen.has(typeId)) continue;
+      const cat = catalog.find((t) => t.id === typeId);
+      if (!cat) continue;
+      const amount = amounts[i];
+      if (amount == null || amount <= 0) continue;
+      seen.add(typeId);
+      allowances.push({ typeId, amount });
+    }
+
+    const currency = pickCurrency(str(formData.get("currency")), emp.businessUnit);
+    const compensation: EmployeeCompensation = {
+      grossSalary: grossSalary ?? 0,
+      basicSalary: basicSalary ?? 0,
+      currency,
+      allowances,
+      updatedAt: new Date().toISOString(),
+      updatedByEmail: session.email,
+    };
+
+    const employees = store.employees.map((e, i) => (i === idx ? { ...e, compensation } : e));
+    return {
+      next: audit({ ...store, employees }, session.email, `Updated salary for ${emp.email}`),
+      result: ok(),
+    };
+  });
+  revalidatePath("/employees");
   return ok();
 }

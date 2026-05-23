@@ -128,6 +128,39 @@ export type Employee = {
 
   /** Profile photo uploaded under /data/uploads/{ref}, served by /api/hr-file/{ref}. */
   photoStoredRef: string | null;
+
+  /**
+   * Appointment compensation — visible and editable only by HR Admin / CEO.
+   * Gross + basic + allowance breakdown (fuel stored as liters).
+   */
+  compensation: EmployeeCompensation | null;
+};
+
+/** Money amount or liters (for fuel) — configured on the allowance catalog. */
+export type SalaryAllowanceUnit = "money" | "liters";
+
+/** HR-configurable allowance labels (Settings → Salary allowances). */
+export type SalaryAllowanceCatalogItem = {
+  id: string;
+  name: string;
+  unit: SalaryAllowanceUnit;
+  isActive: boolean;
+  sortOrder: number;
+};
+
+/** One allowance line on an employee's compensation breakdown. */
+export type EmployeeSalaryAllowanceLine = {
+  typeId: string;
+  amount: number;
+};
+
+export type EmployeeCompensation = {
+  grossSalary: number;
+  basicSalary: number;
+  currency: CurrencyCode;
+  allowances: EmployeeSalaryAllowanceLine[];
+  updatedAt: string | null;
+  updatedByEmail: string | null;
 };
 
 export type LeaveStatus = "PendingHR" | "PendingCEO" | "Approved" | "Denied";
@@ -686,6 +719,8 @@ export type AuditRow = {
 
 export type HrStore = {
   employees: Employee[];
+  /** Configurable salary allowance types (HR → Settings). */
+  salaryAllowanceTypes: SalaryAllowanceCatalogItem[];
   /** Configurable leave types and standard entitlements (HR → Settings). */
   leaveCategories: LeaveCategory[];
   /** Per-employee leave day overrides (HR → Leave). */

@@ -12,6 +12,8 @@ import type {
 import { deleteEmployee, deleteDocument, updateEmployee } from "@/lib/store/hr-actions";
 import { AppointmentLetterDialog } from "@/components/hr/AppointmentLetterDialog";
 import { CorporateCardDialog } from "@/components/hr/CorporateCardDialog";
+import { EmployeeSalarySection } from "@/components/hr/EmployeeSalarySection";
+import type { SalaryAllowanceCatalogItem } from "@/lib/store/types";
 
 type ActionResult = { ok: true } | { error: string };
 
@@ -62,6 +64,7 @@ function Dl({ rows }: { rows: Array<{ label: string; value: ReactNode }> }) {
 export function EmployeesClient({
   employees,
   canManage,
+  allowanceTypes,
   documents,
   academics,
   policyAcknowledgements,
@@ -69,6 +72,7 @@ export function EmployeesClient({
 }: {
   employees: Employee[];
   canManage: boolean;
+  allowanceTypes: SalaryAllowanceCatalogItem[];
   documents: DocumentRow[];
   academics: AcademicRecord[];
   policyAcknowledgements: PolicyAcknowledgement[];
@@ -522,6 +526,16 @@ export function EmployeesClient({
                     <p className="text-sm text-kastros-sage">No policy acknowledgements recorded for this person yet.</p>
                   )}
                 </DetailSection>
+
+                {canManage ? (
+                  <EmployeeSalarySection
+                    employee={e}
+                    allowanceTypes={allowanceTypes}
+                    pending={pending}
+                    onError={setError}
+                    onSaved={() => router.refresh()}
+                  />
+                ) : null}
               </div>
 
               {canManage ? (
@@ -828,6 +842,8 @@ export function EmployeesClient({
           open
           employee={letterFor}
           roster={employees}
+          salary={letterFor.compensation?.grossSalary ?? null}
+          salaryCurrency={letterFor.compensation?.currency ?? null}
           onClose={() => setLetterFor(null)}
         />
       ) : null}

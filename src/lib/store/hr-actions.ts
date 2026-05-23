@@ -390,6 +390,7 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
       hasProvidentFund,
       firebaseUid,
       photoStoredRef: photoSaved?.ref ?? null,
+      compensation: null,
     };
 
     const year = new Date().getFullYear();

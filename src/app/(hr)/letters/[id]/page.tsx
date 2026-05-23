@@ -5,6 +5,7 @@ import { PrintButton } from "@/components/hr/PrintButton";
 import { getSession } from "@/lib/auth";
 import { readStore } from "@/lib/store/persist";
 import { hasExecAccess } from "@/lib/roles";
+import { formatCurrency } from "@/lib/salary-format";
 
 function fmt(date: string): string {
   try {
@@ -16,11 +17,7 @@ function fmt(date: string): string {
 
 function money(amount: number | null | undefined, currency: string | null | undefined): string {
   if (amount == null || !currency) return "—";
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(amount);
-  } catch {
-    return `${currency} ${amount.toFixed(2)}`;
-  }
+  return formatCurrency(amount, currency);
 }
 
 export default async function LetterDetailPage({ params }: { params: Promise<{ id: string }> }) {
