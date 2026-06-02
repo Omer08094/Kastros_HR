@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { mutateStore, readStore } from "@/lib/store/persist";
 import { createInitialStore } from "@/lib/store/seed";
-import { createEmployeeAuth } from "@/lib/firebase-auth";
+import { createEmployeeAuth, sendFirebasePasswordResetEmail, syncEmployeeAuthIdentity } from "@/lib/firebase-auth";
 import { hasExecAccess } from "@/lib/roles";
 import {
   approvedLeaveDaysUsedInYear,
@@ -278,6 +278,9 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
     const newAcademics: HrStore["academics"] = [];
     const newDocs: HrStore["documents"] = [];
     const auditExtras: string[] = [];
+    if (!authResult.resetEmailSent) {
+      auditExtras.push("password reset email not auto-sent");
+    }
 
     if (eduComplete) {
       newAcademics.push({
@@ -429,6 +432,9 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
   const session = await getSession();
   if (!session || !hasExecAccess(session.role)) return { error: "Forbidden." };
   const id = String(formData.get("id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const fatherName = String(formData.get("fatherName") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const title = String(formData.get("title") ?? "").trim();
   const location = String(formData.get("location") ?? "").trim();
   const department = String(formData.get("department") ?? "").trim() || "General";
@@ -439,6 +445,9 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
   const employmentType: EmploymentType = ["Permanent", "Temporary", "Contractual", "Intern", "Trainee"].includes(employmentTypeRaw)
     ? (employmentTypeRaw as EmploymentType)
     : "Permanent";
+  const joiningDate = String(formData.get("joiningDate") ?? "").trim();
+  const probationMonthsRaw = Number(formData.get("probationMonths") ?? "3");
+  const probationMonths = Number.isFinite(probationMonthsRaw) ? Math.max(0, probationMonthsRaw) : 3;
   const businessUnit = optionalBusinessUnit(formData, "businessUnit");
   const employeeIdDisplay = optionalTrimmedField(formData, "employeeIdDisplay");
   const cnic = optionalTrimmedField(formData, "cnic");
@@ -467,13 +476,34 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
   const hasGratuity2 = String(formData.get("hasGratuity") ?? "") === "1";
   const hasEobi2 = String(formData.get("hasEobi") ?? "") === "1";
   const hasProvidentFund2 = String(formData.get("hasProvidentFund") ?? "") === "1";
+  const companyPhone = String(formData.get("companyPhone") ?? "").trim();
+  const personalPhone = String(formData.get("personalPhone") ?? "").trim();
+  const emergencyContactName = String(formData.get("emergencyContactName") ?? "").trim();
+  const emergencyContactRelation = String(formData.get("emergencyContactRelation") ?? "").trim();
+  const emergencyContactPhone = String(formData.get("emergencyContactPhone") ?? "").trim();
+  const familyRelationName = String(formData.get("familyRelationName") ?? "").trim();
+  const familyRelationType = String(formData.get("familyRelationType") ?? "").trim();
+  const familyRelationFirm = String(formData.get("familyRelationFirm") ?? "").trim();
+  const familyLinked = String(formData.get("familyLinked") ?? "no") === "yes";
 
-  if (!id || !title || !location) return { error: "Missing fields." };
+  if (!id || !name || !fatherName || !email || !title || !location || !joiningDate) return { error: "Missing fields." };
   if (!["Active", "On leave", "Offboarding", "Separated"].includes(status)) return { error: "Invalid status." };
 
   const snapshot = await readStore();
   const current = snapshot.employees.find((e) => e.id === id);
   if (!current) return { error: "Not found." };
+  if (snapshot.employees.some((e) => e.id !== id && e.email.toLowerCase() === email)) {
+    return { error: "Email already exists." };
+  }
+  const prevEmail = current.email.toLowerCase();
+  try {
+    await syncEmployeeAuthIdentity(current.email, email, name);
+  } catch (e: any) {
+    const code = typeof e?.code === "string" ? e.code : "";
+    if (code === "auth/email-already-exists") return { error: "This email is already used by another Firebase Auth account." };
+    if (code === "auth/user-not-found") return { error: "Employee Auth account not found; ask admin to re-create account access." };
+    return { error: e?.message || "Could not update Firebase login identity." };
+  }
 
   let nextPhotoRef = current.photoStoredRef;
   let uploadedRef: string | null = null;
@@ -499,10 +529,27 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
     if (idx < 0) return { next: store, result: { error: "Not found." } };
     const prev = store.employees[idx];
     if (!prev) return { next: store, result: { error: "Not found." } };
+    const replacingEmail = prev.email.toLowerCase();
+    const emergencyContacts: Employee["emergencyContacts"] = emergencyContactName
+      ? [{ name: emergencyContactName, relation: emergencyContactRelation || "Next of kin", phone: emergencyContactPhone }]
+      : [];
+    const familyRelations: Employee["familyRelations"] = familyRelationName
+      ? [
+          {
+            name: familyRelationName,
+            relation: familyRelationType || "Relative",
+            firmOrEmployer: familyRelationFirm || "N/A",
+            linkedToTraderOrMerchandiser: familyLinked,
+          },
+        ]
+      : [];
     const copy = structuredClone(store.employees);
     copy[idx] = {
       ...prev,
       salutation: salutation2,
+      name,
+      fatherName,
+      email,
       title,
       location,
       department,
@@ -510,6 +557,9 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
       status,
       reportsToEmail,
       employmentType,
+      joiningDate,
+      probationMonths,
+      probationCompletionDate: probationDate(joiningDate, probationMonths),
       businessUnit,
       employeeIdDisplay,
       cnic,
@@ -525,6 +575,10 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
       officialNumber,
       dutyHours,
       dutyDays,
+      companyPhone,
+      personalPhone,
+      emergencyContacts,
+      familyRelations,
       hasCompanyVehicle,
       vehicleNumber,
       drivingLicenceNumber,
@@ -534,7 +588,60 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
       hasProvidentFund: hasProvidentFund2,
       photoStoredRef: nextPhotoRef,
     };
-    return { next: audit({ ...store, employees: copy }, session.email, `Updated employee ${copy[idx].email}`), result: ok() };
+    const nextEmail = email.toLowerCase();
+    const mapEmail = (v: string | null | undefined): string | null =>
+      !v ? null : v.toLowerCase() === replacingEmail ? email : v;
+    const next: HrStore = {
+      ...store,
+      employees: copy,
+      documents: store.documents.map((d) => ({ ...d, employeeEmail: mapEmail(d.employeeEmail) })),
+      academics: store.academics.map((a) => ({
+        ...a,
+        employeeEmail: a.employeeEmail.toLowerCase() === replacingEmail ? email : a.employeeEmail,
+      })),
+      policyAcknowledgements: store.policyAcknowledgements.map((a) => ({
+        ...a,
+        employeeEmail: a.employeeEmail.toLowerCase() === replacingEmail ? email : a.employeeEmail,
+      })),
+      training: store.training.map((t) => ({
+        ...t,
+        assigneeEmail: t.assigneeEmail.toLowerCase() === replacingEmail ? email : t.assigneeEmail,
+        attendedEmails: (t.attendedEmails ?? []).map((ae) => (ae.toLowerCase() === replacingEmail ? email : ae)),
+      })),
+      goals: store.goals.map((g) => ({
+        ...g,
+        ownerEmail: g.ownerEmail.toLowerCase() === replacingEmail ? email : g.ownerEmail,
+      })),
+      reviews: store.reviews.map((r) => ({
+        ...r,
+        employeeEmail: r.employeeEmail.toLowerCase() === replacingEmail ? email : r.employeeEmail,
+      })),
+      payrollEntries: store.payrollEntries.map((p) => ({
+        ...p,
+        employeeEmail: p.employeeEmail.toLowerCase() === replacingEmail ? email : p.employeeEmail,
+      })),
+      leaveRequests: store.leaveRequests.map((r) => ({
+        ...r,
+        requesterEmail: r.requesterEmail.toLowerCase() === replacingEmail ? email : r.requesterEmail,
+      })),
+      transfers: store.transfers.map((t) => ({
+        ...t,
+        employeeEmail: t.employeeEmail.toLowerCase() === replacingEmail ? email : t.employeeEmail,
+      })),
+      letters: store.letters.map((l) => ({
+        ...l,
+        employeeEmail: l.employeeEmail.toLowerCase() === replacingEmail ? email : l.employeeEmail,
+      })),
+      employeeLeaveAllocations: store.employeeLeaveAllocations.map((a) => ({
+        ...a,
+        employeeEmail: a.employeeEmail.toLowerCase() === replacingEmail ? email : a.employeeEmail,
+      })),
+      coiSubmissions: store.coiSubmissions.map((c) => ({
+        ...c,
+        employeeEmail: c.employeeEmail.toLowerCase() === replacingEmail ? email : c.employeeEmail,
+      })),
+    };
+    return { next: audit(next, session.email, `Updated employee ${copy[idx].email}`), result: ok() };
   });
   if ("error" in result) {
     await deleteStoredFile(uploadedRef);
@@ -545,6 +652,29 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
   }
   revalidatePath("/employees");
   revalidatePath("/dashboard");
+  return ok();
+}
+
+export async function resendEmployeePasswordReset(formData: FormData): Promise<ActionResult> {
+  const session = await getSession();
+  if (!session || !hasExecAccess(session.role)) return { error: "Forbidden." };
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return { error: "Missing employee." };
+
+  const snapshot = await readStore();
+  const emp = snapshot.employees.find((e) => e.id === id);
+  if (!emp) return { error: "Employee not found." };
+
+  const sent = await sendFirebasePasswordResetEmail(emp.email);
+  if (!sent) {
+    return { error: "Could not trigger password reset email. Verify Firebase API key/configuration." };
+  }
+
+  await mutateStore((store) => ({
+    next: audit(store, session.email, `Sent password reset email to ${emp.email}`),
+    result: ok(),
+  }));
+  revalidatePath("/employees");
   return ok();
 }
 
@@ -971,22 +1101,43 @@ export async function submitJobApplication(formData: FormData): Promise<ActionRe
   const coverLetter = optionalTrimmedField(formData, "coverLetter");
 
   if (!jobId || !fullName || !email || !phone) return { error: "Please complete all required fields." };
-  if (!fatherName || !roleTitle || !intakeDepartment || !intakeLocation || !intakeJoiningDate) {
-    return { error: "Complete every required HR field (name, father’s name, title, department, location, joining date, personal phone)." };
-  }
 
   const employmentType: EmploymentType | null = ["Permanent", "Temporary", "Contractual", "Intern"].includes(employmentTypeRaw)
     ? (employmentTypeRaw as EmploymentType)
     : null;
   if (!employmentType) return { error: "Invalid employment type." };
 
+  const eduDegrees = formData.getAll("eduDegree").map((v) => String(v).trim());
+  const eduInstitutions = formData.getAll("eduInstitution").map((v) => String(v).trim());
+  const eduYears = formData.getAll("eduYear").map((v) => String(v).trim());
+  for (let i = 0; i < Math.max(eduDegrees.length, eduInstitutions.length, eduYears.length); i++) {
+    const deg = eduDegrees[i] ?? "";
+    const inst = eduInstitutions[i] ?? "";
+    const year = eduYears[i] ?? "";
+    const any = !!(deg || inst || year);
+    const complete = !!(deg && inst && year);
+    if (any && !complete) {
+      return { error: "Education: enter degree title, institution, and year together, or leave education fields empty." };
+    }
+  }
+  const educationEntries = eduDegrees
+    .map((degree, i) => ({
+      degree,
+      institution: eduInstitutions[i] ?? "",
+      year: eduYears[i] ?? "",
+    }))
+    .filter((e) => e.degree && e.institution && e.year);
+  const firstEduIdx = eduDegrees.findIndex((deg, i) => !!(deg && (eduInstitutions[i] ?? "") && (eduYears[i] ?? "")));
+  const normalizedEduTitle = firstEduIdx >= 0 ? eduDegrees[firstEduIdx]! : eduTitle;
+  const normalizedEduInstitute = firstEduIdx >= 0 ? eduInstitutions[firstEduIdx]! : eduInstitute;
+  const normalizedEduYear = firstEduIdx >= 0 ? eduYears[firstEduIdx]! : eduYear;
   const eduAny = !!(
-    eduTitle ||
-    eduInstitute ||
-    eduYear ||
+    normalizedEduTitle ||
+    normalizedEduInstitute ||
+    normalizedEduYear ||
     (eduFile instanceof File && eduFile.size > 0)
   );
-  const eduComplete = !!(eduTitle && eduInstitute && eduYear);
+  const eduComplete = !!(normalizedEduTitle && normalizedEduInstitute && normalizedEduYear);
   if (eduAny && !eduComplete) {
     return { error: "Education: enter degree title, institution, and year together, or leave education fields empty." };
   }
@@ -1040,12 +1191,12 @@ export async function submitJobApplication(formData: FormData): Promise<ActionRe
       cvOriginalName: saved.originalName,
       submittedAt: new Date().toISOString(),
       reviewStatus: "submitted",
-      fatherName,
-      roleTitle,
-      intakeDepartment,
-      intakeLocation,
+      fatherName: fatherName || null,
+      roleTitle: roleTitle || null,
+      intakeDepartment: intakeDepartment || null,
+      intakeLocation: intakeLocation || null,
       employmentType,
-      intakeJoiningDate,
+      intakeJoiningDate: intakeJoiningDate || null,
       intakeProbationMonths: Number.isFinite(intakeProbationMonths) ? intakeProbationMonths : 3,
       companyPhone: companyPhone || null,
       emergencyContactName: emergencyContactName || null,
@@ -1056,9 +1207,10 @@ export async function submitJobApplication(formData: FormData): Promise<ActionRe
       familyRelationFirm: familyRelationFirm || null,
       familyLinked,
       reportsToEmail,
-      eduTitle: eduTitle || null,
-      eduInstitute: eduInstitute || null,
-      eduYear: eduYear || null,
+      educationEntries,
+      eduTitle: normalizedEduTitle || null,
+      eduInstitute: normalizedEduInstitute || null,
+      eduYear: normalizedEduYear || null,
       eduStoredRef: eduSaved?.ref ?? null,
       eduAttachmentName,
       certTitle: certTitle || null,

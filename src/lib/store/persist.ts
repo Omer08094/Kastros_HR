@@ -119,6 +119,19 @@ function normalizeJobApplication(raw: JobApplication): JobApplication {
       : null;
   const fl = raw.familyLinked === true ? true : raw.familyLinked === false ? false : null;
 
+  const educationEntries =
+    Array.isArray(raw.educationEntries) && raw.educationEntries.length > 0
+      ? raw.educationEntries
+          .map((e) => ({
+            degree: String(e?.degree ?? "").trim(),
+            institution: String(e?.institution ?? "").trim(),
+            year: String(e?.year ?? "").trim(),
+          }))
+          .filter((e) => e.degree && e.institution && e.year)
+      : raw.eduTitle && raw.eduInstitute && raw.eduYear
+        ? [{ degree: raw.eduTitle, institution: raw.eduInstitute, year: raw.eduYear }]
+        : [];
+
   return {
     ...raw,
     reviewStatus,
@@ -146,6 +159,7 @@ function normalizeJobApplication(raw: JobApplication): JobApplication {
     familyRelationFirm: raw.familyRelationFirm ?? null,
     familyLinked: fl,
     reportsToEmail: raw.reportsToEmail ?? null,
+    educationEntries,
     eduTitle: raw.eduTitle ?? null,
     eduInstitute: raw.eduInstitute ?? null,
     eduYear: raw.eduYear ?? null,

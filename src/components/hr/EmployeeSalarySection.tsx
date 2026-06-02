@@ -52,12 +52,15 @@ export function EmployeeSalarySection({
   onSaved,
   pending,
   onError,
+  readOnly = false,
 }: {
   employee: Employee;
   allowanceTypes: SalaryAllowanceCatalogItem[];
   onSaved: () => void;
   pending: boolean;
   onError: (msg: string | null) => void;
+  /** View-only summary (no edit form). */
+  readOnly?: boolean;
 }) {
   const catalog = useMemo(
     () => allowanceTypes.filter((t) => t.isActive).sort((a, b) => a.sortOrder - b.sortOrder),
@@ -155,10 +158,11 @@ export function EmployeeSalarySection({
             </div>
           ) : null}
         </dl>
-      ) : (
-        <p className="mt-2 text-sm text-kastros-sage">No salary recorded yet. Use the form below to add compensation.</p>
+      ) : readOnly ? null : (
+        <p className="mt-2 text-sm text-kastros-sage">No salary recorded yet. Click Edit profile to add compensation.</p>
       )}
 
+      {readOnly ? null : (
       <form action={handleSubmit} className="mt-4 space-y-4 border-t border-kastros-sand/80 pt-4">
         <input type="hidden" name="employeeId" value={employee.id} />
         <input type="hidden" name="currency" value={currency} />
@@ -280,6 +284,7 @@ export function EmployeeSalarySection({
           ) : null}
         </div>
       </form>
+      )}
     </div>
   );
 }

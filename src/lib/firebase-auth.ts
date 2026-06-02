@@ -43,7 +43,47 @@ export async function createEmployeeAuth(email: string, displayName: string, rol
 
   await auth.setCustomUserClaims(user.uid, { role });
   const resetLink = await auth.generatePasswordResetLink(email);
-  return { uid: user.uid, tempPassword, resetLink };
+  const resetEmailSent = await sendFirebasePasswordResetEmail(email);
+  return { uid: user.uid, tempPassword, resetLink, resetEmailSent };
+}
+
+/**
+ * Sends Firebase-hosted password-reset email (uses Auth email template).
+ * Returns false only when delivery trigger call failed.
+ */
+export async function sendFirebasePasswordResetEmail(email: string): Promise<boolean> {
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim();
+  if (!apiKey) return false;
+  try {
+    const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ requestType: "PASSWORD_RESET", email }),
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      console.warn("[kastros-hr] password reset email trigger failed", res.status, txt);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn("[kastros-hr] password reset email trigger error", e);
+    return false;
+  }
+}
+
+/** Keep Firebase Auth login identity in sync with HR profile email/name changes. */
+export async function syncEmployeeAuthIdentity(currentEmail: string, nextEmail: string, displayName: string): Promise<void> {
+  const auth = getAdminAuth();
+  const now = currentEmail.trim().toLowerCase();
+  const next = nextEmail.trim().toLowerCase();
+  const label = displayName.trim() || next;
+  const user = await auth.getUserByEmail(now);
+  if (now === next) {
+    await auth.updateUser(user.uid, { displayName: label });
+    return;
+  }
+  await auth.updateUser(user.uid, { email: next, displayName: label });
 }
 
 /** Verify a Firebase session cookie and return decoded token. */

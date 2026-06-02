@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { Fragment, useMemo, useState, useTransition } from "react";
 import { Card } from "@/components/Card";
 import { LinkedInJobKitDialog } from "@/components/hr/LinkedInJobKitDialog";
 import type { JobApplication, JobPosting } from "@/lib/store/types";
@@ -26,9 +26,13 @@ function formatSubmitted(iso: string) {
 }
 
 function ApplicantsTable({ apps, canMutate }: { apps: JobApplication[]; canMutate: boolean }) {
+  const [openId, setOpenId] = useState<string | null>(null);
   if (apps.length === 0) {
     return <p className="text-sm text-kastros-sage">No submissions yet for this role.</p>;
   }
+
+  const colSpan = canMutate ? 7 : 6;
+  const detailsClass = "rounded-lg border border-kastros-sand/70 bg-white p-3";
 
   return (
     <div className="mt-3 overflow-x-auto rounded-lg border border-kastros-sand/80 bg-white/80">
@@ -45,97 +49,202 @@ function ApplicantsTable({ apps, canMutate }: { apps: JobApplication[]; canMutat
           </tr>
         </thead>
         <tbody className="divide-y divide-kastros-sand text-kastros-ink">
-          {apps.map((a) => (
-            <tr key={a.id}>
-              <td className="max-w-[14rem] px-3 py-2.5 pr-3 align-top">
-                <div className="font-medium">{a.fullName}</div>
-                {a.currentCompany || a.yearsExperience || a.linkedIn ? (
-                  <div className="mt-0.5 text-xs text-kastros-sage">
-                    {[a.currentCompany, a.yearsExperience].filter(Boolean).join(" · ")}
-                    {a.linkedIn ? (
-                      <>
-                        {a.currentCompany || a.yearsExperience ? " · " : null}
-                        <a
-                          href={a.linkedIn}
-                          className="text-kastros-forest underline underline-offset-2"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          LinkedIn
-                        </a>
-                      </>
+          {apps.map((a) => {
+            const isOpen = openId === a.id;
+            return (
+              <Fragment key={a.id}>
+                <tr key={a.id}>
+                  <td className="max-w-[14rem] px-3 py-2.5 pr-3 align-top">
+                    <div className="font-medium">{a.fullName}</div>
+                    {a.currentCompany || a.yearsExperience || a.linkedIn ? (
+                      <div className="mt-0.5 text-xs text-kastros-sage">
+                        {[a.currentCompany, a.yearsExperience].filter(Boolean).join(" · ")}
+                        {a.linkedIn ? (
+                          <>
+                            {a.currentCompany || a.yearsExperience ? " · " : null}
+                            <a
+                              href={a.linkedIn}
+                              className="text-kastros-forest underline underline-offset-2"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              LinkedIn
+                            </a>
+                          </>
+                        ) : null}
+                      </div>
                     ) : null}
-                  </div>
-                ) : null}
-                {a.salaryExpectation || a.noticePeriod ? (
-                  <div className="mt-0.5 text-xs text-kastros-sage">
-                    {a.salaryExpectation ? `Expectation: ${a.salaryExpectation}` : null}
-                    {a.salaryExpectation && a.noticePeriod ? " · " : null}
-                    {a.noticePeriod ? `Notice: ${a.noticePeriod}` : null}
-                  </div>
-                ) : null}
-                {a.coverLetter ? (
-                  <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs leading-snug text-kastros-sage">{a.coverLetter}</p>
-                ) : null}
-              </td>
-              <td className="px-3 py-2.5 pr-3 align-top text-kastros-sage">{a.email}</td>
-              <td className="px-3 py-2.5 pr-3 align-top text-kastros-sage">{a.phone}</td>
-              <td className="px-3 py-2.5 pr-3 align-top text-kastros-sage tabular-nums">{formatSubmitted(a.submittedAt)}</td>
-              <td className="px-3 py-2.5 align-top">
-                {a.cvStoredRef ? (
-                  <a
-                    href={`/api/hr-file/${a.cvStoredRef}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-semibold text-kastros-forest underline-offset-2 hover:underline"
-                  >
-                    {a.cvOriginalName ?? "View CV"}
-                  </a>
-                ) : (
-                  <span className="text-kastros-sage">—</span>
-                )}
-              </td>
-              <td className="px-3 py-2.5 pr-3 align-top">
-                <span
-                  className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
-                    a.reviewStatus === "approved"
-                      ? "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-100"
-                      : "bg-white text-kastros-sage ring-1 ring-kastros-sand"
-                  }`}
-                >
-                  {a.reviewStatus === "approved" ? "Approved" : "Submitted"}
-                </span>
-              </td>
-              {canMutate ? (
-                <td className="px-3 py-2.5 align-top">
-                  <div className="flex flex-col gap-2">
-                    {a.reviewStatus !== "approved" ? (
-                      <form
-                        action={async (fd) => {
-                          await approveJobApplication(fd);
-                        }}
+                  </td>
+                  <td className="px-3 py-2.5 pr-3 align-top text-kastros-sage">{a.email}</td>
+                  <td className="px-3 py-2.5 pr-3 align-top text-kastros-sage">{a.phone}</td>
+                  <td className="px-3 py-2.5 pr-3 align-top text-kastros-sage tabular-nums">{formatSubmitted(a.submittedAt)}</td>
+                  <td className="px-3 py-2.5 align-top">
+                    {a.cvStoredRef ? (
+                      <a
+                        href={`/api/hr-file/${a.cvStoredRef}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-semibold text-kastros-forest underline-offset-2 hover:underline"
                       >
-                        <input type="hidden" name="id" value={a.id} />
-                        <button
-                          type="submit"
-                          className="rounded-lg bg-kastros-forest px-3 py-1.5 text-xs font-semibold text-white hover:opacity-95"
-                        >
-                          Approve
-                        </button>
-                      </form>
+                        {a.cvOriginalName ?? "View CV"}
+                      </a>
                     ) : (
-                      <Link
-                        href={`/onboarding?applicationId=${encodeURIComponent(a.id)}`}
-                        className="inline-flex justify-center rounded-lg border border-kastros-brandBlue/22 bg-kastros-cream px-3 py-1.5 text-center text-xs font-semibold text-kastros-forest hover:bg-kastros-cream/80"
-                      >
-                        Onboard
-                      </Link>
+                      <span className="text-kastros-sage">—</span>
                     )}
-                  </div>
-                </td>
-              ) : null}
-            </tr>
-          ))}
+                  </td>
+                  <td className="px-3 py-2.5 pr-3 align-top">
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                        a.reviewStatus === "approved"
+                          ? "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-100"
+                          : "bg-white text-kastros-sage ring-1 ring-kastros-sand"
+                      }`}
+                    >
+                      {a.reviewStatus === "approved" ? "Approved" : "Submitted"}
+                    </span>
+                  </td>
+                  {canMutate ? (
+                    <td className="px-3 py-2.5 align-top">
+                      <div className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setOpenId((prev) => (prev === a.id ? null : a.id))}
+                          className="rounded-lg border border-kastros-sand bg-white px-3 py-1.5 text-xs font-semibold text-kastros-forest hover:bg-kastros-cream/60"
+                        >
+                          {isOpen ? "Hide details" : "View full application"}
+                        </button>
+                        {a.reviewStatus !== "approved" ? (
+                          <form
+                            action={async (fd) => {
+                              await approveJobApplication(fd);
+                            }}
+                          >
+                            <input type="hidden" name="id" value={a.id} />
+                            <button
+                              type="submit"
+                              className="rounded-lg bg-kastros-forest px-3 py-1.5 text-xs font-semibold text-white hover:opacity-95"
+                            >
+                              Approve
+                            </button>
+                          </form>
+                        ) : (
+                          <Link
+                            href={`/onboarding?applicationId=${encodeURIComponent(a.id)}`}
+                            className="inline-flex justify-center rounded-lg border border-kastros-brandBlue/22 bg-kastros-cream px-3 py-1.5 text-center text-xs font-semibold text-kastros-forest hover:bg-kastros-cream/80"
+                          >
+                            Onboard
+                          </Link>
+                        )}
+                      </div>
+                    </td>
+                  ) : null}
+                </tr>
+                {isOpen ? (
+                  <tr key={`${a.id}-details`} className="bg-kastros-cream/20">
+                    <td colSpan={colSpan} className="px-3 py-3">
+                      <div className="grid gap-3 lg:grid-cols-2">
+                        <div className={detailsClass}>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">Candidate profile</p>
+                          <dl className="mt-2 space-y-1 text-sm">
+                            <div><span className="text-kastros-sage">Name:</span> {a.fullName}</div>
+                            <div><span className="text-kastros-sage">Email:</span> {a.email}</div>
+                            <div><span className="text-kastros-sage">Phone:</span> {a.phone}</div>
+                            <div><span className="text-kastros-sage">Current company:</span> {a.currentCompany ?? "—"}</div>
+                            <div><span className="text-kastros-sage">Experience:</span> {a.yearsExperience ?? "—"}</div>
+                            <div><span className="text-kastros-sage">Salary expectation:</span> {a.salaryExpectation ?? "—"}</div>
+                            <div><span className="text-kastros-sage">Notice period:</span> {a.noticePeriod ?? "—"}</div>
+                            <div>
+                              <span className="text-kastros-sage">LinkedIn:</span>{" "}
+                              {a.linkedIn ? (
+                                <a href={a.linkedIn} target="_blank" rel="noopener noreferrer" className="font-medium text-kastros-forest underline">
+                                  Open profile
+                                </a>
+                              ) : (
+                                "—"
+                              )}
+                            </div>
+                          </dl>
+                        </div>
+                        <div className={detailsClass}>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">Application assets</p>
+                          <dl className="mt-2 space-y-1 text-sm">
+                            <div>
+                              <span className="text-kastros-sage">CV:</span>{" "}
+                              {a.cvStoredRef ? (
+                                <a href={`/api/hr-file/${a.cvStoredRef}`} target="_blank" rel="noopener noreferrer" className="font-medium text-kastros-forest underline">
+                                  {a.cvOriginalName ?? "View CV"}
+                                </a>
+                              ) : (
+                                "—"
+                              )}
+                            </div>
+                            <div>
+                              <span className="text-kastros-sage">Education file:</span>{" "}
+                              {a.eduStoredRef ? (
+                                <a href={`/api/hr-file/${a.eduStoredRef}`} target="_blank" rel="noopener noreferrer" className="font-medium text-kastros-forest underline">
+                                  {a.eduAttachmentName ?? "View file"}
+                                </a>
+                              ) : (
+                                "—"
+                              )}
+                            </div>
+                            <div>
+                              <span className="text-kastros-sage">Certification file:</span>{" "}
+                              {a.certStoredRef ? (
+                                <a href={`/api/hr-file/${a.certStoredRef}`} target="_blank" rel="noopener noreferrer" className="font-medium text-kastros-forest underline">
+                                  {a.certAttachmentName ?? "View file"}
+                                </a>
+                              ) : (
+                                "—"
+                              )}
+                            </div>
+                          </dl>
+                        </div>
+                        <div className={`${detailsClass} lg:col-span-2`}>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">Cover letter</p>
+                          <p className="mt-2 whitespace-pre-wrap text-sm text-kastros-ink">{a.coverLetter ?? "—"}</p>
+                        </div>
+                        <div className={detailsClass}>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">Education</p>
+                          {a.educationEntries?.length ? (
+                            <ul className="mt-2 space-y-1 text-sm">
+                              {a.educationEntries.map((ed, i) => (
+                                <li key={`${a.id}-ed-${i}`}>
+                                  {ed.degree} · {ed.institution} · {ed.year}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="mt-2 text-sm text-kastros-sage">
+                              {a.eduTitle && a.eduInstitute && a.eduYear
+                                ? `${a.eduTitle} · ${a.eduInstitute} · ${a.eduYear}`
+                                : "—"}
+                            </p>
+                          )}
+                        </div>
+                        <div className={detailsClass}>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">HR onboarding snapshot</p>
+                          <dl className="mt-2 space-y-1 text-sm">
+                            <div><span className="text-kastros-sage">Father's name:</span> {a.fatherName ?? "—"}</div>
+                            <div><span className="text-kastros-sage">Role title:</span> {a.roleTitle ?? "—"}</div>
+                            <div><span className="text-kastros-sage">Department:</span> {a.intakeDepartment ?? "—"}</div>
+                            <div><span className="text-kastros-sage">Location:</span> {a.intakeLocation ?? "—"}</div>
+                            <div><span className="text-kastros-sage">Employment type:</span> {a.employmentType ?? "—"}</div>
+                            <div><span className="text-kastros-sage">Joining date:</span> {a.intakeJoiningDate ?? "—"}</div>
+                            <div><span className="text-kastros-sage">Probation:</span> {a.intakeProbationMonths != null ? `${a.intakeProbationMonths} months` : "—"}</div>
+                            <div><span className="text-kastros-sage">Company phone:</span> {a.companyPhone ?? "—"}</div>
+                            <div><span className="text-kastros-sage">Emergency contact:</span> {a.emergencyContactName ?? "—"}{a.emergencyContactRelation ? ` (${a.emergencyContactRelation})` : ""}{a.emergencyContactPhone ? ` — ${a.emergencyContactPhone}` : ""}</div>
+                            <div><span className="text-kastros-sage">Family declaration:</span> {a.familyRelationName ?? "—"}{a.familyRelationType ? ` · ${a.familyRelationType}` : ""}{a.familyRelationFirm ? ` · ${a.familyRelationFirm}` : ""}{a.familyLinked === true ? " · linked to traders/merchandisers" : ""}</div>
+                            <div><span className="text-kastros-sage">Reports to:</span> {a.reportsToEmail ?? "—"}</div>
+                          </dl>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>

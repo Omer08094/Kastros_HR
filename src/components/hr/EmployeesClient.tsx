@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useTransition, type FormEvent } from "react";
 import type {
   AcademicRecord,
   DocumentRow,
@@ -12,7 +12,7 @@ import type {
 import { deleteEmployee, deleteDocument, updateEmployee } from "@/lib/store/hr-actions";
 import { AppointmentLetterDialog } from "@/components/hr/AppointmentLetterDialog";
 import { CorporateCardDialog } from "@/components/hr/CorporateCardDialog";
-import { EmployeeSalarySection } from "@/components/hr/EmployeeSalarySection";
+import { EmployeeProfileCard } from "@/components/hr/EmployeeProfileCard";
 import type { SalaryAllowanceCatalogItem } from "@/lib/store/types";
 
 type ActionResult = { ok: true } | { error: string };
@@ -39,28 +39,6 @@ function cnicExpiryStatus(date: string | null | undefined): "expired" | "soon" |
   return null;
 }
 
-function DetailSection({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="rounded-xl border border-kastros-sand/80 bg-kastros-cream/30 p-4">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-kastros-brandGreen">{title}</h3>
-      <div className="mt-3">{children}</div>
-    </div>
-  );
-}
-
-function Dl({ rows }: { rows: Array<{ label: string; value: ReactNode }> }) {
-  return (
-    <dl className="grid gap-2 text-sm sm:grid-cols-[minmax(0,140px)_1fr] sm:gap-x-4">
-      {rows.map((r) => (
-        <div key={r.label} className="contents">
-          <dt className="text-kastros-sage">{r.label}</dt>
-          <dd className="text-kastros-ink">{r.value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
 export function EmployeesClient({
   employees,
   canManage,
@@ -81,12 +59,14 @@ export function EmployeesClient({
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [nameInput, setNameInput] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
   const [letterFor, setLetterFor] = useState<Employee | null>(null);
   const [cardFor, setCardFor] = useState<Employee | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const filteredEmployees = useMemo(() => {
     const q = appliedQuery.trim().toLowerCase();
@@ -136,11 +116,16 @@ export function EmployeesClient({
     });
   }, [documents, academics, policyAcknowledgements]);
 
-  function handle(p: Promise<ActionResult>) {
+  function handle(p: Promise<ActionResult>, onSuccess?: () => void) {
     setError(null);
+    setSuccess(null);
     start(async () => {
-      const err = await runAction(p, () => router.refresh());
+      const err = await runAction(p, () => {
+        router.refresh();
+        onSuccess?.();
+      });
       if (err) setError(err);
+      else if (!onSuccess) setSuccess("Saved.");
     });
   }
 
@@ -149,6 +134,11 @@ export function EmployeesClient({
       {error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
           {error}
+        </div>
+      ) : null}
+      {success ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
+          {success}
         </div>
       ) : null}
 
@@ -239,9 +229,8 @@ export function EmployeesClient({
 
       <div className="space-y-8">
         {pagedEmployees.map((e) => {
-          const emergencyContacts = e.emergencyContacts ?? [];
-          const familyRelations = e.familyRelations ?? [];
           const { documents: personDocs, academics: personAcademics, acknowledgements: personAcks } = byEmail(e.email);
+          const isEditing = canManage && editingId === e.id;
           return (
             <article
               key={e.id}
@@ -253,6 +242,15 @@ export function EmployeesClient({
                   <p className="mt-0.5 text-sm text-kastros-sage">{e.email}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                  {canManage ? (
+                    <button
+                      type="button"
+                      onClick={() => setEditingId((prev) => (prev === e.id ? null : e.id))}
+                      className="rounded-xl border border-kastros-sand bg-white px-3 py-1.5 text-xs font-semibold text-kastros-forest shadow-sm hover:bg-kastros-cream/60"
+                    >
+                      {isEditing ? "Done editing" : "Edit profile"}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => setLetterFor(e)}
@@ -296,511 +294,35 @@ export function EmployeesClient({
                 </div>
               ) : null}
 
-              <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                <DetailSection title="Identity">
-                  <Dl
-                    rows={[
-                      { label: "Gender", value: e.gender ?? "—" },
-                      { label: "Date of birth", value: e.dateOfBirth ?? "—" },
-                      {
-                        label: "Nationality",
-                        value: e.secondNationality
-                          ? `${e.nationality ?? "—"} / ${e.secondNationality}`
-                          : e.nationality ?? "—",
-                      },
-                      { label: "Marital status", value: e.maritalStatus ?? "—" },
-                      { label: "Religion", value: e.religion ?? "—" },
-                      { label: "CNIC", value: e.cnic ?? "—" },
-                      { label: "CNIC expiry", value: e.cnicExpiry ?? "—" },
-                      { label: "Address", value: e.address ?? "—" },
-                    ]}
-                  />
-                </DetailSection>
+              <EmployeeProfileCard
+                employee={e}
+                editing={isEditing}
+                canManage={canManage}
+                allowanceTypes={allowanceTypes}
+                documents={personDocs}
+                academics={personAcademics}
+                acknowledgements={personAcks}
+                policies={policies}
+                pending={pending}
+                policyTitle={(id) => policyTitle(policies, id)}
+                onError={setError}
+                onSaved={() => router.refresh()}
+                onCancel={() => setEditingId(null)}
+                onAction={handle}
+                onSuccessMessage={setSuccess}
+              />
 
-                <DetailSection title="Working schedule & vehicle">
-                  <Dl
-                    rows={[
-                      { label: "Business unit", value: e.businessUnit ?? "—" },
-                      { label: "Designation #", value: e.designationNumber ?? "—" },
-                      { label: "Official #", value: e.officialNumber ?? "—" },
-                      { label: "Duty hours", value: e.dutyHours != null ? `${e.dutyHours} hrs/wk` : "—" },
-                      { label: "Duty days", value: e.dutyDays != null ? `${e.dutyDays} days/wk` : "—" },
-                      { label: "Company vehicle", value: e.hasCompanyVehicle ? "Yes" : "No" },
-                      { label: "Vehicle #", value: e.vehicleNumber ?? "—" },
-                      { label: "Driving licence #", value: e.drivingLicenceNumber ?? "—" },
-                      { label: "Licence expiry", value: e.drivingLicenceExpiry ?? "—" },
-                    ]}
-                  />
-                  {e.licences.length > 0 ? (
-                    <div className="mt-4 border-t border-kastros-sand/60 pt-4">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">Other licences</p>
-                      <ul className="mt-2 space-y-1 text-xs text-kastros-ink">
-                        {e.licences.map((l) => (
-                          <li key={l.id} className="rounded-lg bg-white/60 px-2 py-1.5 ring-1 ring-kastros-sand/50">
-                            <span className="font-medium">{l.type}</span> · {l.number} · expires {l.expiresOn ?? "—"}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                </DetailSection>
-
-                <DetailSection title="Personal & contact">
-                  <Dl
-                    rows={[
-                      { label: "Father's name", value: e.fatherName },
-                      { label: "Company phone", value: e.companyPhone || "—" },
-                      { label: "Personal phone", value: e.personalPhone || "—" },
-                    ]}
-                  />
-                  <div className="mt-4 border-t border-kastros-sand/60 pt-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">Emergency contacts</p>
-                    {emergencyContacts.length ? (
-                      <ul className="mt-2 space-y-2 text-sm text-kastros-ink">
-                        {emergencyContacts.map((c, i) => (
-                          <li key={`${c.phone}-${i}`} className="rounded-lg bg-white/60 px-2 py-1.5 ring-1 ring-kastros-sand/50">
-                            {c.name} ({c.relation}) — {c.phone}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="mt-2 text-sm text-kastros-sage">None on file.</p>
-                    )}
-                  </div>
-                  <div className="mt-4 border-t border-kastros-sand/60 pt-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">Family / COI declarations</p>
-                    {familyRelations.length ? (
-                      <ul className="mt-2 space-y-2 text-sm text-kastros-ink">
-                        {familyRelations.map((f, i) => (
-                          <li key={`${f.name}-${i}`} className="rounded-lg bg-white/60 px-2 py-1.5 ring-1 ring-kastros-sand/50">
-                            <span className="font-medium">{f.name}</span> · {f.relation} · {f.firmOrEmployer}
-                            {f.linkedToTraderOrMerchandiser ? (
-                              <span className="ml-2 text-amber-800">(linked to traders / merchandisers)</span>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="mt-2 text-sm text-kastros-sage">None declared.</p>
-                    )}
-                  </div>
-                </DetailSection>
-
-                <DetailSection title="Employment">
-                  <Dl
-                    rows={[
-                      { label: "Title", value: e.title },
-                      { label: "Department", value: e.department },
-                      { label: "Location", value: e.location },
-                      { label: "Employment type", value: e.employmentType ?? "—" },
-                      { label: "Employee ID (card)", value: e.employeeIdDisplay?.trim() || "—" },
-                      { label: "CNIC", value: e.cnic?.trim() || "—" },
-                      ...(e.photoStoredRef
-                        ? [
-                            {
-                              label: "Profile photo",
-                              value: (
-                                <a
-                                  href={`/api/hr-file/${e.photoStoredRef}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="font-semibold text-kastros-forest underline underline-offset-2"
-                                >
-                                  View photo
-                                </a>
-                              ),
-                            },
-                          ]
-                        : []),
-                      { label: "Date of joining", value: e.joiningDate },
-                      {
-                        label: "Probation",
-                        value: (
-                          <>
-                            {e.probationMonths} months · ends{" "}
-                            <span className="font-medium text-kastros-forest">{e.probationCompletionDate}</span>
-                          </>
-                        ),
-                      },
-                      { label: "Reports to", value: e.reportsToEmail ?? "—" },
-                    ]}
-                  />
-                </DetailSection>
-
-                <DetailSection title="Education & certifications">
-                  {personAcademics.length ? (
-                    <ul className="space-y-3 text-sm">
-                      {personAcademics.map((a) => (
-                        <li key={a.id} className="rounded-lg bg-white/60 px-3 py-2 ring-1 ring-kastros-sand/50">
-                          <span className="font-medium text-kastros-forest">{a.title}</span>{" "}
-                          <span className="text-kastros-sage">({a.type})</span>
-                          <div className="mt-1 text-xs text-kastros-sage">
-                            {a.institute} · {a.year}
-                            {a.attachmentName ? ` · ${a.attachmentName}` : ""}
-                          </div>
-                          {a.storedRef ? (
-                            <div className="mt-2">
-                              <a
-                                href={`/api/hr-file/${a.storedRef}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm font-semibold text-kastros-forest underline underline-offset-2"
-                              >
-                                View uploaded file
-                              </a>
-                            </div>
-                          ) : a.attachmentName ? (
-                            <p className="mt-2 text-xs text-kastros-sage">Registered file name only — no copy on this server yet.</p>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-kastros-sage">No academic records in the demo store for this person.</p>
-                  )}
-                </DetailSection>
-
-                <DetailSection title="Personnel documents">
-                  {personDocs.length ? (
-                    <ul className="space-y-3 text-sm">
-                      {personDocs.map((d) => (
-                        <li key={d.id} className="rounded-lg bg-white/60 ring-1 ring-kastros-sand/50">
-                          {d.storedRef ? (
-                            <a
-                              href={`/api/hr-file/${d.storedRef}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="block rounded-lg px-3 py-2 transition hover:bg-kastros-cream/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-kastros-forest"
-                            >
-                              <span className="font-medium text-kastros-forest">{d.name}</span>
-                              <span className="ml-2 text-xs font-semibold text-kastros-brandGreen">Open attachment →</span>
-                              <div className="mt-1 text-xs text-kastros-sage">
-                                {d.sensitivity} · custodian: {d.owner} · registered by {d.createdByEmail}
-                              </div>
-                            </a>
-                          ) : (
-                            <div className="px-3 py-2">
-                              <span className="font-medium text-kastros-forest">{d.name}</span>
-                              <div className="mt-1 text-xs text-kastros-sage">
-                                {d.sensitivity} · custodian: {d.owner}
-                              </div>
-                              <p className="mt-2 text-xs text-kastros-sage">No file uploaded — registry entry only.</p>
-                            </div>
-                          )}
-                          {canManage ? (
-                            <div className="border-t border-kastros-sand/60 px-3 py-2">
-                              <form action={(fd) => handle(deleteDocument(fd))}>
-                                <input type="hidden" name="id" value={d.id} />
-                                <button
-                                  type="submit"
-                                  disabled={pending}
-                                  className="text-xs font-semibold text-red-700 hover:underline disabled:opacity-50"
-                                >
-                                  Remove document record
-                                </button>
-                              </form>
-                            </div>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-kastros-sage">
-                      No personnel documents linked yet. Register with a personnel file attachment on Documents, or uploads from onboarding.
-                    </p>
-                  )}
-                </DetailSection>
-
-                <DetailSection title="Policy acknowledgements">
-                  {personAcks.length ? (
-                    <ul className="space-y-2 text-sm text-kastros-ink">
-                      {personAcks.map((a) => (
-                        <li key={a.id} className="rounded-lg bg-white/60 px-3 py-2 ring-1 ring-kastros-sand/50">
-                          <span className="font-medium">{policyTitle(policies, a.policyId)}</span>
-                          <span className="text-kastros-sage"> — </span>
-                          {new Date(a.acknowledgedAt).toLocaleString()}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-kastros-sage">No policy acknowledgements recorded for this person yet.</p>
-                  )}
-                </DetailSection>
-
-                {canManage ? (
-                  <EmployeeSalarySection
-                    employee={e}
-                    allowanceTypes={allowanceTypes}
-                    pending={pending}
-                    onError={setError}
-                    onSaved={() => router.refresh()}
-                  />
-                ) : null}
-              </div>
-
-              {canManage ? (
-                <div className="mt-6 border-t border-kastros-sand pt-5">
-                  <h3 className="text-sm font-semibold text-kastros-forest">HR · quick edit</h3>
-                  <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start">
-                    <form
-                      className="min-w-0 grow space-y-2 rounded-xl border border-kastros-sand bg-kastros-cream/25 p-4 sm:min-w-[320px]"
-                      action={(fd) => handle(updateEmployee(fd))}
-                    >
-                      <input type="hidden" name="id" value={e.id} />
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <label className="text-xs">
-                          Title
-                          <input name="title" defaultValue={e.title} className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm" />
-                        </label>
-                        <label className="text-xs">
-                          Department
-                          <input name="department" defaultValue={e.department} className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm" />
-                        </label>
-                        <label className="text-xs sm:col-span-2">
-                          Location
-                          <input name="location" defaultValue={e.location} className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm" />
-                        </label>
-                        <label className="text-xs">
-                          Employment type
-                          <select
-                            name="employmentType"
-                            defaultValue={e.employmentType ?? "Permanent"}
-                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
-                          >
-                            <option>Permanent</option>
-                            <option>Temporary</option>
-                            <option>Contractual</option>
-                            <option>Intern</option>
-                            <option>Trainee</option>
-                          </select>
-                        </label>
-                        <label className="text-xs">
-                          Business unit
-                          <select
-                            name="businessUnit"
-                            defaultValue={e.businessUnit ?? ""}
-                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
-                          >
-                            <option value="">—</option>
-                            <option value="UAE">UAE</option>
-                            <option value="Karachi">Karachi</option>
-                            <option value="Multan">Multan</option>
-                          </select>
-                        </label>
-                        <label className="text-xs">
-                          Designation #
-                          <input
-                            name="designationNumber"
-                            defaultValue={e.designationNumber ?? ""}
-                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
-                          />
-                        </label>
-                        <label className="text-xs">
-                          Official #
-                          <input
-                            name="officialNumber"
-                            defaultValue={e.officialNumber ?? ""}
-                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
-                          />
-                        </label>
-                        <label className="text-xs">
-                          Duty hours / wk
-                          <input
-                            type="number"
-                            min={0}
-                            name="dutyHours"
-                            defaultValue={e.dutyHours ?? ""}
-                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
-                          />
-                        </label>
-                        <label className="text-xs">
-                          Duty days / wk
-                          <input
-                            type="number"
-                            min={0}
-                            max={7}
-                            name="dutyDays"
-                            defaultValue={e.dutyDays ?? ""}
-                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
-                          />
-                        </label>
-                        <label className="text-xs">
-                          Date of birth
-                          <input
-                            type="date"
-                            name="dateOfBirth"
-                            defaultValue={e.dateOfBirth ?? ""}
-                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
-                          />
-                        </label>
-                        <label className="text-xs">
-                          Gender
-                          <select
-                            name="gender"
-                            defaultValue={e.gender ?? ""}
-                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
-                          >
-                            <option value="">—</option>
-                            <option>Male</option>
-                            <option>Female</option>
-                            <option>Other</option>
-                            <option>Prefer not to say</option>
-                          </select>
-                        </label>
-                        <label className="text-xs">
-                          Nationality
-                          <input
-                            name="nationality"
-                            defaultValue={e.nationality ?? ""}
-                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
-                          />
-                        </label>
-                        <label className="text-xs">
-                          Second nationality
-                          <input
-                            name="secondNationality"
-                            defaultValue={e.secondNationality ?? ""}
-                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
-                          />
-                        </label>
-                        <label className="text-xs">
-                          Marital status
-                          <select
-                            name="maritalStatus"
-                            defaultValue={e.maritalStatus ?? ""}
-                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
-                          >
-                            <option value="">—</option>
-                            <option>Single</option>
-                            <option>Married</option>
-                            <option>Divorced</option>
-                            <option>Widowed</option>
-                          </select>
-                        </label>
-                        <label className="text-xs">
-                          Religion
-                          <input
-                            name="religion"
-                            defaultValue={e.religion ?? ""}
-                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
-                          />
-                        </label>
-                        <label className="text-xs">
-                          CNIC expiry
-                          <input
-                            type="date"
-                            name="cnicExpiry"
-                            defaultValue={e.cnicExpiry ?? ""}
-                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
-                          />
-                        </label>
-                        <label className="text-xs sm:col-span-2">
-                          Address
-                          <textarea
-                            name="address"
-                            defaultValue={e.address ?? ""}
-                            rows={2}
-                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
-                          />
-                        </label>
-                        <label className="text-xs sm:col-span-2 inline-flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            name="hasCompanyVehicle"
-                            value="1"
-                            defaultChecked={e.hasCompanyVehicle}
-                            className="rounded border-kastros-sand"
-                          />
-                          Company vehicle assigned
-                        </label>
-                        <label className="text-xs">
-                          Vehicle #
-                          <input
-                            name="vehicleNumber"
-                            defaultValue={e.vehicleNumber ?? ""}
-                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
-                          />
-                        </label>
-                        <label className="text-xs">
-                          Driving licence #
-                          <input
-                            name="drivingLicenceNumber"
-                            defaultValue={e.drivingLicenceNumber ?? ""}
-                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
-                          />
-                        </label>
-                        <label className="text-xs">
-                          Driving licence expiry
-                          <input
-                            type="date"
-                            name="drivingLicenceExpiry"
-                            defaultValue={e.drivingLicenceExpiry ?? ""}
-                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
-                          />
-                        </label>
-                        <label className="text-xs">
-                          Status
-                          <select name="status" defaultValue={e.status} className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm">
-                            <option>Active</option>
-                            <option>On leave</option>
-                            <option>Offboarding</option>
-                          </select>
-                        </label>
-                        <label className="text-xs">
-                          Employee ID (for ID card)
-                          <input
-                            name="employeeIdDisplay"
-                            defaultValue={e.employeeIdDisplay ?? ""}
-                            placeholder="e.g. KST-1001"
-                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
-                          />
-                        </label>
-                        <label className="text-xs">
-                          CNIC / national ID
-                          <input name="cnic" defaultValue={e.cnic ?? ""} className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm" />
-                        </label>
-                        <label className="text-xs sm:col-span-2">
-                          Manager email
-                          <input
-                            name="reportsToEmail"
-                            defaultValue={e.reportsToEmail ?? ""}
-                            className="mt-1 w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm"
-                            placeholder="optional"
-                          />
-                        </label>
-                        <label className="text-xs sm:col-span-2">
-                          Profile photo (ID card)
-                          <input
-                            type="file"
-                            name="profilePhoto"
-                            accept="image/png,image/jpeg,image/webp"
-                            className="mt-1 w-full text-xs file:mr-2 file:rounded-lg file:border file:border-kastros-sand file:bg-white file:px-2 file:py-1"
-                          />
-                        </label>
-                        {e.photoStoredRef ? (
-                          <label className="flex items-center gap-2 text-xs text-kastros-sage sm:col-span-2">
-                            <input type="checkbox" name="clearProfilePhoto" value="1" className="rounded border-kastros-sand" />
-                            Remove profile photo
-                          </label>
-                        ) : null}
-                      </div>
-                      <button type="submit" disabled={pending} className="rounded-lg bg-kastros-forest px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
-                        Save changes
-                      </button>
-                    </form>
-                    <form action={(fd) => handle(deleteEmployee(fd))}>
-                      <input type="hidden" name="id" value={e.id} />
-                      <button
-                        type="submit"
-                        disabled={pending}
-                        className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50"
-                      >
-                        Remove employee
-                      </button>
-                    </form>
-                  </div>
-
-                </div>
+              {isEditing ? (
+                <form className="mt-4" action={(fd) => handle(deleteEmployee(fd))}>
+                  <input type="hidden" name="id" value={e.id} />
+                  <button
+                    type="submit"
+                    disabled={pending}
+                    className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800 hover:bg-red-100 disabled:opacity-50"
+                  >
+                    Remove employee
+                  </button>
+                </form>
               ) : null}
             </article>
           );

@@ -1,14 +1,28 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { EmployeeIntakeFields } from "@/components/hr/employee-intake-fields";
 import { submitJobApplication } from "@/lib/store/hr-actions";
 import type { JobPosting } from "@/lib/store/types";
+
+type EducationRow = { degree: string; institution: string; year: string };
 
 export function ApplyJobForm({ job }: { job: JobPosting }) {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [pending, start] = useTransition();
+  const [eduRows, setEduRows] = useState<EducationRow[]>([{ degree: "", institution: "", year: "" }]);
+
+  function addEduRow() {
+    setEduRows((rows) => [...rows, { degree: "", institution: "", year: "" }]);
+  }
+
+  function removeEduRow(index: number) {
+    setEduRows((rows) => (rows.length <= 1 ? rows : rows.filter((_, i) => i !== index)));
+  }
+
+  function updateEduRow(index: number, key: keyof EducationRow, value: string) {
+    setEduRows((rows) => rows.map((row, i) => (i === index ? { ...row, [key]: value } : row)));
+  }
 
   function handleSubmit(formData: FormData) {
     formData.set("jobId", job.id);
@@ -49,13 +63,73 @@ export function ApplyJobForm({ job }: { job: JobPosting }) {
       <form action={handleSubmit} className="rounded-2xl border border-kastros-sand bg-white p-6 shadow-sm">
         <input type="hidden" name="jobId" value={job.id} />
 
-        <h2 className="font-display text-lg font-semibold text-kastros-forest">Your HR profile</h2>
+        <h2 className="font-display text-lg font-semibold text-kastros-forest">Candidate profile</h2>
         <p className="mt-1 text-sm text-kastros-sage">
-          Same details your HR team captures when adding someone in onboarding — complete every required field.
+          Share your core contact details. Employment setup (department, business unit, manager, etc.) is completed by HR after approval.
         </p>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          <EmployeeIntakeFields showSubtitle={false} />
+          <label className="text-sm sm:col-span-2">
+            <span className="text-kastros-sage">Full name</span>
+            <input name="name" required className="mt-1 w-full rounded-xl border border-kastros-sand px-3 py-2 text-sm" />
+          </label>
+          <label className="text-sm">
+            <span className="text-kastros-sage">Email</span>
+            <input name="email" type="email" required className="mt-1 w-full rounded-xl border border-kastros-sand px-3 py-2 text-sm" />
+          </label>
+          <label className="text-sm">
+            <span className="text-kastros-sage">Phone</span>
+            <input name="personalPhone" required className="mt-1 w-full rounded-xl border border-kastros-sand px-3 py-2 text-sm" />
+          </label>
+          <label className="text-sm sm:col-span-2">
+            <span className="text-kastros-sage">Education (optional)</span>
+            <div className="mt-1 space-y-2">
+              {eduRows.map((row, i) => (
+                <div key={i} className="grid gap-2 sm:grid-cols-[1.1fr_1.1fr_0.6fr_auto]">
+                  <input
+                    name="eduDegree"
+                    value={row.degree}
+                    onChange={(e) => updateEduRow(i, "degree", e.target.value)}
+                    placeholder="Degree / qualification"
+                    className="rounded-xl border border-kastros-sand px-3 py-2 text-sm"
+                  />
+                  <input
+                    name="eduInstitution"
+                    value={row.institution}
+                    onChange={(e) => updateEduRow(i, "institution", e.target.value)}
+                    placeholder="Institution"
+                    className="rounded-xl border border-kastros-sand px-3 py-2 text-sm"
+                  />
+                  <input
+                    name="eduYear"
+                    value={row.year}
+                    onChange={(e) => updateEduRow(i, "year", e.target.value)}
+                    placeholder="Year"
+                    className="rounded-xl border border-kastros-sand px-3 py-2 text-sm"
+                  />
+                  {eduRows.length > 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => removeEduRow(i)}
+                      className="rounded-xl border border-kastros-sand px-3 py-2 text-xs font-semibold text-kastros-sage hover:text-red-700"
+                    >
+                      Remove
+                    </button>
+                  ) : (
+                    <span />
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="mt-1 text-xs text-kastros-sage">If you fill one education field, fill all three (degree, institution, year).</p>
+            <button
+              type="button"
+              onClick={addEduRow}
+              className="mt-2 rounded-lg bg-kastros-cream px-3 py-1.5 text-xs font-semibold text-kastros-forest ring-1 ring-kastros-sand hover:bg-kastros-sand/30"
+            >
+              + Add education row
+            </button>
+          </label>
         </div>
 
         <div className="mt-8 border-t border-kastros-sand pt-6">

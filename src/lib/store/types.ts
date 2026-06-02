@@ -243,6 +243,8 @@ export type JobApplication = {
   familyRelationFirm: string | null;
   familyLinked: boolean | null;
   reportsToEmail: string | null;
+  /** Candidate-entered education rows from apply portal. */
+  educationEntries: EducationEntry[];
   eduTitle: string | null;
   eduInstitute: string | null;
   eduYear: string | null;
