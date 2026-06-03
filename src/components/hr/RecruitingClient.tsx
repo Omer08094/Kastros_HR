@@ -225,7 +225,7 @@ function ApplicantsTable({ apps, canMutate }: { apps: JobApplication[]; canMutat
                         <div className={detailsClass}>
                           <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">HR onboarding snapshot</p>
                           <dl className="mt-2 space-y-1 text-sm">
-                            <div><span className="text-kastros-sage">Father's name:</span> {a.fatherName ?? "—"}</div>
+                            <div><span className="text-kastros-sage">Father&apos;s name:</span> {a.fatherName ?? "—"}</div>
                             <div><span className="text-kastros-sage">Role title:</span> {a.roleTitle ?? "—"}</div>
                             <div><span className="text-kastros-sage">Department:</span> {a.intakeDepartment ?? "—"}</div>
                             <div><span className="text-kastros-sage">Location:</span> {a.intakeLocation ?? "—"}</div>
