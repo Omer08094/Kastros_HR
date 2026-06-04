@@ -228,17 +228,19 @@ export function TrainingManual({ loginHref = "/login" }: { loginHref?: string })
             <h1 className="font-display text-xl font-semibold text-kastros-forest">{intro.title}</h1>
             <p className="mt-1 text-sm text-kastros-brandGreen">{intro.subtitle}</p>
             <p className="mt-3 text-sm text-kastros-sage">{intro.description}</p>
-            <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-kastros-sage">Start here</p>
-            <ul className="mt-2 space-y-1.5 text-sm text-kastros-ink">
-              {intro.startHere.map((line) => (
-                <li key={line} className="flex gap-2">
-                  <span className="text-kastros-brandGreen" aria-hidden>
-                    →
-                  </span>
-                  {line}
+            <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-kastros-sage">
+              {role === "hr" ? "Recommended order (new system)" : "Start here"}
+            </p>
+            <ol className="mt-2 space-y-1.5 text-sm text-kastros-ink">
+              {intro.startHere.map((step, i) => (
+                <li key={step.moduleId} className="flex gap-2">
+                  <span className="shrink-0 font-medium text-kastros-sage">{i + 1}.</span>
+                  <a href={`#${step.moduleId}`} className="font-medium text-kastros-forest underline-offset-2 hover:underline">
+                    {step.label}
+                  </a>
                 </li>
               ))}
-            </ul>
+            </ol>
             {role === "employee" ? (
               <p className="mt-4 text-xs text-kastros-sage">
                 Quick topics: {EMPLOYEE_QUICK_TOPICS.join(" · ")}

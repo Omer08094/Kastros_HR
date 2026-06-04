@@ -74,9 +74,15 @@ export function modulesForRole(role: ManualRole): ManualModule[] {
   return MANUAL_MODULES.filter((m) => ids.has(m.id));
 }
 
+export type ManualStartStep = {
+  /** Plain label — matches the topic card title below (no “Module N”). */
+  label: string;
+  moduleId: string;
+};
+
 export const MANUAL_AUDIENCE_INTRO: Record<
   ManualRole,
-  { title: string; subtitle: string; description: string; startHere: string[] }
+  { title: string; subtitle: string; description: string; startHere: ManualStartStep[] }
 > = {
   employee: {
     title: "Employee guide",
@@ -84,22 +90,26 @@ export const MANUAL_AUDIENCE_INTRO: Record<
     description:
       "Pick a topic below. Each card opens to short steps only. Use search if you know what you need (e.g. “leave” or “password”).",
     startHere: [
-      "Sign in and set your password",
-      "Check Overview for your manager and leave balance",
-      "Acknowledge policies under Documents",
-      "Submit leave or expenses when needed",
+      { label: "Getting started — sign in and password", moduleId: "module-01-getting-started" },
+      { label: "Employee self-service (daily use)", moduleId: "module-03-employee-daily" },
+      { label: "Leave (time off)", moduleId: "module-04-leave" },
+      { label: "Expense claims", moduleId: "module-05-expenses" },
+      { label: "Documents & compliance", moduleId: "module-06-documents" },
     ],
   },
   hr: {
     title: "HR & CEO guide",
     subtitle: "Setup, people, approvals, and compliance",
     description:
-      "Follow Module 9 first if you're launching the system. Open one card at a time — steps are concise; expand only what you need.",
+      "If the company is new to Kastros HR, use the recommended order below — each line matches a topic card on this page. Tap a card to see the steps. You can skip ahead if you only need one area (e.g. expense approvals).",
     startHere: [
-      "Module 9 — rollout checklist (do this first)",
-      "Modules 10–11 — settings and organization",
-      "Module 12–13 — onboarding and profiles",
-      "Modules 14–15 — leave and expense queues",
+      { label: "HR rollout checklist (start here for new go-live)", moduleId: "module-09-hr-setup" },
+      { label: "Settings (leave policy & salary)", moduleId: "module-10-hr-settings" },
+      { label: "Organization setup", moduleId: "module-11-hr-organization" },
+      { label: "Onboarding (Add team member)", moduleId: "module-12-hr-onboarding" },
+      { label: "People (full profile guide)", moduleId: "module-13-hr-people" },
+      { label: "Leave administration (HR)", moduleId: "module-14-hr-leave-ops" },
+      { label: "Expense claims (HR)", moduleId: "module-15-hr-expense-ops" },
     ],
   },
 };
