@@ -436,6 +436,140 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
   return ok();
 }
 
+/** Minimal roster + optional Firebase login for C-level executives (no full onboarding intake). */
+export async function addExecutiveMinimal(formData: FormData): Promise<ActionResult> {
+  const session = await getSession();
+  if (!session || !hasExecAccess(session.role)) return { error: "Forbidden." };
+
+  const name = String(formData.get("name") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const title = String(formData.get("title") ?? "").trim();
+  const location = String(formData.get("location") ?? "").trim();
+  const joiningDate = String(formData.get("joiningDate") ?? "").trim();
+  const businessUnit = optionalBusinessUnit(formData, "businessUnit");
+  const reportsToEmail = String(formData.get("reportsToEmail") ?? "").trim().toLowerCase() || null;
+  const department = String(formData.get("department") ?? "").trim() || EXECUTIVE_DEPARTMENT;
+  const createLogin = String(formData.get("createLogin") ?? "1") === "1";
+
+  const salutationRaw = String(formData.get("salutation") ?? "").trim();
+  const salutationOpts = ["Mr.", "Mrs.", "Ms.", "Dr.", "Eng.", "Prof."];
+  const salutation = salutationOpts.includes(salutationRaw) ? (salutationRaw as Employee["salutation"]) : null;
+
+  if (!name || !email || !title || !location || !joiningDate) {
+    return { error: "Name, email, title, location, and joining date are required." };
+  }
+
+  const snapshot = await readStore();
+  if (snapshot.employees.some((e) => e.email.toLowerCase() === email)) {
+    return { error: "Email already exists in the directory." };
+  }
+
+  let firebaseUid: string | undefined;
+  let resetEmailSent = false;
+  if (createLogin) {
+    try {
+      const authResult = await createEmployeeAuth(email, name, "employee");
+      firebaseUid = authResult.uid;
+      resetEmailSent = authResult.resetEmailSent;
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { error: `Failed to create login: ${msg}` };
+    }
+  }
+
+  const probationMonths = 0;
+  const probationCompletionDate = probationDate(joiningDate, probationMonths);
+
+  let result: ActionResult;
+  try {
+    result = await mutateStore<ActionResult>((store) => {
+      if (store.employees.some((e) => e.email.toLowerCase() === email)) {
+        return { next: store, result: { error: "Email already exists." } };
+      }
+
+      const newEmployee: Employee = {
+        id: `emp-${randomUUID()}`,
+        employeeIdDisplay: nextEmployeeIdDisplay(store, null),
+        salutation,
+        name,
+        fatherName: "—",
+        email,
+        gender: null,
+        dateOfBirth: null,
+        nationality: null,
+        secondNationality: null,
+        maritalStatus: null,
+        religion: null,
+        cnic: null,
+        cnicExpiry: null,
+        address: null,
+        title,
+        designationNumber: null,
+        officialNumber: null,
+        location,
+        businessUnit,
+        status: "Active",
+        department,
+        subDepartment: null,
+        employmentType: "Permanent",
+        joiningDate,
+        probationMonths,
+        probationCompletionDate,
+        dutyHours: null,
+        dutyDays: null,
+        companyPhone: "",
+        personalPhone: "",
+        emergencyContacts: [],
+        familyRelations: [],
+        reportsToEmail,
+        hasCompanyVehicle: false,
+        vehicleNumber: null,
+        drivingLicenceNumber: null,
+        drivingLicenceExpiry: null,
+        licences: [],
+        education: [],
+        hasGratuity: false,
+        hasEobi: false,
+        hasProvidentFund: false,
+        firebaseUid,
+        photoStoredRef: null,
+        compensation: null,
+      };
+
+      const year = new Date().getFullYear();
+      const seedAllocations = buildAllocationsFromDefaults(store, [email], year);
+      const allocKey = (a: { employeeEmail: string; categoryId: string; year: number }) =>
+        `${a.employeeEmail.toLowerCase()}:${a.categoryId}:${a.year}`;
+      const allocMap = new Map(store.employeeLeaveAllocations.map((a) => [allocKey(a), a]));
+      for (const row of seedAllocations) {
+        allocMap.set(allocKey(row), row);
+      }
+
+      const loginNote = createLogin ? (resetEmailSent ? "" : " (password reset email not sent)") : " (no login created)";
+      const next: HrStore = {
+        ...store,
+        employees: [...store.employees, newEmployee],
+        employeeLeaveAllocations: [...allocMap.values()],
+      };
+      return {
+        next: audit(next, session.email, `Quick-added executive ${email}${loginNote}`),
+        result: ok(),
+      };
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Could not save executive.";
+    return { error: msg };
+  }
+
+  if ("error" in result) return result;
+
+  revalidatePath("/employees");
+  revalidatePath("/dashboard");
+  revalidatePath("/onboarding");
+  revalidatePath("/org-chart");
+  return ok();
+}
+
 
 
 export async function updateEmployee(formData: FormData): Promise<ActionResult> {

@@ -2,8 +2,11 @@ import { redirect } from "next/navigation";
 import type { EmployeeIntakeDefaults } from "@/components/hr/employee-intake-fields";
 import { PageShell } from "@/components/PageShell";
 import { AddTeamMemberForm } from "@/components/hr/AddTeamMemberForm";
+import { QuickAddExecutiveForm } from "@/components/hr/QuickAddExecutiveForm";
 import { mapJobApplicationToOnboardingDefaults } from "@/lib/job-application-onboarding";
 import { getSession } from "@/lib/auth";
+import { hasExecAccess } from "@/lib/roles";
+import { getPersistenceInfo } from "@/lib/store/persistence-info";
 import { readStore } from "@/lib/store/persist";
 
 type PageProps = { searchParams: Promise<{ applicationId?: string }> };
@@ -13,6 +16,8 @@ export default async function OnboardingPage({ searchParams }: PageProps) {
   if (!session) redirect("/login");
   const sp = await searchParams;
   const store = await readStore();
+  const canQuickAddExec = hasExecAccess(session.role);
+  const persistence = getPersistenceInfo();
 
   let applicationDraft: EmployeeIntakeDefaults | undefined;
   let draftBanner: "ok" | "missing" | null = null;
@@ -39,6 +44,14 @@ export default async function OnboardingPage({ searchParams }: PageProps) {
         <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
           Could not load application <code className="rounded bg-white px-1 text-xs">{sp.applicationId}</code>. Approve the candidate in{" "}
           <strong>Recruiting</strong> first, then use <strong>Onboard</strong>.
+        </div>
+      ) : null}
+      {canQuickAddExec ? (
+        <div className="mb-6">
+          <QuickAddExecutiveForm
+            employees={store.employees.map((e) => ({ email: e.email, name: e.name }))}
+            persistence={persistence}
+          />
         </div>
       ) : null}
       <AddTeamMemberForm
