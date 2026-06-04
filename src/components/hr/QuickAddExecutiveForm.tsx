@@ -21,7 +21,6 @@ export function QuickAddExecutiveForm({
   const { toasts, push, dismiss } = useToasts();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const today = new Date().toISOString().slice(0, 10);
 
   function handleSubmit(formData: FormData) {
     setError(null);
@@ -48,7 +47,7 @@ export function QuickAddExecutiveForm({
       <ToastStack toasts={toasts} onDismiss={dismiss} />
       <h2 className="font-display text-lg font-semibold text-kastros-forest">Quick add — C-level executive</h2>
       <p className="mt-1 max-w-2xl text-sm text-kastros-sage">
-        Minimal roster entry for CEO, CFO, COO, and similar roles. Skips CNIC, emergency contacts, education, and other
+        Minimal roster entry for CEO, CFO, COO, and similar roles. Skips CNIC, joining date, emergency contacts, education, and other
         full onboarding fields — add those later in <strong className="text-kastros-ink">People → Edit profile</strong> if needed.
       </p>
       {error ? (
@@ -73,7 +72,6 @@ export function QuickAddExecutiveForm({
           defaultValue="UAE"
           options={BUSINESS_UNITS.map((bu) => ({ value: bu, label: bu }))}
         />
-        <Field name="joiningDate" kind="date" label="Joining date" required defaultValue={today} />
         {employees.length > 0 ? (
           <SelectField
             name="reportsToEmail"

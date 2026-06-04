@@ -445,7 +445,8 @@ export async function addExecutiveMinimal(formData: FormData): Promise<ActionRes
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const title = String(formData.get("title") ?? "").trim();
   const location = String(formData.get("location") ?? "").trim();
-  const joiningDate = String(formData.get("joiningDate") ?? "").trim();
+  const joiningDate =
+    String(formData.get("joiningDate") ?? "").trim() || new Date().toISOString().slice(0, 10);
   const businessUnit = optionalBusinessUnit(formData, "businessUnit");
   const reportsToEmail = String(formData.get("reportsToEmail") ?? "").trim().toLowerCase() || null;
   const department = String(formData.get("department") ?? "").trim() || EXECUTIVE_DEPARTMENT;
@@ -455,8 +456,8 @@ export async function addExecutiveMinimal(formData: FormData): Promise<ActionRes
   const salutationOpts = ["Mr.", "Mrs.", "Ms.", "Dr.", "Eng.", "Prof."];
   const salutation = salutationOpts.includes(salutationRaw) ? (salutationRaw as Employee["salutation"]) : null;
 
-  if (!name || !email || !title || !location || !joiningDate) {
-    return { error: "Name, email, title, location, and joining date are required." };
+  if (!name || !email || !title || !location) {
+    return { error: "Name, email, title, and location are required." };
   }
 
   const snapshot = await readStore();
