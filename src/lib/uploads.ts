@@ -59,10 +59,17 @@ export async function saveFormDataFile(file: File): Promise<SavedUpload | null> 
   }
 
   const dir = uploadsDir();
-  await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, ref), buf);
-  await writeFile(join(dir, `${ref}.meta.json`), JSON.stringify(meta), "utf8");
-  return { ref, ...meta };
+  try {
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, ref), buf);
+    await writeFile(join(dir, `${ref}.meta.json`), JSON.stringify(meta), "utf8");
+    return { ref, ...meta };
+  } catch (e) {
+    console.error("[kastros-hr] Local upload write failed.", e);
+    throw new Error(
+      "Could not store the file. Configure FIREBASE_STORAGE_BUCKET on Vercel, or run locally where the uploads folder is writable.",
+    );
+  }
 }
 
 export async function deleteStoredFile(ref: string | null | undefined): Promise<void> {

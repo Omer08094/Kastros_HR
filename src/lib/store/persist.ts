@@ -48,6 +48,9 @@ const storePath = () => join(process.cwd(), "data", "kastros-hr-demo.json");
 
 const STORE_FALLBACK = createInitialStore();
 
+/** Last-resort when Firestore and disk are unavailable (e.g. Vercel without env). */
+let volatileMemoryStore: HrStore | null = null;
+
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -528,6 +531,10 @@ function normalizeStore(parsed: unknown): HrStore {
 }
 
 async function readStoreOnce(): Promise<HrStore> {
+  if (volatileMemoryStore) {
+    return structuredClone(volatileMemoryStore);
+  }
+
   if (firestore) {
     try {
       const docSnap = await firestore.collection("kastros-hr").doc("store").get();
@@ -597,6 +604,7 @@ export async function writeStore(store: HrStore): Promise<void> {
   if (firestore) {
     try {
       await firestore.collection("kastros-hr").doc("store").set({ store: cloneStoreForFirestore(store) });
+      volatileMemoryStore = null;
       return;
     } catch (e) {
       console.error("[kastros-hr] Firestore write failed, falling back to local file.", e);
@@ -604,8 +612,24 @@ export async function writeStore(store: HrStore): Promise<void> {
   }
 
   const path = storePath();
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, JSON.stringify(store, null, 2), "utf8");
+  try {
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, JSON.stringify(store, null, 2), "utf8");
+    volatileMemoryStore = null;
+    return;
+  } catch (e) {
+    console.error("[kastros-hr] Local store write failed.", e);
+  }
+
+  volatileMemoryStore = structuredClone(store);
+  if (!firestore) {
+    throw new Error(
+      "Could not save HR data. On Vercel, set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY in Environment Variables, then redeploy.",
+    );
+  }
+  throw new Error(
+    "Could not save to Firestore or local disk. Check Vercel logs, Firebase credentials, and Firestore rules. Your change was not saved.",
+  );
 }
 
 export async function mutateStore<T>(fn: (store: HrStore) => { next: HrStore; result: T }): Promise<T> {

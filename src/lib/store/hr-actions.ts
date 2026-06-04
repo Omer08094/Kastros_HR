@@ -534,7 +534,9 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
     return { error: e?.message || "Could not save profile photo." };
   }
 
-  const result = await mutateStore<ActionResult>((store) => {
+  let result: ActionResult;
+  try {
+    result = await mutateStore<ActionResult>((store) => {
     const idx = store.employees.findIndex((e) => e.id === id);
     if (idx < 0) return { next: store, result: { error: "Not found." } };
     const prev = store.employees[idx];
@@ -653,12 +655,17 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
     };
     return { next: audit(next, session.email, `Updated employee ${copy[idx].email}`), result: ok() };
   });
+  } catch (e) {
+    await deleteStoredFile(uploadedRef);
+    const msg = e instanceof Error ? e.message : "Could not save profile.";
+    return { error: msg };
+  }
   if ("error" in result) {
     await deleteStoredFile(uploadedRef);
     return result;
   }
   if (current.photoStoredRef && current.photoStoredRef !== nextPhotoRef) {
-    await deleteStoredFile(current.photoStoredRef);
+    await deleteStoredFile(uploadedRef);
   }
   revalidatePath("/employees");
   revalidatePath("/dashboard");

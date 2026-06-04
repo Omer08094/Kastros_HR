@@ -120,12 +120,16 @@ export function EmployeesClient({
     setError(null);
     setSuccess(null);
     start(async () => {
-      const err = await runAction(p, () => {
-        router.refresh();
-        onSuccess?.();
-      });
-      if (err) setError(err);
-      else if (!onSuccess) setSuccess("Saved.");
+      try {
+        const err = await runAction(p, () => {
+          router.refresh();
+          onSuccess?.();
+        });
+        if (err) setError(err);
+        else if (!onSuccess) setSuccess("Saved.");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Something went wrong while saving.");
+      }
     });
   }
 
