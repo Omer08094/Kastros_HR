@@ -1,5 +1,6 @@
 "use client";
 
+import { formatEmployeeDepartment } from "@/lib/executive-org";
 import type { Employee } from "@/lib/store/types";
 
 type Node = Employee & { children: Node[] };
@@ -34,7 +35,7 @@ function NodeCard({ node }: { node: Node }) {
         <p className="text-sm font-semibold text-kastros-forest">{node.name}</p>
         <p className="text-xs text-kastros-sage">{node.title}</p>
         <p className="text-[0.6rem] uppercase tracking-wide text-kastros-sage">
-          {node.businessUnit ?? "—"} · {node.department}
+          {node.businessUnit ?? "—"} · {formatEmployeeDepartment(node)}
         </p>
       </div>
       {node.children.length > 0 ? (

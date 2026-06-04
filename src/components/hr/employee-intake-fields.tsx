@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Field, FileField, SelectField, TextareaField } from "@/components/Field";
+import { mergeDepartmentOptions } from "@/lib/executive-org";
 import { BUSINESS_UNITS } from "@/lib/store/types";
 
 export type EmployeeIntakeDefaults = Partial<{
@@ -102,9 +103,8 @@ export function EmployeeIntakeFields({
     setEduRows((r) => r.map((row, idx) => (idx === i ? { ...row, [field]: value } : row)));
   }
 
-  const deptOptions = departments.length > 0
-    ? departments.map((n) => ({ value: n, label: n }))
-    : undefined;
+  const deptNames = mergeDepartmentOptions(departments);
+  const deptOptions = deptNames.length > 0 ? deptNames.map((n) => ({ value: n, label: n })) : undefined;
 
   return (
     <>
@@ -220,6 +220,7 @@ export function EmployeeIntakeFields({
           defaultValue={d.department}
           options={deptOptions}
           onChange={(v) => setSelectedDept(v)}
+          hint="CEO / group leadership: choose Executive Office. Sub-department can stay blank."
         />
       ) : (
         <Field
@@ -227,7 +228,7 @@ export function EmployeeIntakeFields({
           label="Department *"
           required
           defaultValue={d.department}
-          hint="No departments set up yet — type freely or add them in Organization Setup."
+          hint="CEO / group leadership: type Executive Office. Sub-department optional. Add more departments in Organization setup."
           onChange={(v) => setSelectedDept(v)}
         />
       )}
@@ -301,12 +302,12 @@ export function EmployeeIntakeFields({
       {employees.length > 0 ? (
         <SelectField
           name="reportsToEmail"
-          label="Reports to (manager) *"
-          required
+          label="Reports to (manager)"
           defaultValue={d.reportsToEmail}
           span2
+          hint="Leave as None for CEO or anyone at the top of the org chart."
           options={[
-            { value: "", label: "— Select manager —" },
+            { value: "", label: "— None (CEO / top leadership) —" },
             ...employees.map((e) => ({ value: e.email, label: `${e.name} (${e.email})` })),
           ]}
         />
@@ -314,11 +315,11 @@ export function EmployeeIntakeFields({
         <Field
           name="reportsToEmail"
           kind="email"
-          label="Reports to (manager email) *"
-          required
+          label="Reports to (manager email)"
           defaultValue={d.reportsToEmail}
           span2
-          placeholder="manager@kastros.co"
+          placeholder="Leave blank for CEO"
+          hint="Optional. Leave empty for CEO or group leadership."
         />
       )}
 

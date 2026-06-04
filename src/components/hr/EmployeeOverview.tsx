@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Card } from "@/components/Card";
+import { formatEmployeeDepartment } from "@/lib/executive-org";
 import { ROLE_LABELS } from "@/lib/roles";
 import { buildEmployeeDashboard } from "@/lib/employee-dashboard";
 import type { HrStore } from "@/lib/store/types";
@@ -47,7 +48,7 @@ export function EmployeeOverview({ session, store }: { session: Session; store: 
             </div>
             <div className="flex justify-between gap-4 border-b border-kastros-sand pb-3">
               <dt className="text-kastros-sage">Department</dt>
-              <dd className="text-right font-medium text-kastros-forest">{e.department}</dd>
+              <dd className="text-right font-medium text-kastros-forest">{formatEmployeeDepartment(e)}</dd>
             </div>
             <div className="flex justify-between gap-4 border-b border-kastros-sand pb-3">
               <dt className="text-kastros-sage">Location</dt>

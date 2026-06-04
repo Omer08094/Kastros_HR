@@ -19,6 +19,7 @@ import {
   updateEmployee,
 } from "@/lib/store/hr-actions";
 import { EmployeeSalarySection } from "@/components/hr/EmployeeSalarySection";
+import { formatEmployeeDepartment } from "@/lib/executive-org";
 
 const INP = "w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm";
 
@@ -591,8 +592,15 @@ export function EmployeeProfileCard({
           <Row
             label="Department"
             editing={editing}
-            view={e.department}
-            edit={<input name="department" required defaultValue={e.department} className={INP} />}
+            view={formatEmployeeDepartment(e)}
+            edit={
+              <input
+                name="department"
+                defaultValue={e.department}
+                className={INP}
+                placeholder="Executive Office for CEO"
+              />
+            }
           />
           <Row
             label="Sub-department"
@@ -666,7 +674,15 @@ export function EmployeeProfileCard({
             label="Reports to"
             editing={editing}
             view={e.reportsToEmail ?? "—"}
-            edit={<input name="reportsToEmail" type="email" defaultValue={e.reportsToEmail ?? ""} className={INP} placeholder="manager@…" />}
+            edit={
+              <input
+                name="reportsToEmail"
+                type="email"
+                defaultValue={e.reportsToEmail ?? ""}
+                className={INP}
+                placeholder="Leave blank for CEO"
+              />
+            }
           />
           <Row
             label="Profile photo"

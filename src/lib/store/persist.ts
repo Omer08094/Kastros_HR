@@ -568,11 +568,20 @@ async function readStoreOnce(): Promise<HrStore> {
       console.error("[kastros-hr] Failed to normalize store (check for unusual row shapes).", e);
       return STORE_FALLBACK;
     }
-  } catch {
+  } catch (readErr) {
+    console.error("[kastros-hr] Local store file missing or unreadable.", readErr);
     const initial = createInitialStore();
-    await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, JSON.stringify(initial, null, 2), "utf8");
-    return initial;
+    try {
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, JSON.stringify(initial, null, 2), "utf8");
+      return initial;
+    } catch (writeErr) {
+      console.error(
+        "[kastros-hr] Cannot write local store (common on Vercel — use Firestore). Using in-memory fallback.",
+        writeErr,
+      );
+      return initial;
+    }
   }
 }
 

@@ -1,18 +1,17 @@
 /** Rich job descriptions stored as sanitized HTML. Legacy plain/markdown still supported on read. */
 
-import { sanitizeJobDescriptionHtml } from "@/lib/sanitize-job-html";
-
 const HTML_TAG = /<(p|h[1-6]|ul|ol|li|strong|em|u|div|br|a)\b/i;
 
 export function isRichHtmlDescription(raw: string): boolean {
   return HTML_TAG.test(raw.trim());
 }
 
-/** Normalize description from forms before persisting. */
-export function normalizeStoredJobDescription(raw: string): string | null {
+/** Normalize description from forms before persisting (server action — dynamic import avoids SSR bundle issues). */
+export async function normalizeStoredJobDescription(raw: string): Promise<string | null> {
   const t = raw.trim();
   if (!t || t === "<p></p>") return null;
   if (isRichHtmlDescription(t)) {
+    const { sanitizeJobDescriptionHtml } = await import("@/lib/sanitize-job-html");
     const safe = sanitizeJobDescriptionHtml(t).trim();
     return safe && safe !== "<p></p>" ? safe : null;
   }

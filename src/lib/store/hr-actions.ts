@@ -6,6 +6,7 @@ import { getSession } from "@/lib/auth";
 import { mutateStore, readStore } from "@/lib/store/persist";
 import { createInitialStore } from "@/lib/store/seed";
 import { createEmployeeAuth, sendFirebasePasswordResetEmail, syncEmployeeAuthIdentity } from "@/lib/firebase-auth";
+import { EXECUTIVE_DEPARTMENT } from "@/lib/executive-org";
 import { normalizeStoredJobDescription } from "@/lib/job-description-html";
 import { hasExecAccess } from "@/lib/roles";
 import {
@@ -47,6 +48,14 @@ function ok(): ActionResult {
 function optionalTrimmedField(formData: FormData, key: string): string | null {
   const s = String(formData.get(key) ?? "").trim();
   return s || null;
+}
+
+/** CEO / top of org: no functional dept — use Executive Office; others default to General. */
+function resolveEmployeeDepartment(formData: FormData): string {
+  const department = String(formData.get("department") ?? "").trim();
+  if (department) return department;
+  const reportsTo = String(formData.get("reportsToEmail") ?? "").trim();
+  return reportsTo ? "General" : EXECUTIVE_DEPARTMENT;
 }
 
 function optionalNumber(formData: FormData, key: string): number | null {
@@ -153,7 +162,7 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
   const fatherName = String(formData.get("fatherName") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const title = String(formData.get("title") ?? "").trim();
-  const department = String(formData.get("department") ?? "").trim() || "General";
+  const department = resolveEmployeeDepartment(formData);
   const location = String(formData.get("location") ?? "").trim();
   const businessUnit = optionalBusinessUnit(formData, "businessUnit");
   const employmentType = String(formData.get("employmentType") ?? "Permanent");
@@ -438,7 +447,7 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const title = String(formData.get("title") ?? "").trim();
   const location = String(formData.get("location") ?? "").trim();
-  const department = String(formData.get("department") ?? "").trim() || "General";
+  const department = resolveEmployeeDepartment(formData);
   const status = String(formData.get("status") ?? "") as "Active" | "On leave" | "Offboarding" | "Separated";
   const reportsToEmailRaw = String(formData.get("reportsToEmail") ?? "").trim();
   const reportsToEmail = reportsToEmailRaw ? reportsToEmailRaw.toLowerCase() : null;
@@ -1052,7 +1061,7 @@ export async function createJob(formData: FormData): Promise<ActionResult> {
   const title = String(formData.get("title") ?? "").trim();
   const location = String(formData.get("location") ?? "").trim();
   const stage = String(formData.get("stage") ?? "").trim() || "Applied";
-  const description = normalizeStoredJobDescription(String(formData.get("description") ?? ""));
+  const description = await normalizeStoredJobDescription(String(formData.get("description") ?? ""));
   if (!title || !location) return { error: "Fill required fields." };
   await mutateStore((store) => ({
     next: audit(
@@ -1073,7 +1082,7 @@ export async function updateJobDescription(formData: FormData): Promise<ActionRe
   const session = await getSession();
   if (!session || !hasExecAccess(session.role)) return { error: "Forbidden." };
   const id = String(formData.get("id") ?? "");
-  const description = normalizeStoredJobDescription(String(formData.get("description") ?? ""));
+  const description = await normalizeStoredJobDescription(String(formData.get("description") ?? ""));
   if (!id) return { error: "Missing id." };
   const storeBefore = await readStore();
   const job = storeBefore.jobs.find((j) => j.id === id);
