@@ -20,6 +20,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  /** Public training manual — no login (like an external how-to site). */
+  if (pathname.startsWith("/training-manual")) {
+    return NextResponse.next();
+  }
+
+  if (pathname === "/help") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/training-manual/how-to";
+    return NextResponse.redirect(url);
+  }
+
   if (PUBLIC_PATHS.has(pathname)) {
     const token = request.cookies.get(sessionCookieName)?.value;
     if (token) {

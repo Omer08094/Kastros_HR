@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BRAND_LOGO, BRAND_LOGO_WHITE } from "@/lib/brand-assets";
+import { MANUAL_PATH } from "@/lib/help/manual-content";
 import { listDemoAccountsForDisplay } from "@/lib/demo-accounts";
 import { ROLE_LABELS } from "@/lib/roles";
 import { LoginForm } from "./ui";
@@ -32,14 +33,24 @@ export default function LoginPage() {
             <p className="text-xs text-emerald-100/90">Cultivating global trade excellence</p>
           </div>
         </div>
-        <Link
-          href="https://www.kastros.co"
-          className="text-sm text-white/70 underline-offset-4 transition hover:text-white hover:underline"
-          target="_blank"
-          rel="noreferrer"
-        >
-          kastros.co
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link
+            href={MANUAL_PATH}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-white/70 underline-offset-4 transition hover:text-white hover:underline"
+          >
+            How-to manual
+          </Link>
+          <Link
+            href="https://www.kastros.co"
+            className="text-sm text-white/70 underline-offset-4 transition hover:text-white hover:underline"
+            target="_blank"
+            rel="noreferrer"
+          >
+            kastros.co
+          </Link>
+        </div>
       </header>
 
       <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center px-6 pb-16 pt-4 sm:px-10">
