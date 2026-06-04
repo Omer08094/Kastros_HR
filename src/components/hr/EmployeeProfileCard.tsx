@@ -80,7 +80,7 @@ function ProfileLinkedRecordsSection({
   policies: PolicyManual[];
   policyTitle: (id: string) => string;
   pending: boolean;
-  onAction: (p: Promise<ActionResult>, onSuccess?: () => void) => void;
+  onAction: (p: Promise<ActionResult>, onSuccess?: () => void, successMessage?: string) => void;
   onSaved: () => void;
 }) {
   const manageLinked = editing && canManage;
@@ -111,7 +111,7 @@ function ProfileLinkedRecordsSection({
                   </a>
                 ) : null}
                 {manageLinked ? (
-                  <form className="mt-2" action={(fd) => onAction(deleteAcademicRecord(fd), onSaved)}>
+                  <form className="mt-2" action={(fd) => onAction(deleteAcademicRecord(fd), onSaved, "Education record removed")}>
                     <input type="hidden" name="id" value={a.id} />
                     <button type="submit" disabled={pending} className="text-xs font-semibold text-red-700 hover:underline disabled:opacity-50">
                       Remove record
@@ -139,7 +139,7 @@ function ProfileLinkedRecordsSection({
         {manageLinked ? (
           <form
             className="mt-4 space-y-2 border-t border-kastros-sand/60 pt-4"
-            action={(fd) => onAction(addAcademicRecord(fd), onSaved)}
+            action={(fd) => onAction(addAcademicRecord(fd), onSaved, "Education record added")}
           >
             <input type="hidden" name="employeeEmail" value={e.email} />
             <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">Add degree or certification</p>
@@ -192,7 +192,7 @@ function ProfileLinkedRecordsSection({
                 )}
                 {canManage && (manageLinked || !editing) ? (
                   <div className="border-t border-kastros-sand/60 px-3 py-2">
-                    <form action={(fd) => onAction(deleteDocument(fd), onSaved)}>
+                    <form action={(fd) => onAction(deleteDocument(fd), onSaved, "Document removed")}>
                       <input type="hidden" name="id" value={d.id} />
                       <button type="submit" disabled={pending} className="text-xs font-semibold text-red-700 hover:underline disabled:opacity-50">
                         Remove
@@ -207,7 +207,7 @@ function ProfileLinkedRecordsSection({
           <p className="text-sm text-kastros-sage">No personnel documents linked.</p>
         )}
         {manageLinked ? (
-          <form className="mt-4 space-y-2 border-t border-kastros-sand/60 pt-4" action={(fd) => onAction(addDocument(fd), onSaved)}>
+          <form className="mt-4 space-y-2 border-t border-kastros-sand/60 pt-4" action={(fd) => onAction(addDocument(fd), onSaved, "Document added")}>
             <input type="hidden" name="employeeEmail" value={e.email} />
             <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">Add personnel document</p>
             <input name="name" required placeholder="Document name" className={INP} />
@@ -262,7 +262,7 @@ function ProfileLinkedRecordsSection({
                     <span className="text-sm font-medium text-kastros-forest">
                       {p.title} <span className="font-normal text-kastros-sage">({p.version})</span>
                     </span>
-                    <form action={(fd) => onAction(recordPolicyAcknowledgementForEmployee(fd), onSaved)}>
+                    <form action={(fd) => onAction(recordPolicyAcknowledgementForEmployee(fd), onSaved, "Policy acknowledgement saved")}>
                       <input type="hidden" name="policyId" value={p.id} />
                       <input type="hidden" name="employeeEmail" value={e.email} />
                       <button
@@ -301,7 +301,7 @@ export function EmployeeProfileCard({
   onSaved,
   onCancel,
   onAction,
-  onSuccessMessage,
+  onNotifySuccess,
 }: {
   employee: Employee;
   editing: boolean;
@@ -316,8 +316,8 @@ export function EmployeeProfileCard({
   onError: (msg: string | null) => void;
   onSaved: () => void;
   onCancel: () => void;
-  onAction: (p: Promise<ActionResult>, onSuccess?: () => void) => void;
-  onSuccessMessage: (msg: string | null) => void;
+  onAction: (p: Promise<ActionResult>, onSuccess?: () => void, successMessage?: string) => void;
+  onNotifySuccess?: (message: string) => void;
 }) {
   const emergencyContacts = e.emergencyContacts ?? [];
   const familyRelations = e.familyRelations ?? [];
@@ -713,7 +713,11 @@ export function EmployeeProfileCard({
           <div className="mt-4 border-t border-kastros-sand/60 pt-4">
             <form
               action={(fd) =>
-                onAction(resendEmployeePasswordReset(fd), () => onSuccessMessage(`Password reset email sent to ${e.email}.`))
+                onAction(
+                resendEmployeePasswordReset(fd),
+                undefined,
+                `Password reset email sent to ${e.email}`,
+              )
               }
             >
               <input type="hidden" name="id" value={e.id} />
@@ -778,7 +782,10 @@ export function EmployeeProfileCard({
           allowanceTypes={allowanceTypes}
           pending={pending}
           onError={onError}
-          onSaved={onSaved}
+          onSaved={() => {
+            onNotifySuccess?.("Salary saved");
+            onSaved();
+          }}
           readOnly={!editing}
         />
       </div>
@@ -787,7 +794,7 @@ export function EmployeeProfileCard({
   if (editing) {
     return (
       <div className="mt-5">
-        <form action={(fd) => onAction(updateEmployee(fd), () => { onCancel(); onSaved(); })}>
+        <form action={(fd) => onAction(updateEmployee(fd), () => { onCancel(); onSaved(); }, "Profile saved")}>
           <input type="hidden" name="id" value={e.id} />
           <div className="grid gap-4 lg:grid-cols-2">{body}</div>
           <div className="mt-4 flex flex-wrap gap-2 border-t border-kastros-sand pt-4">
@@ -803,7 +810,11 @@ export function EmployeeProfileCard({
           <form
             className="mt-3"
             action={(fd) =>
-              onAction(resendEmployeePasswordReset(fd), () => onSuccessMessage(`Password reset email sent to ${e.email}.`))
+              onAction(
+                resendEmployeePasswordReset(fd),
+                undefined,
+                `Password reset email sent to ${e.email}`,
+              )
             }
           >
             <input type="hidden" name="id" value={e.id} />

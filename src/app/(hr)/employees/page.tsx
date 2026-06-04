@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
 import { getSession } from "@/lib/auth";
 import { hasExecAccess } from "@/lib/roles";
+import { getPersistenceInfo } from "@/lib/store/persistence-info";
 import { readStore } from "@/lib/store/persist";
 import { visibleEmployees } from "@/lib/store/policy";
 
@@ -26,6 +27,7 @@ export default async function EmployeesPage() {
   const store = await readStore();
   const rows = visibleEmployees(store, session);
   const canManage = hasExecAccess(session.role);
+  const persistence = getPersistenceInfo();
 
   return (
     <PageShell
@@ -44,6 +46,7 @@ export default async function EmployeesPage() {
         academics={store.academics}
         policyAcknowledgements={store.policyAcknowledgements}
         policies={store.policies}
+        persistence={persistence}
       />
     </PageShell>
   );

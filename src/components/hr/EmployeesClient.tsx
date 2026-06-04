@@ -9,11 +9,14 @@ import type {
   PolicyAcknowledgement,
   PolicyManual,
 } from "@/lib/store/types";
+import { ToastStack, useToasts } from "@/components/ui/ToastStack";
 import { deleteEmployee, deleteDocument, updateEmployee } from "@/lib/store/hr-actions";
 import { AppointmentLetterDialog } from "@/components/hr/AppointmentLetterDialog";
 import { CorporateCardDialog } from "@/components/hr/CorporateCardDialog";
 import { EmployeeProfileCard } from "@/components/hr/EmployeeProfileCard";
+import type { PersistenceInfo } from "@/lib/store/persistence-info";
 import type { SalaryAllowanceCatalogItem } from "@/lib/store/types";
+import { Cloud, HardDrive, AlertTriangle } from "lucide-react";
 
 type ActionResult = { ok: true } | { error: string };
 
@@ -39,6 +42,31 @@ function cnicExpiryStatus(date: string | null | undefined): "expired" | "soon" |
   return null;
 }
 
+function PersistenceBadge({ info }: { info: PersistenceInfo }) {
+  if (info.backend === "firestore") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-900 ring-1 ring-emerald-200">
+        <Cloud className="h-3.5 w-3.5" aria-hidden />
+        Data: {info.label}
+      </span>
+    );
+  }
+  if (info.backend === "local") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-950 ring-1 ring-amber-200">
+        <HardDrive className="h-3.5 w-3.5" aria-hidden />
+        Data: {info.label}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-900 ring-1 ring-red-200">
+      <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+      {info.label}
+    </span>
+  );
+}
+
 export function EmployeesClient({
   employees,
   canManage,
@@ -47,6 +75,7 @@ export function EmployeesClient({
   academics,
   policyAcknowledgements,
   policies,
+  persistence,
 }: {
   employees: Employee[];
   canManage: boolean;
@@ -55,11 +84,12 @@ export function EmployeesClient({
   academics: AcademicRecord[];
   policyAcknowledgements: PolicyAcknowledgement[];
   policies: PolicyManual[];
+  persistence: PersistenceInfo;
 }) {
   const router = useRouter();
+  const { toasts, push, dismiss } = useToasts();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [nameInput, setNameInput] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -116,33 +146,40 @@ export function EmployeesClient({
     });
   }, [documents, academics, policyAcknowledgements]);
 
-  function handle(p: Promise<ActionResult>, onSuccess?: () => void) {
+  function handle(p: Promise<ActionResult>, onSuccess?: () => void, successMessage = "Saved") {
     setError(null);
-    setSuccess(null);
     start(async () => {
       try {
         const err = await runAction(p, () => {
           router.refresh();
           onSuccess?.();
         });
-        if (err) setError(err);
-        else if (!onSuccess) setSuccess("Saved.");
+        if (err) {
+          setError(err);
+          push(err, "error");
+        } else {
+          push(successMessage, "success", persistence.saveHint);
+        }
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Something went wrong while saving.");
+        const msg = e instanceof Error ? e.message : "Something went wrong while saving.";
+        setError(msg);
+        push(msg, "error");
       }
     });
   }
 
   return (
     <div className="space-y-6">
+      <ToastStack toasts={toasts} onDismiss={dismiss} />
+      {canManage ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <PersistenceBadge info={persistence} />
+          <p className="text-xs text-kastros-sage">{persistence.saveHint}</p>
+        </div>
+      ) : null}
       {error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
           {error}
-        </div>
-      ) : null}
-      {success ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
-          {success}
         </div>
       ) : null}
 
@@ -313,7 +350,7 @@ export function EmployeesClient({
                 onSaved={() => router.refresh()}
                 onCancel={() => setEditingId(null)}
                 onAction={handle}
-                onSuccessMessage={setSuccess}
+                onNotifySuccess={(msg) => push(msg, "success", persistence.saveHint)}
               />
 
               {isEditing ? (
