@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fragment, useMemo, useState, useTransition } from "react";
 import { Card } from "@/components/Card";
+import { JobDescriptionField } from "@/components/hr/JobDescriptionField";
 import { LinkedInJobKitDialog } from "@/components/hr/LinkedInJobKitDialog";
 import type { JobApplication, JobPosting } from "@/lib/store/types";
-import { approveJobApplication, createJob, deleteJob } from "@/lib/store/hr-actions";
+import { approveJobApplication, createJob, deleteJob, updateJobDescription } from "@/lib/store/hr-actions";
 
 type ActionResult = { ok: true } | { error: string };
 
@@ -266,6 +267,7 @@ export function RecruitingClient({
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [linkedInKitJob, setLinkedInKitJob] = useState<JobPosting | null>(null);
+  const [editDescriptionJobId, setEditDescriptionJobId] = useState<string | null>(null);
 
   const byJob = useMemo(() => {
     const m = new Map<string, JobApplication[]>();
@@ -280,10 +282,13 @@ export function RecruitingClient({
     return m;
   }, [jobs, applications]);
 
-  function handle(p: Promise<ActionResult>) {
+  function handle(p: Promise<ActionResult>, onSuccess?: () => void) {
     setError(null);
     start(async () => {
-      const err = await runAction(p, () => router.refresh());
+      const err = await runAction(p, () => {
+        router.refresh();
+        onSuccess?.();
+      });
       if (err) setError(err);
     });
   }
@@ -315,15 +320,10 @@ export function RecruitingClient({
               <span className="text-kastros-sage">Stage</span>
               <input name="stage" className="mt-1 w-full rounded-xl border border-kastros-sand px-3 py-2 text-sm" placeholder="Applied" />
             </label>
-            <label className="text-sm sm:col-span-2">
+            <div className="text-sm sm:col-span-2">
               <span className="text-kastros-sage">Description (shown on public apply page)</span>
-              <textarea
-                name="description"
-                rows={3}
-                className="mt-1 w-full rounded-xl border border-kastros-sand px-3 py-2 text-sm"
-                placeholder="What the role involves and what you are looking for…"
-              />
-            </label>
+              <JobDescriptionField placeholder="About the role, responsibilities, requirements…" />
+            </div>
             <div className="sm:col-span-2">
               <button
                 type="submit"
@@ -442,16 +442,46 @@ export function RecruitingClient({
                         Open application portal
                       </Link>
                       {canMutate ? (
-                        <button
-                          type="button"
-                          onClick={() => setLinkedInKitJob(j)}
-                          className="inline-flex shrink-0 justify-center rounded-xl border border-kastros-brandBlue/25 bg-kastros-cream px-4 py-2 text-center text-sm font-semibold text-kastros-forest"
-                        >
-                          LinkedIn post kit
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setEditDescriptionJobId((id) => (id === j.id ? null : j.id))}
+                            className="inline-flex shrink-0 justify-center rounded-xl border border-kastros-sand bg-white px-4 py-2 text-center text-sm font-semibold text-kastros-forest"
+                          >
+                            {editDescriptionJobId === j.id ? "Close editor" : "Edit description"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setLinkedInKitJob(j)}
+                            className="inline-flex shrink-0 justify-center rounded-xl border border-kastros-brandBlue/25 bg-kastros-cream px-4 py-2 text-center text-sm font-semibold text-kastros-forest"
+                          >
+                            LinkedIn post kit
+                          </button>
+                        </>
                       ) : null}
                     </div>
                   </div>
+                  {canMutate && editDescriptionJobId === j.id ? (
+                    <form
+                      className="mt-4 rounded-xl border border-kastros-sand bg-white p-4"
+                      action={(fd) => {
+                        fd.set("id", j.id);
+                        handle(updateJobDescription(fd), () => setEditDescriptionJobId(null));
+                      }}
+                    >
+                      <p className="text-sm font-semibold text-kastros-forest">Public portal description</p>
+                      <div className="mt-3">
+                        <JobDescriptionField defaultValue={j.description ?? ""} />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={pending}
+                        className="mt-4 rounded-xl bg-kastros-forest px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                      >
+                        {pending ? "Saving…" : "Save description"}
+                      </button>
+                    </form>
+                  ) : null}
                   <ApplicantsTable apps={apps} canMutate={canMutate} />
                 </div>
               );

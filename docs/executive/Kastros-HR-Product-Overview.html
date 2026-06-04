@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Kastros HR — Product Overview for Management</title>
+    <style>
+      @page {
+        size: A4;
+        margin: 14mm;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Segoe UI", system-ui, -apple-system, Helvetica, Arial, sans-serif;
+        font-size: 10.5pt;
+        line-height: 1.45;
+        color: #1a1f36;
+        margin: 0;
+        padding: 0;
+      }
+      h1,
+      h2,
+      h3 {
+        font-family: Georgia, "Times New Roman", serif;
+        color: #2b3990;
+        font-weight: 600;
+      }
+      h1 {
+        font-size: 26pt;
+        margin: 0 0 8px;
+      }
+      h2 {
+        font-size: 14pt;
+        margin: 28px 0 10px;
+        padding-bottom: 4px;
+        border-bottom: 2px solid #006837;
+        page-break-after: avoid;
+      }
+      h3 {
+        font-size: 11pt;
+        margin: 16px 0 6px;
+        color: #006837;
+        page-break-after: avoid;
+      }
+      p {
+        margin: 0 0 8px;
+      }
+      .cover {
+        min-height: 260mm;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        page-break-after: always;
+        text-align: center;
+        padding: 20mm 10mm;
+      }
+      .cover img {
+        height: 56px;
+        margin: 0 auto 24px;
+      }
+      .cover .tag {
+        font-size: 10pt;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: #006837;
+        margin-bottom: 12px;
+      }
+      .cover .sub {
+        font-size: 13pt;
+        color: #475569;
+        max-width: 140mm;
+        margin: 16px auto 32px;
+      }
+      .cover .meta {
+        font-size: 9pt;
+        color: #64748b;
+        margin-top: 40px;
+      }
+      .lead {
+        font-size: 11.5pt;
+        color: #334155;
+        margin-bottom: 16px;
+      }
+      ul {
+        margin: 0 0 10px;
+        padding-left: 18px;
+      }
+      li {
+        margin-bottom: 4px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 10px 0 14px;
+        font-size: 9.5pt;
+      }
+      th,
+      td {
+        border: 1px solid #cbd5e1;
+        padding: 6px 8px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: #f1f5f9;
+        color: #2b3990;
+        font-weight: 600;
+      }
+      tr:nth-child(even) td {
+        background: #fafbfc;
+      }
+      .box {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-left: 4px solid #006837;
+        padding: 10px 12px;
+        margin: 12px 0;
+        border-radius: 4px;
+      }
+      .box strong {
+        color: #2b3990;
+      }
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .page-break {
+        page-break-before: always;
+      }
+      .toc a {
+        color: #2b3990;
+        text-decoration: none;
+      }
+      .toc li {
+        margin-bottom: 6px;
+      }
+      .footer-note {
+        font-size: 8.5pt;
+        color: #64748b;
+        margin-top: 24px;
+        border-top: 1px solid #e2e8f0;
+        padding-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="cover">
+      <img src="../../public/brand/kastros-logo.png" alt="Kastros" />
+      <p class="tag">Confidential · Management briefing</p>
+      <h1>Kastros HR Platform</h1>
+      <p class="sub">Comprehensive product overview — capabilities delivered for workforce management across UAE, Karachi, and Multan operations.</p>
+      <p class="meta">Document version: 1.0 · Platform: Kastros HR (Next.js + Firebase)<br />Prepared for executive and board review</p>
+    </section>
+
+    <section>
+      <h2>Executive summary</h2>
+      <p class="lead">
+        <strong>Kastros HR</strong> is a secure, browser-based human resources platform built for Kastros Group. It centralises employee
+        records, time off, expenses, compliance documents, learning, performance data, and hiring in one system — with role-based access
+        for employees, HR administrators, and the CEO.
+      </p>
+      <div class="box">
+        <strong>What leadership gains:</strong> Real-time visibility of headcount, leave pipeline, open recruitment, training compliance,
+        and probation milestones — without spreadsheets or disconnected tools. HR gains a single source of truth for profiles, letters,
+        ID cards, and audit history.
+      </div>
+      <ul>
+        <li><strong>Deployed as a modern web application</strong> (cloud-ready, Firebase authentication and data storage).</li>
+        <li><strong>Multi–business unit</strong> support: UAE, Karachi, Multan — with currency defaults (AED / PKR).</li>
+        <li><strong>End-to-end employee lifecycle:</strong> public job applications → HR hire → onboarding → daily self-service → offboarding data.</li>
+        <li><strong>Built-in compliance:</strong> policy acknowledgements, Conflict of Interest (CoI) workflow, document library, audit log.</li>
+        <li><strong>Employee enablement:</strong> public how-to manual and in-app help — no login required for training material.</li>
+      </ul>
+
+      <h2>Table of contents</h2>
+      <ol class="toc">
+        <li><a href="#platform">Platform &amp; security</a></li>
+        <li><a href="#roles">User roles &amp; access</a></li>
+        <li><a href="#catalog">Complete feature catalogue</a></li>
+        <li><a href="#employee">Employee experience</a></li>
+        <li><a href="#hr">HR &amp; CEO operations</a></li>
+        <li><a href="#talent">Talent acquisition</a></li>
+        <li><a href="#compensation">Compensation &amp; benefits data</a></li>
+        <li><a href="#compliance">Compliance &amp; documents</a></li>
+        <li><a href="#governance">Governance, audit &amp; support</a></li>
+        <li><a href="#matrix">Feature matrix (summary table)</a></li>
+      </ol>
+
+      <h2 id="platform">1. Platform &amp; security</h2>
+      <h3>Technology foundation</h3>
+      <ul>
+        <li><strong>Application:</strong> Next.js 15 web application — responsive for desktop and tablet use.</li>
+        <li><strong>Authentication:</strong> Firebase Auth (work email + password); role enforced via secure session and custom claims (Employee, HR Admin, CEO).</li>
+        <li><strong>Data:</strong> Firestore (production) with structured HR store — employees, leave, expenses, documents, training, cases, audit, etc.</li>
+        <li><strong>File storage:</strong> Firebase Storage (and local fallback for development) for CVs, receipts, profile photos, policy files, CoI submissions.</li>
+        <li><strong>Hosting:</strong> Designed for Vercel or equivalent cloud deployment with environment-based configuration.</li>
+      </ul>
+      <h3>Security controls</h3>
+      <ul>
+        <li>Route-level access control — users only see modules permitted for their role.</li>
+        <li>File downloads authorised per document type (own files, manager scope, or HR-wide).</li>
+        <li>Audit trail of material actions (who changed what and when).</li>
+        <li>CEO-only role promotion — prevents unauthorised elevation to HR Admin.</li>
+        <li>Password reset via Firebase — onboarding emails for new hires when mail is configured.</li>
+      </ul>
+
+      <h2 id="roles">2. User roles &amp; access</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Role</th>
+            <th>Typical users</th>
+            <th>Access scope</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Employee</strong></td>
+            <td>All staff</td>
+            <td>Own overview, leave, expenses, documents (policies &amp; CoI), training, own performance reviews, org chart (view). Cannot access other employees' HR records or admin setup.</td>
+          </tr>
+          <tr>
+            <td><strong>HR Admin</strong></td>
+            <td>People Operations</td>
+            <td>Full HR module set: People directory, onboarding, recruiting, settings, organization, letters, cases, approvals, compensation entry, document management.</td>
+          </tr>
+          <tr>
+            <td><strong>CEO</strong></td>
+            <td>Executive leadership</td>
+            <td>Same as HR Admin plus executive dashboard (company-wide KPIs), leave sign-off where required (Pending CEO), and Firebase role management.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2 id="catalog" class="page-break">3. Complete feature catalogue</h2>
+      <p>The platform is organised into the following modules (sidebar groups in the application).</p>
+
+      <h3>Overview</h3>
+      <ul>
+        <li><strong>Dashboard (Overview):</strong> Role-specific home — employees see profile summary, leave balance estimate, goals count, quick links; HR/CEO see headcount, pending leave, jobs, cases, probation alerts; CEO sees additional company pulse metrics.</li>
+        <li><strong>My leave:</strong> Leave balances by type and year; submit requests; track approval status; HR manages entitlements and approves/denies.</li>
+        <li><strong>Expense claims:</strong> Submit claims with category, amount, currency, receipt; HR approves, rejects, marks reimbursed (Paid).</li>
+      </ul>
+
+      <h3>People</h3>
+      <ul>
+        <li><strong>People (directory):</strong> Searchable roster; full employee profiles; inline edit for HR; CNIC expiry alerts.</li>
+        <li><strong>Onboarding:</strong> Add team member — creates employee + Firebase login; comprehensive intake form.</li>
+        <li><strong>Recruiting:</strong> Job postings; applicant pipeline; public apply link; CV and attachment review.</li>
+        <li><strong>Transfer / Posting:</strong> Record cross–business unit and department moves with effective dates.</li>
+        <li><strong>Reporting channel:</strong> Live org chart from “Reports to” manager email on each profile.</li>
+      </ul>
+
+      <h3>Time &amp; performance</h3>
+      <ul>
+        <li><strong>Performance:</strong> Formal review records (cycle, grade, criteria, comments); HR/CEO record reviews; employees view own history.</li>
+        <li><strong>Learning (training):</strong> Assign training with due dates; internal/external provider; upload materials (PDF/PPT); track Required/Done and attendance.</li>
+      </ul>
+
+      <h3>Letters &amp; documents</h3>
+      <ul>
+        <li><strong>Letters:</strong> HR letter repository (promotion, termination, etc.); printable views; appointment letter quick-generate from profile.</li>
+        <li><strong>Documents:</strong> Company library; policy manual acknowledgements; CoI template upload and employee signed submissions; register personnel files.</li>
+        <li><strong>HR cases:</strong> Confidential case log for investigations and employee relations matters.</li>
+      </ul>
+
+      <h3>Setup &amp; administration</h3>
+      <ul>
+        <li><strong>Organization setup:</strong> Business units, departments, sub-departments, job descriptions.</li>
+        <li><strong>Settings:</strong> Leave policy (types and default days); salary allowance catalog; demo reset (non-production).</li>
+        <li><strong>Security:</strong> Audit log viewer for compliance spot-checks.</li>
+      </ul>
+
+      <h3>External &amp; support surfaces</h3>
+      <ul>
+        <li><strong>Public careers portal:</strong> /apply/[jobId] — candidates apply without login.</li>
+        <li><strong>Training manual (public):</strong> /training-manual/how-to — Employee vs HR/CEO guides with search; no login.</li>
+        <li><strong>In-app help:</strong> Floating help button opens manual in new tab while using the system.</li>
+      </ul>
+
+      <h2 id="employee" class="page-break">4. Employee experience (self-service)</h2>
+      <p>Every employee with a work email and profile can:</p>
+      <ul>
+        <li>Sign in securely and set password via HR-triggered reset email.</li>
+        <li>View personal dashboard: job title, department, manager, joining date, probation reminder, estimated annual leave remaining.</li>
+        <li>Request leave with type, date range, and notes; follow status through HR/CEO approval chain.</li>
+        <li>Submit expense claims with receipt attachment and currency selection (AED, PKR, USD).</li>
+        <li>Acknowledge company policies from the policy manual with timestamped record.</li>
+        <li>Download CoI template, sign offline, upload signed declaration.</li>
+        <li>View assigned training, open materials, complete compliance programmes.</li>
+        <li>View own performance review history.</li>
+        <li>View reporting channel to understand team structure.</li>
+        <li>Use public how-to manual (employee path) for step-by-step guidance.</li>
+      </ul>
+
+      <h2 id="hr">5. HR &amp; CEO operations (detailed)</h2>
+
+      <h3>People &amp; profiles</h3>
+      <p>HR maintains a rich employee record including:</p>
+      <div class="two-col">
+        <ul>
+          <li>Identity: name, salutation, gender, DOB, nationality, marital status, religion, CNIC, address</li>
+          <li>Employment: title, department, sub-department, location, BU, type, status, joining, probation</li>
+          <li>Reports to (manager email), employee ID for card</li>
+          <li>Phones, emergency contact, family/COI declaration</li>
+        </ul>
+        <ul>
+          <li>Vehicle &amp; licence details where applicable</li>
+          <li>Statutory flags: Gratuity, EOBI, Provident Fund</li>
+          <li>Profile photo (ID card)</li>
+          <li>Education &amp; certification records with files</li>
+          <li>Personnel documents linked to individual</li>
+          <li>Policy acknowledgement on behalf of employee when needed</li>
+        </ul>
+      </div>
+      <p><strong>HR actions on profiles:</strong> Edit profile (inline), resend password reset, generate appointment letter, print corporate ID card, manage salary/compensation with configurable allowances, add/remove academic and document records.</p>
+
+      <h3>Leave administration</h3>
+      <ul>
+        <li>Configure leave types and standard days per year in Settings.</li>
+        <li>Apply defaults to all employees for a calendar year.</li>
+        <li>Override per-employee entitlements on Leave page.</li>
+        <li>Approve or deny requests; Pending HR → Pending CEO → Approved/Denied workflow.</li>
+        <li>Company-wide pending count on executive dashboard.</li>
+      </ul>
+
+      <h3>Expense administration</h3>
+      <ul>
+        <li>Review all employee claims with receipt preview.</li>
+        <li>Approve or reject with audit trail.</li>
+        <li>Mark Approved claims as Paid when finance completes reimbursement.</li>
+        <li>Dashboard counts for pending review and approved-awaiting-payment.</li>
+      </ul>
+
+      <h3>Onboarding &amp; offboarding data</h3>
+      <ul>
+        <li>Single flow creates roster entry and Firebase account.</li>
+        <li>Recommended top-down hire order for correct org chart.</li>
+        <li>Email change on profile can sync to authentication (identity update).</li>
+        <li>Employee status: Active, On leave, Offboarding, Separated.</li>
+      </ul>
+
+      <h2 id="talent" class="page-break">6. Talent acquisition</h2>
+      <ul>
+        <li><strong>Job management:</strong> Create roles with description; share public application URL.</li>
+        <li><strong>Applicant tracking:</strong> Table of candidates per job; status; expand full application (education rows, cover letter, LinkedIn, experience).</li>
+        <li><strong>Attachments:</strong> CV, education certificate, other certs — stored and viewable by HR.</li>
+        <li><strong>Decisions:</strong> Approve or reject applications.</li>
+        <li><strong>Hire path:</strong> Approved candidates onboarded via HR form (internal fields: department, manager, joining date, probation, BU — not collected on public form).</li>
+        <li><strong>LinkedIn kit:</strong> Supporting collateral for external job posts (where configured in UI).</li>
+      </ul>
+
+      <h2 id="compensation">7. Compensation &amp; benefits data</h2>
+      <ul>
+        <li><strong>Per-employee compensation</strong> (HR/CEO only on People profile): gross salary, basic salary, currency, multiple allowance lines.</li>
+        <li><strong>Allowance catalog</strong> in Settings: configurable types (e.g. fuel in liters, housing allowance) — HR defines catalog, applies per employee.</li>
+        <li><strong>Appointment letter</strong> can pull saved gross salary when generating letters.</li>
+        <li><strong>Statutory flags</strong> on profile (Gratuity, EOBI, PF) support letter generation and local compliance context.</li>
+        <li>Display formatting with thousands separators for clarity.</li>
+      </ul>
+
+      <h2 id="compliance">8. Compliance &amp; documents</h2>
+      <ul>
+        <li><strong>Policy manual:</strong> Versioned policies; employees acknowledge in-app; HR can record acknowledgement for paper sign-offs.</li>
+        <li><strong>Company library:</strong> HR-published notices and templates visible organisation-wide; preview and print.</li>
+        <li><strong>Personnel files:</strong> Contracts, visas, certificates — linked to named employee, not mixed into company library.</li>
+        <li><strong>CoI programme:</strong> HR uploads master template; employees submit signed copies; HR reviews registry.</li>
+        <li><strong>File security:</strong> Authorised download only — linked to employee, document, application, training, or expense receipt.</li>
+      </ul>
+
+      <h2 id="governance">9. Governance, audit &amp; support</h2>
+      <h3>Audit &amp; accountability</h3>
+      <ul>
+        <li>Security module exposes chronological audit log (actor, action description, timestamp).</li>
+        <li>Material HR mutations logged: onboarding, leave decisions, expense status, document registration, role changes, etc.</li>
+      </ul>
+      <h3>Executive controls (CEO)</h3>
+      <ul>
+        <li>Company pulse dashboard: active headcount, on leave, departments, pending leave company-wide, open jobs, new applications, open training.</li>
+        <li>Role manager: promote/demote Employee ↔ HR Admin ↔ CEO in Firebase (effective after re-login).</li>
+        <li>Probation alerts: employees within 10 days of probation end — proactive HR action.</li>
+      </ul>
+      <h3>Training &amp; adoption</h3>
+      <ul>
+        <li>Public manual with Employee / HR/CEO paths and search — shareable by email without credentials.</li>
+        <li>Direct links: ?role=employee or ?role=hr for targeted comms.</li>
+        <li>In-app ? help button on every authenticated page.</li>
+        <li>This PDF: full management overview of delivered capabilities.</li>
+      </ul>
+
+      <h2 id="matrix" class="page-break">10. Feature matrix (at a glance)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Capability</th>
+            <th>Employee</th>
+            <th>HR Admin</th>
+            <th>CEO</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Dashboard / overview</td><td>Own</td><td>Team + alerts</td><td>Company pulse</td></tr>
+          <tr><td>Leave request</td><td>Yes</td><td>Approve</td><td>Approve + CEO queue</td></tr>
+          <tr><td>Expense claim</td><td>Submit</td><td>Approve / Paid</td><td>Approve / Paid</td></tr>
+          <tr><td>Policy acknowledge</td><td>Yes</td><td>Record for others</td><td>Record for others</td></tr>
+          <tr><td>CoI submit</td><td>Yes</td><td>Template upload</td><td>Template upload</td></tr>
+          <tr><td>People directory</td><td>—</td><td>Full</td><td>Full</td></tr>
+          <tr><td>Onboarding / hire</td><td>—</td><td>Yes</td><td>Yes</td></tr>
+          <tr><td>Recruiting</td><td>—</td><td>Yes</td><td>Yes</td></tr>
+          <tr><td>Salary / allowances</td><td>—</td><td>Yes</td><td>Yes</td></tr>
+          <tr><td>Letters &amp; ID card</td><td>—</td><td>Yes</td><td>Yes</td></tr>
+          <tr><td>Training assign</td><td>View own</td><td>Assign all</td><td>Assign all</td></tr>
+          <tr><td>Performance reviews</td><td>View own</td><td>Create</td><td>Create</td></tr>
+          <tr><td>HR cases</td><td>—</td><td>Yes</td><td>Yes</td></tr>
+          <tr><td>Settings / org setup</td><td>—</td><td>Yes</td><td>Yes</td></tr>
+          <tr><td>Audit log</td><td>—</td><td>View</td><td>View</td></tr>
+          <tr><td>Change user roles</td><td>—</td><td>—</td><td>Yes</td></tr>
+          <tr><td>Org chart</td><td>View</td><td>View</td><td>View</td></tr>
+          <tr><td>Public apply / manual</td><td>Apply / read</td><td>Manage / read</td><td>Manage / read</td></tr>
+        </tbody>
+      </table>
+
+      <div class="box">
+        <strong>Conclusion:</strong> Kastros HR delivers an integrated people operations platform aligned to multi-location trading operations — combining
+        employee self-service, HR operational control, executive visibility, and compliance workflows in one secure system. The solution is
+        live, extensible, and supported by role-based training materials for sustainable adoption.
+      </div>
+
+      <p class="footer-note">
+        For technical or access questions, contact your People Operations lead. To regenerate this PDF after platform updates, run
+        <code>npm run docs:pdf</code> from the project repository.
+      </p>
+    </section>
+  </body>
+</html>

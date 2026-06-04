@@ -6,6 +6,7 @@ import { getSession } from "@/lib/auth";
 import { mutateStore, readStore } from "@/lib/store/persist";
 import { createInitialStore } from "@/lib/store/seed";
 import { createEmployeeAuth, sendFirebasePasswordResetEmail, syncEmployeeAuthIdentity } from "@/lib/firebase-auth";
+import { normalizeStoredJobDescription } from "@/lib/job-description-html";
 import { hasExecAccess } from "@/lib/roles";
 import {
   approvedLeaveDaysUsedInYear,
@@ -1051,7 +1052,7 @@ export async function createJob(formData: FormData): Promise<ActionResult> {
   const title = String(formData.get("title") ?? "").trim();
   const location = String(formData.get("location") ?? "").trim();
   const stage = String(formData.get("stage") ?? "").trim() || "Applied";
-  const description = String(formData.get("description") ?? "").trim() || null;
+  const description = normalizeStoredJobDescription(String(formData.get("description") ?? ""));
   if (!title || !location) return { error: "Fill required fields." };
   await mutateStore((store) => ({
     next: audit(
@@ -1065,6 +1066,31 @@ export async function createJob(formData: FormData): Promise<ActionResult> {
     result: ok(),
   }));
   revalidatePath("/recruiting");
+  return ok();
+}
+
+export async function updateJobDescription(formData: FormData): Promise<ActionResult> {
+  const session = await getSession();
+  if (!session || !hasExecAccess(session.role)) return { error: "Forbidden." };
+  const id = String(formData.get("id") ?? "");
+  const description = normalizeStoredJobDescription(String(formData.get("description") ?? ""));
+  if (!id) return { error: "Missing id." };
+  const storeBefore = await readStore();
+  const job = storeBefore.jobs.find((j) => j.id === id);
+  if (!job) return { error: "Job not found." };
+  await mutateStore((store) => ({
+    next: audit(
+      {
+        ...store,
+        jobs: store.jobs.map((j) => (j.id === id ? { ...j, description } : j)),
+      },
+      session.email,
+      `Updated job description ${job.title}`,
+    ),
+    result: ok(),
+  }));
+  revalidatePath("/recruiting");
+  revalidatePath(`/apply/${id}`);
   return ok();
 }
 

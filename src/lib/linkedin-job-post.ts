@@ -1,5 +1,7 @@
 /** LinkedIn-friendly copy from HR’s draft — no external API; formatting + structure only. */
 
+import { stripHtmlForPlainText } from "@/lib/job-description-html";
+
 const DEFAULT_COMPANY = "KASTROS";
 
 function normalizeWhitespace(s: string): string {
@@ -8,7 +10,7 @@ function normalizeWhitespace(s: string): string {
 
 /** Split long blocks into short paragraphs at sentence boundaries for feed readability. */
 export function polishJobDescriptionForLinkedIn(raw: string): string {
-  const t = normalizeWhitespace(raw);
+  const t = normalizeWhitespace(stripHtmlForPlainText(raw));
   if (!t) return "";
 
   const sentences = t.split(/(?<=[.!?])\s+/).filter(Boolean);

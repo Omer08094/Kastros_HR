@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { JobDescriptionContent } from "@/components/apply/JobDescriptionContent";
 import { submitJobApplication } from "@/lib/store/hr-actions";
 import type { JobPosting } from "@/lib/store/types";
 
@@ -51,7 +52,11 @@ export function ApplyJobForm({ job }: { job: JobPosting }) {
       <div className="rounded-2xl border border-kastros-sand bg-white p-6 shadow-sm">
         <h1 className="font-display text-2xl font-semibold text-kastros-forest">{job.title}</h1>
         <p className="mt-1 text-sm text-kastros-sage">{job.location}</p>
-        {job.description ? <p className="mt-4 text-sm leading-relaxed text-kastros-ink">{job.description}</p> : null}
+        {job.description ? (
+          <div className="mt-4 border-t border-kastros-sand/80 pt-4">
+            <JobDescriptionContent text={job.description} />
+          </div>
+        ) : null}
       </div>
 
       {error ? (

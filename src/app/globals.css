@@ -21,3 +21,40 @@ body {
 .focus-ring {
   @apply outline-none ring-2 ring-kastros-brandGreen/45 ring-offset-2 ring-offset-kastros-cream;
 }
+
+/* TipTap rich text editor (job descriptions) */
+.rich-text-editor .tiptap {
+  outline: none;
+}
+
+.rich-text-editor .tiptap p.is-editor-empty:first-child::before {
+  color: #52796f;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.rich-text-editor .rich-editor-prose h2 {
+  @apply mt-4 font-display text-lg font-semibold text-kastros-forest first:mt-0;
+}
+
+.rich-text-editor .rich-editor-prose h3 {
+  @apply mt-3 font-display text-base font-semibold text-kastros-forest first:mt-0;
+}
+
+.rich-text-editor .rich-editor-prose p {
+  @apply my-2 first:mt-0 last:mb-0;
+}
+
+.rich-text-editor .rich-editor-prose ul {
+  @apply my-2 list-disc pl-5;
+}
+
+.rich-text-editor .rich-editor-prose ol {
+  @apply my-2 list-decimal pl-5;
+}
+
+.rich-text-editor .rich-editor-prose a {
+  @apply font-medium text-kastros-forest underline;
+}
