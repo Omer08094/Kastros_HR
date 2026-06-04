@@ -143,8 +143,8 @@ export function EmployeesClient({
       ) : null}
 
       <p className="text-sm text-kastros-sage">
-        Each profile lists personnel documents below (click a row to open the file). Company-wide notices live under Documents · Company
-        library. Register personnel files from Documents → Register a document (personnel file).
+        Each profile lists education, personnel documents, and policy acknowledgements below. While editing a profile, HR can add records in
+        those sections. Company-wide notices live under Documents · Company library.
       </p>
 
       <div className="rounded-2xl border border-kastros-sand bg-white p-4 shadow-sm sm:p-5">

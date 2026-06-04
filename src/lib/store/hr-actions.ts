@@ -835,32 +835,94 @@ export async function addAcademicRecord(formData: FormData): Promise<ActionResul
   const title = String(formData.get("title") ?? "").trim();
   const institute = String(formData.get("institute") ?? "").trim();
   const year = String(formData.get("year") ?? "").trim();
-  const attachmentName = String(formData.get("attachmentName") ?? "").trim() || null;
+  let attachmentName = String(formData.get("attachmentName") ?? "").trim() || null;
   if (!employeeEmail || !title || !institute) return { error: "Missing fields." };
+  const recordType = type === "Certification" ? "Certification" : "Degree";
+
+  const attachmentFile = formData.get("attachmentFile");
+  let storedRef: string | null = null;
+  if (attachmentFile instanceof File && attachmentFile.size > 0) {
+    if (!isAllowedLibraryDocumentFile(attachmentFile)) {
+      return { error: "File type not allowed. Use PDF, Word, PowerPoint, or an image (PNG, JPG, WebP)." };
+    }
+    try {
+      const saved = await saveFormDataFile(attachmentFile);
+      if (saved) {
+        storedRef = saved.ref;
+        attachmentName = attachmentName || saved.originalName;
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Could not save uploaded file.";
+      return { error: msg };
+    }
+  }
+
+  const result = await mutateStore<ActionResult>((store) => {
+    const employee = store.employees.find((e) => e.email.toLowerCase() === employeeEmail);
+    if (!employee) return { next: store, result: { error: "Employee not found." } };
+    const newDocs: HrStore["documents"] = [];
+    if (storedRef && attachmentName) {
+      newDocs.push({
+        id: `doc-${randomUUID()}`,
+        name: `${recordType} · ${title} — ${attachmentName}`,
+        owner: "People Ops",
+        sensitivity: "Internal",
+        createdByEmail: session.email,
+        employeeEmail: employee.email,
+        storedRef,
+      });
+    }
+    return {
+      next: audit(
+        {
+          ...store,
+          academics: [
+            ...store.academics,
+            {
+              id: `ac-${randomUUID()}`,
+              employeeEmail: employee.email,
+              type: recordType,
+              title,
+              institute,
+              year,
+              attachmentName,
+              storedRef,
+            },
+          ],
+          documents: [...newDocs, ...store.documents],
+        },
+        session.email,
+        `Added ${recordType} record for ${employeeEmail}`,
+      ),
+      result: ok(),
+    };
+  });
+  if ("error" in result) {
+    await deleteStoredFile(storedRef);
+    return result;
+  }
+  revalidatePath("/employees");
+  revalidatePath("/documents");
+  revalidatePath("/training");
+  return ok();
+}
+
+export async function deleteAcademicRecord(formData: FormData): Promise<ActionResult> {
+  const session = await getSession();
+  if (!session || !hasExecAccess(session.role)) return { error: "Forbidden." };
+  const id = String(formData.get("id") ?? "");
+  if (!id) return { error: "Missing id." };
+  const snapshot = await readStore();
+  const row = snapshot.academics.find((a) => a.id === id);
+  if (!row) return { error: "Not found." };
+  const ref = row.storedRef;
   await mutateStore((store) => ({
-    next: audit(
-      {
-        ...store,
-        academics: [
-          ...store.academics,
-          {
-            id: `ac-${randomUUID()}`,
-            employeeEmail,
-            type: type === "Certification" ? "Certification" : "Degree",
-            title,
-            institute,
-            year,
-            attachmentName,
-            storedRef: null,
-          },
-        ],
-      },
-      session.email,
-      `Added ${type} record for ${employeeEmail}`,
-    ),
+    next: audit({ ...store, academics: store.academics.filter((a) => a.id !== id) }, session.email, `Removed academic record ${id}`),
     result: ok(),
   }));
-  revalidatePath("/training");
+  await deleteStoredFile(ref);
+  revalidatePath("/employees");
+  revalidatePath("/documents");
   return ok();
 }
 
@@ -1349,6 +1411,46 @@ export async function acknowledgePolicy(formData: FormData): Promise<ActionResul
   revalidatePath("/documents");
   revalidatePath("/employees");
   return ok();
+}
+
+/** HR/CEO records that an employee has acknowledged a policy (e.g. on paper). */
+export async function recordPolicyAcknowledgementForEmployee(formData: FormData): Promise<ActionResult> {
+  const session = await getSession();
+  if (!session || !hasExecAccess(session.role)) return { error: "Forbidden." };
+  const policyId = String(formData.get("policyId") ?? "");
+  const employeeEmail = String(formData.get("employeeEmail") ?? "").trim().toLowerCase();
+  if (!policyId || !employeeEmail) return { error: "Missing policy or employee." };
+  const result = await mutateStore<ActionResult>((store) => {
+    const employee = store.employees.find((e) => e.email.toLowerCase() === employeeEmail);
+    if (!employee) return { next: store, result: { error: "Employee not found." } };
+    if (!store.policies.some((p) => p.id === policyId)) return { next: store, result: { error: "Policy not found." } };
+    const exists = store.policyAcknowledgements.some(
+      (a) => a.policyId === policyId && a.employeeEmail.toLowerCase() === employeeEmail,
+    );
+    if (exists) return { next: store, result: { error: "Already acknowledged for this employee." } };
+    return {
+      next: audit(
+        {
+          ...store,
+          policyAcknowledgements: [
+            {
+              id: `ack-${randomUUID()}`,
+              policyId,
+              employeeEmail: employee.email,
+              acknowledgedAt: new Date().toISOString(),
+            },
+            ...store.policyAcknowledgements,
+          ],
+        },
+        session.email,
+        `Recorded policy acknowledgement for ${employeeEmail}`,
+      ),
+      result: ok(),
+    };
+  });
+  revalidatePath("/documents");
+  revalidatePath("/employees");
+  return result;
 }
 
 export async function createCase(formData: FormData): Promise<ActionResult> {

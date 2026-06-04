@@ -9,7 +9,15 @@ import type {
   PolicyManual,
   SalaryAllowanceCatalogItem,
 } from "@/lib/store/types";
-import { deleteDocument, resendEmployeePasswordReset, updateEmployee } from "@/lib/store/hr-actions";
+import {
+  addAcademicRecord,
+  addDocument,
+  deleteAcademicRecord,
+  deleteDocument,
+  recordPolicyAcknowledgementForEmployee,
+  resendEmployeePasswordReset,
+  updateEmployee,
+} from "@/lib/store/hr-actions";
 import { EmployeeSalarySection } from "@/components/hr/EmployeeSalarySection";
 
 const INP = "w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm";
@@ -43,6 +51,235 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
       <h3 className="text-xs font-semibold uppercase tracking-wide text-kastros-brandGreen">{title}</h3>
       <div className="mt-3">{children}</div>
     </div>
+  );
+}
+
+const FILE_INP =
+  "mt-1 block w-full text-xs file:mr-2 file:rounded-lg file:border file:border-kastros-sand file:bg-white file:px-2 file:py-1";
+
+function ProfileLinkedRecordsSection({
+  employee: e,
+  editing,
+  canManage,
+  documents: personDocs,
+  academics: personAcademics,
+  acknowledgements: personAcks,
+  policies,
+  policyTitle,
+  pending,
+  onAction,
+  onSaved,
+}: {
+  employee: Employee;
+  editing: boolean;
+  canManage: boolean;
+  documents: DocumentRow[];
+  academics: AcademicRecord[];
+  acknowledgements: PolicyAcknowledgement[];
+  policies: PolicyManual[];
+  policyTitle: (id: string) => string;
+  pending: boolean;
+  onAction: (p: Promise<ActionResult>, onSuccess?: () => void) => void;
+  onSaved: () => void;
+}) {
+  const manageLinked = editing && canManage;
+  const ackedIds = new Set(personAcks.map((a) => a.policyId));
+  const pendingPolicies = policies.filter((p) => !ackedIds.has(p.id));
+
+  return (
+    <>
+      <Section title="Education & certifications">
+        {personAcademics.length ? (
+          <ul className="space-y-3 text-sm">
+            {personAcademics.map((a) => (
+              <li key={a.id} className="rounded-lg bg-white/60 px-3 py-2 ring-1 ring-kastros-sand/50">
+                <span className="font-medium text-kastros-forest">{a.title}</span>{" "}
+                <span className="text-kastros-sage">({a.type})</span>
+                <div className="mt-1 text-xs text-kastros-sage">
+                  {a.institute} · {a.year}
+                  {a.attachmentName ? ` · ${a.attachmentName}` : ""}
+                </div>
+                {a.storedRef ? (
+                  <a
+                    href={`/api/hr-file/${a.storedRef}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-block text-sm font-semibold text-kastros-forest underline"
+                  >
+                    View file
+                  </a>
+                ) : null}
+                {manageLinked ? (
+                  <form className="mt-2" action={(fd) => onAction(deleteAcademicRecord(fd), onSaved)}>
+                    <input type="hidden" name="id" value={a.id} />
+                    <button type="submit" disabled={pending} className="text-xs font-semibold text-red-700 hover:underline disabled:opacity-50">
+                      Remove record
+                    </button>
+                  </form>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-kastros-sage">No academic records on file.</p>
+        )}
+        {e.education.length > 0 ? (
+          <div className="mt-4 border-t border-kastros-sand/60 pt-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">On employee record</p>
+            <ul className="mt-2 space-y-1 text-sm">
+              {e.education.map((ed, i) => (
+                <li key={i}>
+                  {ed.degree} · {ed.institution} · {ed.year}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {manageLinked ? (
+          <form
+            className="mt-4 space-y-2 border-t border-kastros-sand/60 pt-4"
+            action={(fd) => onAction(addAcademicRecord(fd), onSaved)}
+          >
+            <input type="hidden" name="employeeEmail" value={e.email} />
+            <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">Add degree or certification</p>
+            <select name="type" defaultValue="Degree" className={INP}>
+              <option value="Degree">Degree</option>
+              <option value="Certification">Certification</option>
+            </select>
+            <input name="title" required placeholder="Title (e.g. BSc Computer Science)" className={INP} />
+            <input name="institute" required placeholder="Institution / issuer" className={INP} />
+            <input name="year" placeholder="Year" className={INP} />
+            <input name="attachmentName" placeholder="File label (optional)" className={INP} />
+            <label className="block text-xs text-kastros-sage">
+              Certificate / transcript (optional)
+              <input
+                name="attachmentFile"
+                type="file"
+                accept=".pdf,.doc,.docx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,application/pdf"
+                className={FILE_INP}
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={pending}
+              className="rounded-lg bg-kastros-forest px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+            >
+              Add record
+            </button>
+          </form>
+        ) : null}
+      </Section>
+
+      <Section title="Personnel documents">
+        {personDocs.length ? (
+          <ul className="space-y-3 text-sm">
+            {personDocs.map((d) => (
+              <li key={d.id} className="rounded-lg bg-white/60 ring-1 ring-kastros-sand/50">
+                {d.storedRef ? (
+                  <a
+                    href={`/api/hr-file/${d.storedRef}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block rounded-lg px-3 py-2 hover:bg-kastros-cream/60"
+                  >
+                    <span className="font-medium text-kastros-forest">{d.name}</span>
+                  </a>
+                ) : (
+                  <div className="px-3 py-2">
+                    <span className="font-medium text-kastros-forest">{d.name}</span>
+                  </div>
+                )}
+                {canManage && (manageLinked || !editing) ? (
+                  <div className="border-t border-kastros-sand/60 px-3 py-2">
+                    <form action={(fd) => onAction(deleteDocument(fd), onSaved)}>
+                      <input type="hidden" name="id" value={d.id} />
+                      <button type="submit" disabled={pending} className="text-xs font-semibold text-red-700 hover:underline disabled:opacity-50">
+                        Remove
+                      </button>
+                    </form>
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-kastros-sage">No personnel documents linked.</p>
+        )}
+        {manageLinked ? (
+          <form className="mt-4 space-y-2 border-t border-kastros-sand/60 pt-4" action={(fd) => onAction(addDocument(fd), onSaved)}>
+            <input type="hidden" name="employeeEmail" value={e.email} />
+            <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">Add personnel document</p>
+            <input name="name" required placeholder="Document name" className={INP} />
+            <input name="owner" required defaultValue="People Ops" placeholder="Owner" className={INP} />
+            <select name="sensitivity" defaultValue="Internal" className={INP}>
+              <option>Internal</option>
+              <option>Confidential</option>
+              <option>Restricted</option>
+            </select>
+            <label className="block text-xs text-kastros-sage">
+              File (optional)
+              <input
+                name="documentFile"
+                type="file"
+                accept=".pdf,.doc,.docx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,application/pdf"
+                className={FILE_INP}
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={pending}
+              className="rounded-lg bg-kastros-forest px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+            >
+              Add document
+            </button>
+          </form>
+        ) : null}
+      </Section>
+
+      <Section title="Policy acknowledgements">
+        {personAcks.length ? (
+          <ul className="space-y-2 text-sm text-kastros-ink">
+            {personAcks.map((a) => (
+              <li key={a.id} className="rounded-lg bg-white/60 px-3 py-2 ring-1 ring-kastros-sand/50">
+                <span className="font-medium">{policyTitle(a.policyId)}</span>
+                <span className="text-kastros-sage"> — {new Date(a.acknowledgedAt).toLocaleString()}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-kastros-sage">No policy acknowledgements yet.</p>
+        )}
+        {manageLinked ? (
+          <div className="mt-4 space-y-3 border-t border-kastros-sand/60 pt-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">Record acknowledgement (HR)</p>
+            {pendingPolicies.length === 0 ? (
+              <p className="text-sm text-kastros-sage">All policies are acknowledged for this employee.</p>
+            ) : (
+              <ul className="space-y-2">
+                {pendingPolicies.map((p) => (
+                  <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white/60 px-3 py-2 ring-1 ring-kastros-sand/50">
+                    <span className="text-sm font-medium text-kastros-forest">
+                      {p.title} <span className="font-normal text-kastros-sage">({p.version})</span>
+                    </span>
+                    <form action={(fd) => onAction(recordPolicyAcknowledgementForEmployee(fd), onSaved)}>
+                      <input type="hidden" name="policyId" value={p.id} />
+                      <input type="hidden" name="employeeEmail" value={e.email} />
+                      <button
+                        type="submit"
+                        disabled={pending}
+                        className="rounded-lg bg-kastros-forest px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                      >
+                        Record ack
+                      </button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
+      </Section>
+    </>
   );
 }
 
@@ -87,7 +324,7 @@ export function EmployeeProfileCard({
   const fr0 = familyRelations[0];
 
   const body = (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <>
       <Section title="Identity">
         <FieldGrid>
           <Row
@@ -456,7 +693,7 @@ export function EmployeeProfileCard({
             }
           />
         </FieldGrid>
-        {canManage ? (
+        {canManage && !editing ? (
           <div className="mt-4 border-t border-kastros-sand/60 pt-4">
             <form
               action={(fd) =>
@@ -491,90 +728,29 @@ export function EmployeeProfileCard({
           </div>
         ) : null}
       </Section>
+    </>
+  );
 
-      <Section title="Education & certifications">
-        {personAcademics.length ? (
-          <ul className="space-y-3 text-sm">
-            {personAcademics.map((a) => (
-              <li key={a.id} className="rounded-lg bg-white/60 px-3 py-2 ring-1 ring-kastros-sand/50">
-                <span className="font-medium text-kastros-forest">{a.title}</span>{" "}
-                <span className="text-kastros-sage">({a.type})</span>
-                <div className="mt-1 text-xs text-kastros-sage">
-                  {a.institute} · {a.year}
-                  {a.attachmentName ? ` · ${a.attachmentName}` : ""}
-                </div>
-                {a.storedRef ? (
-                  <a href={`/api/hr-file/${a.storedRef}`} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-sm font-semibold text-kastros-forest underline">
-                    View file
-                  </a>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-kastros-sage">No academic records on file.</p>
-        )}
-        {e.education.length > 0 ? (
-          <div className="mt-4 border-t border-kastros-sand/60 pt-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">On employee record</p>
-            <ul className="mt-2 space-y-1 text-sm">
-              {e.education.map((ed, i) => (
-                <li key={i}>
-                  {ed.degree} · {ed.institution} · {ed.year}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </Section>
+  const linkedRecords = (
+    <ProfileLinkedRecordsSection
+      employee={e}
+      editing={editing}
+      canManage={canManage}
+      documents={personDocs}
+      academics={personAcademics}
+      acknowledgements={personAcks}
+      policies={policies}
+      policyTitle={policyTitle}
+      pending={pending}
+      onAction={onAction}
+      onSaved={onSaved}
+    />
+  );
 
-      <Section title="Personnel documents">
-        {personDocs.length ? (
-          <ul className="space-y-3 text-sm">
-            {personDocs.map((d) => (
-              <li key={d.id} className="rounded-lg bg-white/60 ring-1 ring-kastros-sand/50">
-                {d.storedRef ? (
-                  <a href={`/api/hr-file/${d.storedRef}`} target="_blank" rel="noopener noreferrer" className="block rounded-lg px-3 py-2 hover:bg-kastros-cream/60">
-                    <span className="font-medium text-kastros-forest">{d.name}</span>
-                  </a>
-                ) : (
-                  <div className="px-3 py-2">
-                    <span className="font-medium text-kastros-forest">{d.name}</span>
-                  </div>
-                )}
-                {canManage && !editing ? (
-                  <div className="border-t border-kastros-sand/60 px-3 py-2">
-                    <form action={(fd) => onAction(deleteDocument(fd))}>
-                      <input type="hidden" name="id" value={d.id} />
-                      <button type="submit" disabled={pending} className="text-xs font-semibold text-red-700 hover:underline disabled:opacity-50">
-                        Remove
-                      </button>
-                    </form>
-                  </div>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-kastros-sage">No personnel documents linked.</p>
-        )}
-      </Section>
-
-      <Section title="Policy acknowledgements">
-        {personAcks.length ? (
-          <ul className="space-y-2 text-sm text-kastros-ink">
-            {personAcks.map((a) => (
-              <li key={a.id} className="rounded-lg bg-white/60 px-3 py-2 ring-1 ring-kastros-sand/50">
-                <span className="font-medium">{policyTitle(a.policyId)}</span>
-                <span className="text-kastros-sage"> — {new Date(a.acknowledgedAt).toLocaleString()}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-kastros-sage">No policy acknowledgements yet.</p>
-        )}
-      </Section>
-
+  const profileGrid = (
+    <div className="grid gap-4 lg:grid-cols-2">
+      {body}
+      {linkedRecords}
     </div>
   );
 
@@ -597,7 +773,7 @@ export function EmployeeProfileCard({
       <div className="mt-5">
         <form action={(fd) => onAction(updateEmployee(fd), () => { onCancel(); onSaved(); })}>
           <input type="hidden" name="id" value={e.id} />
-          {body}
+          <div className="grid gap-4 lg:grid-cols-2">{body}</div>
           <div className="mt-4 flex flex-wrap gap-2 border-t border-kastros-sand pt-4">
             <button type="submit" disabled={pending} className="rounded-lg bg-kastros-forest px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
               {pending ? "Saving…" : "Save profile"}
@@ -607,6 +783,28 @@ export function EmployeeProfileCard({
             </button>
           </div>
         </form>
+        {canManage && editing ? (
+          <form
+            className="mt-3"
+            action={(fd) =>
+              onAction(resendEmployeePasswordReset(fd), () => onSuccessMessage(`Password reset email sent to ${e.email}.`))
+            }
+          >
+            <input type="hidden" name="id" value={e.id} />
+            <button
+              type="submit"
+              disabled={pending}
+              className="rounded-lg border border-kastros-sand bg-white px-3 py-2 text-xs font-semibold text-kastros-forest hover:bg-kastros-cream/60 disabled:opacity-50"
+            >
+              Resend password reset email
+            </button>
+          </form>
+        ) : null}
+        {canManage ? (
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            {linkedRecords}
+          </div>
+        ) : null}
         {salaryBlock}
       </div>
     );
@@ -614,7 +812,7 @@ export function EmployeeProfileCard({
 
   return (
     <div className="mt-5">
-      {body}
+      {profileGrid}
       {salaryBlock}
     </div>
   );

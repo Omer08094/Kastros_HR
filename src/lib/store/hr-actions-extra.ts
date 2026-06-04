@@ -17,7 +17,7 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { hasExecAccess } from "@/lib/roles";
-import { mutateStore } from "@/lib/store/persist";
+import { mutateStore, readStore } from "@/lib/store/persist";
 import {
   deleteStoredFile,
   isAllowedLibraryDocumentFile,
@@ -39,6 +39,8 @@ import {
   type LetterType,
   type Employee,
   type EmployeeCompensation,
+  type ExpenseClaim,
+  type ExpenseStatus,
   type EmployeeLeaveAllocation,
   type EmployeeSalaryAllowanceLine,
   type LeaveCategory,
@@ -849,5 +851,167 @@ export async function upsertEmployeeCompensation(formData: FormData): Promise<Ac
     };
   });
   revalidatePath("/employees");
+  return ok();
+}
+
+/* ------------------------------------------------------------------ */
+/* Expense claims (submit → approve → reimburse)                          */
+/* ------------------------------------------------------------------ */
+
+const EXPENSE_CATEGORIES = [
+  "Travel",
+  "Meals",
+  "Lodging",
+  "Supplies",
+  "Client entertainment",
+  "Software",
+  "Other",
+] as const;
+
+export async function submitExpense(formData: FormData): Promise<ActionResult> {
+  const session = await getSession();
+  if (!session) return { error: "Unauthorized." };
+
+  const category = str(formData.get("category"));
+  const amount = parseMoneyField(formData.get("amount"));
+  const description = str(formData.get("description"));
+  if (!category || amount == null || amount <= 0 || !description) {
+    return { error: "Category, amount, and description are required." };
+  }
+  if (!EXPENSE_CATEGORIES.includes(category as (typeof EXPENSE_CATEGORIES)[number])) {
+    return { error: "Invalid expense category." };
+  }
+
+  const receiptFile = formData.get("receiptFile");
+  let receiptRef: string | null = null;
+  let receiptOriginalName: string | null = null;
+  if (receiptFile instanceof File && receiptFile.size > 0) {
+    if (!isAllowedLibraryDocumentFile(receiptFile)) {
+      return { error: "Receipt must be PDF, Word, PowerPoint, or an image (PNG, JPG, WebP)." };
+    }
+    try {
+      const saved = await saveFormDataFile(receiptFile);
+      if (saved) {
+        receiptRef = saved.ref;
+        receiptOriginalName = saved.originalName;
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Could not save receipt.";
+      return { error: msg };
+    }
+  }
+
+  const result = await mutateStore<ActionResult>((store) => {
+    const employee = store.employees.find((e) => e.email.toLowerCase() === session.email.toLowerCase());
+    if (!employee) return { next: store, result: { error: "Your employee profile was not found." } };
+    const currency = pickCurrency(str(formData.get("currency")), employee.businessUnit);
+    const row: ExpenseClaim = {
+      id: `exp-${randomUUID()}`,
+      employeeEmail: employee.email,
+      submittedOn: new Date().toISOString(),
+      category,
+      amount,
+      currency,
+      description,
+      receiptRef,
+      receiptOriginalName,
+      status: "Pending",
+      approvedByEmail: null,
+      approvedOn: null,
+      paidOn: null,
+    };
+    return {
+      next: audit({ ...store, expenses: [row, ...store.expenses] }, session.email, `Submitted expense claim ${row.id}`),
+      result: ok(),
+    };
+  });
+  if ("error" in result) {
+    await deleteStoredFile(receiptRef);
+    return result;
+  }
+  revalidatePath("/expenses");
+  return ok();
+}
+
+export async function decideExpense(formData: FormData): Promise<ActionResult> {
+  const auth = await requireExec();
+  if (!auth.ok) return { error: auth.error };
+  const { session } = auth;
+  const id = str(formData.get("id"));
+  const decision = str(formData.get("decision"));
+  if (!id || !["approve", "reject"].includes(decision)) return { error: "Invalid request." };
+
+  const nextStatus: ExpenseStatus = decision === "approve" ? "Approved" : "Rejected";
+  const result = await mutateStore<ActionResult>((store) => {
+    const idx = store.expenses.findIndex((e) => e.id === id);
+    if (idx < 0) return { next: store, result: { error: "Claim not found." } };
+    const claim = store.expenses[idx]!;
+    if (claim.status !== "Pending") return { next: store, result: { error: "Only pending claims can be approved or rejected." } };
+    const expenses = store.expenses.map((e, i) =>
+      i === idx
+        ? {
+            ...e,
+            status: nextStatus,
+            approvedByEmail: session.email,
+            approvedOn: new Date().toISOString(),
+          }
+        : e,
+    );
+    return {
+      next: audit({ ...store, expenses }, session.email, `${nextStatus} expense ${id}`),
+      result: ok(),
+    };
+  });
+  revalidatePath("/expenses");
+  return result;
+}
+
+export async function markExpensePaid(formData: FormData): Promise<ActionResult> {
+  const auth = await requireExec();
+  if (!auth.ok) return { error: auth.error };
+  const { session } = auth;
+  const id = str(formData.get("id"));
+  if (!id) return { error: "Missing claim id." };
+
+  const result = await mutateStore<ActionResult>((store) => {
+    const idx = store.expenses.findIndex((e) => e.id === id);
+    if (idx < 0) return { next: store, result: { error: "Claim not found." } };
+    const claim = store.expenses[idx]!;
+    if (claim.status !== "Approved") return { next: store, result: { error: "Only approved claims can be marked paid." } };
+    const expenses = store.expenses.map((e, i) =>
+      i === idx ? { ...e, status: "Paid" as ExpenseStatus, paidOn: new Date().toISOString() } : e,
+    );
+    return {
+      next: audit({ ...store, expenses }, session.email, `Marked expense ${id} as paid`),
+      result: ok(),
+    };
+  });
+  revalidatePath("/expenses");
+  return result;
+}
+
+export async function deleteExpense(formData: FormData): Promise<ActionResult> {
+  const session = await getSession();
+  if (!session) return { error: "Unauthorized." };
+  const id = str(formData.get("id"));
+  if (!id) return { error: "Missing id." };
+
+  const snapshot = await readStore();
+  const claim = snapshot.expenses.find((e) => e.id === id);
+  if (!claim) return { error: "Claim not found." };
+
+  const isOwner = claim.employeeEmail.toLowerCase() === session.email.toLowerCase();
+  const isExec = hasExecAccess(session.role);
+  if (!isExec && (!isOwner || claim.status !== "Pending")) {
+    return { error: "You can only withdraw your own pending claims." };
+  }
+
+  const ref = claim.receiptRef;
+  await mutateStore((store) => ({
+    next: audit({ ...store, expenses: store.expenses.filter((e) => e.id !== id) }, session.email, `Deleted expense ${id}`),
+    result: ok(),
+  }));
+  await deleteStoredFile(ref);
+  revalidatePath("/expenses");
   return ok();
 }

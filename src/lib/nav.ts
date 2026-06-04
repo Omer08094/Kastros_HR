@@ -11,6 +11,7 @@ import {
   Mail,
   Network,
   Palmtree,
+  Receipt,
   Repeat,
   Search,
   Settings,
@@ -39,6 +40,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/dashboard", label: "Overview", icon: LayoutDashboard, description: "KPIs and alerts" },
       { href: "/leave", label: "My leave", icon: Palmtree, description: "Requests and balances" },
+      { href: "/expenses", label: "Expense claims", icon: Receipt, description: "Submit and track reimbursements" },
     ],
   },
   {

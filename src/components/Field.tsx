@@ -71,8 +71,10 @@ export function Field({
   );
   const invalid = touched && !result.ok;
 
-  const inputType =
-    kind === "number" || kind === "currency"
+  const isCurrency = kind === "currency";
+  const inputType = isCurrency
+    ? "text"
+    : kind === "number"
       ? "number"
       : kind === "tel"
         ? "tel"
@@ -102,6 +104,7 @@ export function Field({
           id={id}
           name={name}
           type={inputType}
+          inputMode={isCurrency ? "decimal" : undefined}
           value={value}
           required={required}
           disabled={disabled}
@@ -114,7 +117,7 @@ export function Field({
           onBlur={() => setTouched(true)}
           aria-invalid={invalid ? "true" : undefined}
           aria-describedby={invalid ? `${id}-err` : hint ? `${id}-hint` : undefined}
-          className={inputClass(invalid)}
+          className={`${inputClass(invalid)} ${currency ? "pr-14 tabular-nums" : ""}`}
         />
         {currency ? (
           <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-kastros-sage">

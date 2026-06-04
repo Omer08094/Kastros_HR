@@ -9,6 +9,7 @@ export const ROUTE_ACCESS: Record<string, RoleId[]> = {
   /** Overview / self-service */
   "/dashboard": ALL,
   "/leave": ALL,
+  "/expenses": ALL,
 
   /** People */
   "/employees": EXEC,

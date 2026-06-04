@@ -45,6 +45,12 @@ function canAccessStoredRef(
     return visibleEmployees(store, session).some((e) => e.email.toLowerCase() === email);
   }
 
+  const expenseReceipt = store.expenses.find((e) => e.receiptRef === ref);
+  if (expenseReceipt) {
+    if (hasExecAccess(session.role)) return true;
+    return expenseReceipt.employeeEmail.toLowerCase() === session.email.toLowerCase();
+  }
+
   if (doc) {
     const email = (doc.employeeEmail ?? "").toLowerCase();
     return visibleEmployees(store, session).some((e) => e.email.toLowerCase() === email);
@@ -73,7 +79,8 @@ export async function GET(_req: Request, context: { params: Promise<{ ref: strin
     ) ||
     store.training.some((t) => t.trainingMaterialStoredRef === normalizedRef) ||
     store.employees.some((e) => e.photoStoredRef === normalizedRef) ||
-    store.coiSubmissions.some((s) => s.storedRef === normalizedRef);
+    store.coiSubmissions.some((s) => s.storedRef === normalizedRef) ||
+    store.expenses.some((e) => e.receiptRef === normalizedRef);
 
   if (!knownRef) return new Response("Not found", { status: 404 });
 
