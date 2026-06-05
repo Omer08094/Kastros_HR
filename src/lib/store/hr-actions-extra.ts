@@ -112,6 +112,7 @@ export async function upsertBusinessUnit(formData: FormData): Promise<ActionResu
     return { error: "Business unit must be one of UAE, Karachi, or Multan." };
   }
   const notes = str(formData.get("notes")) || null;
+  const cardReturnAddress = str(formData.get("cardReturnAddress")) || null;
 
   await mutateStore((store) => {
     if (!id && store.businessUnits.some((b) => b.name === name)) {
@@ -122,6 +123,7 @@ export async function upsertBusinessUnit(formData: FormData): Promise<ActionResu
       id: id || `bu-${randomUUID()}`,
       name,
       notes,
+      cardReturnAddress,
     };
     const list = idx >= 0 ? store.businessUnits.map((b, i) => (i === idx ? row : b)) : [...store.businessUnits, row];
     return {

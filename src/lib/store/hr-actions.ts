@@ -19,7 +19,9 @@ import {
 import { canDecideLeave } from "@/lib/store/policy";
 import {
   BUSINESS_UNITS,
+  BLOOD_GROUPS,
   currencyForBusinessUnit,
+  type BloodGroup,
   type BusinessUnit,
   type CurrencyCode,
   type Employee,
@@ -82,6 +84,11 @@ function optionalMaritalStatus(formData: FormData, key: string): MaritalStatus |
   return (["Single", "Married", "Divorced", "Widowed"] as const).includes(v as MaritalStatus)
     ? (v as MaritalStatus)
     : null;
+}
+
+function optionalBloodGroup(formData: FormData, key: string): BloodGroup | null {
+  const v = String(formData.get(key) ?? "").trim();
+  return (BLOOD_GROUPS as readonly string[]).includes(v) ? (v as BloodGroup) : null;
 }
 
 function nextEmployeeIdDisplay(store: HrStore, override: string | null): string {
@@ -186,6 +193,7 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
   const secondNationality = optionalTrimmedField(formData, "secondNationality");
   const maritalStatus = optionalMaritalStatus(formData, "maritalStatus");
   const religion = optionalTrimmedField(formData, "religion");
+  const bloodGroup = optionalBloodGroup(formData, "bloodGroup");
   const cnicExpiry = optionalTrimmedField(formData, "cnicExpiry");
   const address = optionalTrimmedField(formData, "address");
   const designationNumber = optionalTrimmedField(formData, "designationNumber");
@@ -357,6 +365,7 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
       secondNationality,
       maritalStatus,
       religion,
+      bloodGroup,
       cnic,
       cnicExpiry,
       address,
@@ -501,6 +510,7 @@ export async function addExecutiveMinimal(formData: FormData): Promise<ActionRes
         secondNationality: null,
         maritalStatus: null,
         religion: null,
+        bloodGroup: null,
         cnic: null,
         cnicExpiry: null,
         address: null,
@@ -603,6 +613,7 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
   const secondNationality = optionalTrimmedField(formData, "secondNationality");
   const maritalStatus = optionalMaritalStatus(formData, "maritalStatus");
   const religion = optionalTrimmedField(formData, "religion");
+  const bloodGroup = optionalBloodGroup(formData, "bloodGroup");
   const address = optionalTrimmedField(formData, "address");
   const designationNumber = optionalTrimmedField(formData, "designationNumber");
   const officialNumber = optionalTrimmedField(formData, "officialNumber");
@@ -717,6 +728,7 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
       secondNationality,
       maritalStatus,
       religion,
+      bloodGroup,
       address,
       designationNumber,
       officialNumber,

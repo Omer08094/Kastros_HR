@@ -2,8 +2,9 @@
 
 import { CreditCard, Printer, X } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import type { Employee } from "@/lib/store/types";
+import type { BusinessUnitRecord, Employee } from "@/lib/store/types";
 import { BRAND_LOGO, BRAND_LOGO_WHITE } from "@/lib/brand-assets";
+import { businessUnitLabel, resolveCardReturnAddress } from "@/lib/corporate-card";
 import { printInnerHtmlInIframe } from "@/lib/print-in-iframe";
 
 /** Portrait ID-1 (54 × 85.6 mm) — vertical badge */
@@ -80,9 +81,9 @@ function CorporateCardFront({
               <span className="font-mono tracking-tight">{displayEmployeeId(employee)}</span>
             </p>
             <p>
-              <span className="font-semibold text-[#2B3990]">CNIC</span>
+              <span className="font-semibold text-[#2B3990]">Blood group</span>
               <br />
-              <span className="font-mono tracking-tight">{employee.cnic?.trim() || "—"}</span>
+              <span className="font-mono tracking-tight">{employee.bloodGroup?.trim() || "—"}</span>
             </p>
           </div>
         </div>
@@ -91,21 +92,45 @@ function CorporateCardFront({
   );
 }
 
-function CorporateCardBack({ frameClass, origin }: { frameClass: string; origin: string }) {
+function CorporateCardBack({
+  frameClass,
+  origin,
+  employee,
+  businessUnits,
+}: {
+  frameClass: string;
+  origin: string;
+  employee: Employee;
+  businessUnits: BusinessUnitRecord[];
+}) {
   const logoSrc = `${origin}${BRAND_LOGO_WHITE}`;
+  const returnAddress = resolveCardReturnAddress(employee, businessUnits);
+  const buLabel = businessUnitLabel(employee.businessUnit);
+
   return (
     <CardShell frameClass={frameClass}>
-      <div className="flex h-full w-full flex-col items-center justify-between bg-gradient-to-b from-[#2B3990] to-[#243d6b] px-3 py-4 text-white print:px-[2.5mm] print:py-[3mm]">
-        <div className="flex flex-col items-center text-center">
-          <img src={logoSrc} alt="" className="h-8 w-auto object-contain opacity-95 print:h-[9mm]" />
-          <p className="mt-2 max-w-[11rem] text-[8px] leading-snug text-white/75 print:max-w-none print:text-[6.5pt]">
-            Agricultural commodities trading
+      <div className="flex h-full w-full flex-col items-center justify-between bg-gradient-to-b from-[#2B3990] to-[#243d6b] px-3 py-3 text-white print:px-[2.5mm] print:py-[2.5mm]">
+        <div className="flex w-full flex-col items-center text-center">
+          <img src={logoSrc} alt="" className="h-7 w-auto object-contain opacity-95 print:h-[8mm]" />
+          <p className="mt-2 text-[7px] font-semibold uppercase tracking-[0.12em] text-white/80 print:text-[6pt]">
+            If found, please return to
+          </p>
+          {returnAddress ? (
+            <p className="mt-1.5 whitespace-pre-line text-[8px] leading-snug text-white/90 print:text-[6.5pt]">
+              {returnAddress}
+            </p>
+          ) : (
+            <p className="mt-1.5 text-[8px] leading-snug text-white/70 print:text-[6.5pt]">
+              Kastros {buLabel} — set return address in Organization setup.
+            </p>
+          )}
+        </div>
+        <div className="w-full text-center">
+          <p className="text-[8px] text-white/75 print:text-[6.5pt]">kastros.co</p>
+          <p className="mt-1 text-[7px] uppercase tracking-[0.12em] text-white/55 print:text-[5.5pt]">
+            Official ID · Not transferable
           </p>
         </div>
-        <p className="text-center text-[8px] text-white/65 print:text-[6.5pt]">kastros.co</p>
-        <p className="text-center text-[7px] uppercase tracking-[0.15em] text-white/55 print:text-[6pt]">
-          Official ID · Not transferable
-        </p>
       </div>
     </CardShell>
   );
@@ -113,10 +138,12 @@ function CorporateCardBack({ frameClass, origin }: { frameClass: string; origin:
 
 export function CorporateCardDialog({
   employee,
+  businessUnits,
   open,
   onClose,
 }: {
   employee: Employee;
+  businessUnits: BusinessUnitRecord[];
   open: boolean;
   onClose: () => void;
 }) {
@@ -184,7 +211,8 @@ export function CorporateCardDialog({
             <div>
               <p className="font-display text-sm font-semibold text-kastros-forest">Corporate card</p>
               <p className="mt-0.5 max-w-xl text-[11px] leading-snug text-kastros-sage sm:text-xs">
-                Vertical layout · front and back print on <strong>one page</strong>. Set employee ID, CNIC, and photo under People → quick edit.
+                Vertical layout · front and back print on <strong>one page</strong>. Set blood group and photo under People → Edit profile.
+                Return address per sector under <strong>Organization setup</strong>.
               </p>
             </div>
           </div>
@@ -236,7 +264,12 @@ export function CorporateCardDialog({
             {face === "front" ? (
               <CorporateCardFront employee={employee} frameClass={PREVIEW_FRAME} origin={origin} />
             ) : (
-              <CorporateCardBack frameClass={PREVIEW_FRAME} origin={origin} />
+              <CorporateCardBack
+                frameClass={PREVIEW_FRAME}
+                origin={origin}
+                employee={employee}
+                businessUnits={businessUnits}
+              />
             )}
           </div>
         </div>
@@ -246,7 +279,12 @@ export function CorporateCardDialog({
         <div id="corporate-card-print-root">
           <div className="corp-card-print-pair">
             <CorporateCardFront employee={employee} frameClass={PRINT_FRAME} origin={origin || "http://localhost:3000"} />
-            <CorporateCardBack frameClass={PRINT_FRAME} origin={origin || "http://localhost:3000"} />
+            <CorporateCardBack
+              frameClass={PRINT_FRAME}
+              origin={origin || "http://localhost:3000"}
+              employee={employee}
+              businessUnits={businessUnits}
+            />
           </div>
         </div>
       </div>

@@ -26,6 +26,9 @@ export function currencyForBusinessUnit(bu: BusinessUnit | null | undefined): Cu
 export type Gender = "Male" | "Female" | "Other" | "Prefer not to say";
 export type MaritalStatus = "Single" | "Married" | "Divorced" | "Widowed";
 
+export const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] as const;
+export type BloodGroup = (typeof BLOOD_GROUPS)[number];
+
 export type FamilyRelation = {
   name: string;
   relation: string;
@@ -74,6 +77,7 @@ export type Employee = {
   secondNationality: string | null;
   maritalStatus: MaritalStatus | null;
   religion: string | null;
+  bloodGroup: BloodGroup | null;
   cnic: string | null;
   cnicExpiry: string | null;
   address: string | null;
@@ -405,6 +409,8 @@ export type BusinessUnitRecord = {
   id: string;
   name: BusinessUnit;
   notes: string | null;
+  /** Shown on corporate ID card back — if lost, return to this office. */
+  cardReturnAddress: string | null;
 };
 
 export type DepartmentRecord = {

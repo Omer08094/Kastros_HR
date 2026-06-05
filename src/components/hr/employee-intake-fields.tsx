@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { Field, FileField, SelectField, TextareaField } from "@/components/Field";
 import { mergeDepartmentOptions } from "@/lib/executive-org";
-import { BUSINESS_UNITS } from "@/lib/store/types";
+import { BLOOD_GROUPS, BUSINESS_UNITS } from "@/lib/store/types";
 
 export type EmployeeIntakeDefaults = Partial<{
   salutation: string;
@@ -26,6 +26,7 @@ export type EmployeeIntakeDefaults = Partial<{
   secondNationality: string;
   maritalStatus: string;
   religion: string;
+  bloodGroup: string;
   cnic: string;
   cnicExpiry: string;
   address: string;
@@ -165,6 +166,16 @@ export function EmployeeIntakeFields({
         options={["Single", "Married", "Divorced", "Widowed"]}
       />
       <Field name="religion" label="Religion *" required defaultValue={d.religion} />
+      <SelectField
+        name="bloodGroup"
+        label="Blood group"
+        defaultValue={d.bloodGroup ?? ""}
+        options={[
+          { value: "", label: "— Select —" },
+          ...BLOOD_GROUPS.map((bg) => ({ value: bg, label: bg })),
+        ]}
+        hint="Shown on corporate ID card."
+      />
       <Field
         name="cnic"
         kind="cnic"

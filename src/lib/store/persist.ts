@@ -5,6 +5,7 @@ import { firestore } from "@/lib/firebase-admin";
 import type {
   AcademicRecord,
   BonusRecord,
+  BloodGroup,
   BusinessUnit,
   BusinessUnitRecord,
   CoiSubmission,
@@ -40,7 +41,7 @@ import type {
   TransferRecord,
   CurrencyCode,
 } from "@/lib/store/types";
-import { BUSINESS_UNITS, CURRENCIES, currencyForBusinessUnit } from "@/lib/store/types";
+import { BUSINESS_UNITS, BLOOD_GROUPS, CURRENCIES, currencyForBusinessUnit } from "@/lib/store/types";
 import { payrollGrossPay, payrollNetPay } from "@/lib/store/payroll";
 import { createInitialStore, DEFAULT_LEAVE_CATEGORIES, DEFAULT_SALARY_ALLOWANCE_TYPES } from "@/lib/store/seed";
 
@@ -219,6 +220,10 @@ function normalizeCompensation(raw: unknown, businessUnit: BusinessUnit | null):
   };
 }
 
+function normalizeBloodGroup(v: unknown): BloodGroup | null {
+  return typeof v === "string" && (BLOOD_GROUPS as readonly string[]).includes(v) ? (v as BloodGroup) : null;
+}
+
 function normalizeEmployee(raw: Record<string, unknown>): Employee {
   const base = raw as unknown as Partial<Employee>;
   const emergencyContacts = Array.isArray(raw.emergencyContacts)
@@ -264,6 +269,7 @@ function normalizeEmployee(raw: Record<string, unknown>): Employee {
     secondNationality: strOrNull(raw.secondNationality),
     maritalStatus: normalizeMarital(raw.maritalStatus),
     religion: strOrNull(raw.religion),
+    bloodGroup: normalizeBloodGroup(raw.bloodGroup),
     cnic: strOrNull(raw.cnic),
     cnicExpiry: strOrNull(raw.cnicExpiry),
     address: strOrNull(raw.address),
@@ -439,6 +445,10 @@ function normalizeStore(parsed: unknown): HrStore {
           id: b.id,
           name: (BUSINESS_UNITS as readonly string[]).includes(b.name) ? b.name : "Karachi",
           notes: b.notes ?? null,
+          cardReturnAddress:
+            typeof b.cardReturnAddress === "string" && b.cardReturnAddress.trim()
+              ? b.cardReturnAddress.trim()
+              : null,
         }))
       : fb.businessUnits;
 

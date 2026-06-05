@@ -5,7 +5,6 @@ import { BUSINESS_UNITS } from "@/lib/store/types";
 import { Field, FileField, SelectField, TextareaField } from "@/components/Field";
 import { Card } from "@/components/Card";
 import {
-  deleteBusinessUnit,
   deleteDepartment,
   deleteJobDescription,
   deleteSubDepartment,
@@ -34,38 +33,47 @@ export function OrganizationClient({
       <StatusBanner error={error} success={success} />
 
       <Card title="Business units" eyebrow="Locations">
+        <p className="mb-4 text-sm text-kastros-sage">
+          Set the <strong className="text-kastros-ink">return address</strong> for each sector — it prints on the back of corporate ID cards
+          for employees in that business unit (if lost, return here).
+        </p>
         <form className="flex flex-wrap items-end gap-3" action={(fd) => run(upsertBusinessUnit(fd), "Business unit saved.")}>
-          <SelectField name="name" label="Business unit" required options={BUSINESS_UNITS as readonly string[]} />
-          <PrimaryButton pending={pending}>Save business unit</PrimaryButton>
+          <SelectField name="name" label="Add business unit" required options={BUSINESS_UNITS as readonly string[]} />
+          <PrimaryButton pending={pending}>Add unit</PrimaryButton>
         </form>
 
         {businessUnits.length === 0 ? (
           <div className="mt-4">
-            <EmptyState title="No business units yet" description="Add your first business unit above." />
+            <EmptyState title="No business units yet" description="Add UAE, Karachi, and Multan above." />
           </div>
         ) : (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[320px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-kastros-sand text-xs uppercase tracking-wide text-kastros-sage">
-                  <th className="pb-3 pr-3 font-medium">Name</th>
-                  <th className="pb-3 font-medium" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-kastros-sand">
-                {businessUnits.map((b) => (
-                  <tr key={b.id} className="text-kastros-ink">
-                    <td className="py-2 pr-3 font-medium">{b.name}</td>
-                    <td className="py-2">
-                      <form action={(fd) => run(deleteBusinessUnit(fd))}>
-                        <input type="hidden" name="id" value={b.id} />
-                        <GhostButton pending={pending}>Delete</GhostButton>
-                      </form>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-6 space-y-4">
+            {businessUnits.map((b) => (
+              <form
+                key={b.id}
+                className="rounded-xl border border-kastros-sand/80 bg-kastros-cream/30 p-4"
+                action={(fd) => run(upsertBusinessUnit(fd), `${b.name} card address saved.`)}
+              >
+                <input type="hidden" name="id" value={b.id} />
+                <input type="hidden" name="name" value={b.name} />
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="font-display text-base font-semibold text-kastros-forest">{b.name}</p>
+                    <p className="text-xs text-kastros-sage">Corporate card — if found, return to:</p>
+                  </div>
+                  <PrimaryButton pending={pending}>Save address</PrimaryButton>
+                </div>
+                <TextareaField
+                  name="cardReturnAddress"
+                  label="Office address (card back)"
+                  defaultValue={b.cardReturnAddress ?? ""}
+                  rows={3}
+                  span2
+                  placeholder={`e.g. Kastros ${b.name} — building, street, city, phone`}
+                  hint={`Employees with business unit “${b.name}” see this on their ID card back.`}
+                />
+              </form>
+            ))}
           </div>
         )}
       </Card>

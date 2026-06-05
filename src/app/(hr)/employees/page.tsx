@@ -47,6 +47,7 @@ export default async function EmployeesPage() {
         policyAcknowledgements={store.policyAcknowledgements}
         policies={store.policies}
         persistence={persistence}
+        businessUnits={store.businessUnits}
       />
     </PageShell>
   );

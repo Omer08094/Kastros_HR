@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition, type FormEvent } from "react";
 import type {
   AcademicRecord,
+  BusinessUnitRecord,
   DocumentRow,
   Employee,
   PolicyAcknowledgement,
@@ -76,6 +77,7 @@ export function EmployeesClient({
   policyAcknowledgements,
   policies,
   persistence,
+  businessUnits,
 }: {
   employees: Employee[];
   canManage: boolean;
@@ -85,6 +87,7 @@ export function EmployeesClient({
   policyAcknowledgements: PolicyAcknowledgement[];
   policies: PolicyManual[];
   persistence: PersistenceInfo;
+  businessUnits: BusinessUnitRecord[];
 }) {
   const router = useRouter();
   const { toasts, push, dismiss } = useToasts();
@@ -411,7 +414,9 @@ export function EmployeesClient({
         />
       ) : null}
 
-      {cardFor ? <CorporateCardDialog open employee={cardFor} onClose={() => setCardFor(null)} /> : null}
+      {cardFor ? (
+        <CorporateCardDialog open employee={cardFor} businessUnits={businessUnits} onClose={() => setCardFor(null)} />
+      ) : null}
     </div>
   );
 }

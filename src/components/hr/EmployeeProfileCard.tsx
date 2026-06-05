@@ -9,6 +9,7 @@ import type {
   PolicyManual,
   SalaryAllowanceCatalogItem,
 } from "@/lib/store/types";
+import { BLOOD_GROUPS } from "@/lib/store/types";
 import {
   addAcademicRecord,
   addDocument,
@@ -407,6 +408,21 @@ export function EmployeeProfileCard({
             editing={editing}
             view={e.religion ?? "—"}
             edit={<input name="religion" defaultValue={e.religion ?? ""} className={INP} />}
+          />
+          <Row
+            label="Blood group"
+            editing={editing}
+            view={e.bloodGroup ?? "—"}
+            edit={
+              <select name="bloodGroup" defaultValue={e.bloodGroup ?? ""} className={INP}>
+                <option value="">—</option>
+                {BLOOD_GROUPS.map((bg) => (
+                  <option key={bg} value={bg}>
+                    {bg}
+                  </option>
+                ))}
+              </select>
+            }
           />
           <Row
             label="CNIC"

@@ -20,9 +20,9 @@ export const DEFAULT_LEAVE_CATEGORIES: LeaveCategory[] = [
 
 /** Default business units shipped with every fresh install. */
 const DEFAULT_BUSINESS_UNITS: BusinessUnitRecord[] = [
-  { id: "bu-uae", name: "UAE", notes: null },
-  { id: "bu-karachi", name: "Karachi", notes: null },
-  { id: "bu-multan", name: "Multan", notes: null },
+  { id: "bu-uae", name: "UAE", notes: null, cardReturnAddress: null },
+  { id: "bu-karachi", name: "Karachi", notes: null, cardReturnAddress: null },
+  { id: "bu-multan", name: "Multan", notes: null, cardReturnAddress: null },
 ];
 
 /** Default published policy manuals. */
