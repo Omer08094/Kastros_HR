@@ -16,7 +16,11 @@ export default async function LettersPage() {
       title="Letters"
       subtitle="Generate and archive promotion, redesignation, trainee, and internship letters."
     >
-      <LettersClient letters={store.letters} employees={store.employees} />
+      <LettersClient
+        letters={store.letters}
+        employees={store.employees}
+        departmentNames={store.departments.map((d) => d.name)}
+      />
     </PageShell>
   );
 }

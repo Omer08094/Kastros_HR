@@ -109,10 +109,14 @@ function CorporateCardBack({
 
   return (
     <CardShell frameClass={frameClass}>
-      <div className="flex h-full w-full flex-col items-center justify-between bg-gradient-to-b from-[#2B3990] to-[#243d6b] px-3 py-3 text-white print:px-[2.5mm] print:py-[2.5mm]">
+      <div className="flex h-full w-full flex-col bg-gradient-to-b from-[#2B3990] to-[#243d6b] px-3 py-3 text-white print:px-[2.5mm] print:py-[2.5mm]">
         <div className="flex w-full flex-col items-center text-center">
           <img src={logoSrc} alt="" className="h-7 w-auto object-contain opacity-95 print:h-[8mm]" />
-          <p className="mt-2 text-[7px] font-semibold uppercase tracking-[0.12em] text-white/80 print:text-[6pt]">
+          <p className="mt-2 text-[9px] font-medium tracking-wide text-white/90 print:text-[7pt]">kastros.co</p>
+        </div>
+
+        <div className="mt-auto w-full border-t border-white/15 pt-2.5 text-center">
+          <p className="text-[7px] font-semibold uppercase tracking-[0.12em] text-white/80 print:text-[6pt]">
             If found, please return to
           </p>
           {returnAddress ? (
@@ -124,10 +128,7 @@ function CorporateCardBack({
               Kastros {buLabel} — set return address in Organization setup.
             </p>
           )}
-        </div>
-        <div className="w-full text-center">
-          <p className="text-[8px] text-white/75 print:text-[6.5pt]">kastros.co</p>
-          <p className="mt-1 text-[7px] uppercase tracking-[0.12em] text-white/55 print:text-[5.5pt]">
+          <p className="mt-2 text-[7px] uppercase tracking-[0.12em] text-white/55 print:text-[5.5pt]">
             Official ID · Not transferable
           </p>
         </div>

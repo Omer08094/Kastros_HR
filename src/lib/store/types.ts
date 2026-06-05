@@ -80,6 +80,9 @@ export type Employee = {
   bloodGroup: BloodGroup | null;
   cnic: string | null;
   cnicExpiry: string | null;
+  /** CNIC / national ID card images — served via /api/hr-file/{ref}. */
+  cnicFrontStoredRef: string | null;
+  cnicBackStoredRef: string | null;
   address: string | null;
 
   /** Employment */

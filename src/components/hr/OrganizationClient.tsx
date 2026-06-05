@@ -1,6 +1,7 @@
 "use client";
 
-import type { BusinessUnitRecord, DepartmentRecord, JobDescription, SubDepartmentRecord } from "@/lib/store/types";
+import type { BusinessUnitRecord, DepartmentRecord, Employee, JobDescription, SubDepartmentRecord } from "@/lib/store/types";
+import { buildHeadEmailOptions } from "@/lib/hr-picker-options";
 import { BUSINESS_UNITS } from "@/lib/store/types";
 import { Field, FileField, SelectField, TextareaField } from "@/components/Field";
 import { Card } from "@/components/Card";
@@ -20,12 +21,15 @@ export function OrganizationClient({
   departments,
   subDepartments,
   jobDescriptions,
+  employees,
 }: {
   businessUnits: BusinessUnitRecord[];
   departments: DepartmentRecord[];
   subDepartments: SubDepartmentRecord[];
   jobDescriptions: JobDescription[];
+  employees: Employee[];
 }) {
+  const headEmailOptions = buildHeadEmailOptions(employees.map((e) => ({ email: e.email, name: e.name })));
   const { pending, error, success, run } = useAction();
 
   return (
@@ -86,7 +90,12 @@ export function OrganizationClient({
             label="Business unit"
             options={businessUnits.map((b) => ({ value: b.id, label: b.name }))}
           />
-          <Field name="headEmail" label="Head email" kind="email" />
+          <SelectField
+            name="headEmail"
+            label="Department head"
+            options={headEmailOptions}
+            hint="Choose the employee who leads this department."
+          />
           <div className="sm:col-span-2">
             <TextareaField name="notes" label="Notes" rows={2} />
           </div>

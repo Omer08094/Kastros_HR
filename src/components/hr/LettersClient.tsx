@@ -5,6 +5,7 @@ import type { Employee, EmployeeLetter, LetterType } from "@/lib/store/types";
 import { Card } from "@/components/Card";
 import { currencyForBusinessUnit } from "@/lib/store/types";
 import { deleteLetter, issueLetter } from "@/lib/store/hr-actions-extra";
+import { buildDepartmentOptions } from "@/lib/hr-picker-options";
 import { EmptyState, GhostButton, PrimaryButton, StatusBanner, formatCurrency, useAction } from "./ModuleHelpers";
 
 const LETTER_TYPES: { value: LetterType; label: string; description: string }[] = [
@@ -18,7 +19,16 @@ const LETTER_TYPES: { value: LetterType; label: string; description: string }[] 
 const INPUT =
   "mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm text-kastros-ink focus:outline-none focus:ring-2 focus:ring-kastros-brandGreen/30";
 
-export function LettersClient({ letters, employees }: { letters: EmployeeLetter[]; employees: Employee[] }) {
+export function LettersClient({
+  letters,
+  employees,
+  departmentNames,
+}: {
+  letters: EmployeeLetter[];
+  employees: Employee[];
+  departmentNames: string[];
+}) {
+  const departmentOptions = buildDepartmentOptions(departmentNames);
   const { pending, error, success, run } = useAction();
   const [type, setType] = useState<LetterType>("Promotion");
   const [employeeEmail, setEmployeeEmail] = useState<string>(employees[0]?.email ?? "");
@@ -120,7 +130,14 @@ export function LettersClient({ letters, employees }: { letters: EmployeeLetter[
               </label>
               <label className="text-sm">
                 <span className="text-kastros-sage">New department</span>
-                <input name="newDepartment" className={INPUT} />
+                <select name="newDepartment" className={INPUT}>
+                  <option value="">— Same as current —</option>
+                  {departmentOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="text-sm">
                 <span className="text-kastros-sage">Current salary ({currency})</span>

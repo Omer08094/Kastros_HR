@@ -18,6 +18,7 @@ export default async function OrganizationPage() {
         departments={store.departments}
         subDepartments={store.subDepartments}
         jobDescriptions={store.jobDescriptions}
+        employees={store.employees}
       />
     </PageShell>
   );

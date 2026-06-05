@@ -3,7 +3,6 @@ import Link from "next/link";
 import { PageShell } from "@/components/PageShell";
 import { Card } from "@/components/Card";
 import { EmployeeOverview } from "@/components/hr/EmployeeOverview";
-import { RoleManagerClient } from "@/components/hr/RoleManagerClient";
 import { getSession } from "@/lib/auth";
 import { hasExecAccess, ROLE_LABELS } from "@/lib/roles";
 import { readStore } from "@/lib/store/persist";
@@ -127,14 +126,22 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      {isCeo ? (
-        <Card className="mt-6" eyebrow="CEO · Access control" title="Manage user roles">
-          <p className="mb-4 text-sm text-kastros-sage">
-            Promote an employee to HR Admin or CEO, or demote back to Employee. The change is written directly to Firebase Auth
-            and takes effect on next sign-in.
-          </p>
-          <RoleManagerClient employees={store.employees} />
-        </Card>
+      {hasExecAccess(session.role) ? (
+        <Link
+          href="/user-roles"
+          className="group mt-6 block rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-kastros-forest"
+        >
+          <Card
+            className="border-transparent transition-shadow group-hover:border-kastros-brandGreen/30 group-hover:shadow-card"
+            eyebrow="Access control"
+            title="User roles"
+          >
+            <p className="text-sm text-kastros-sage">
+              Assign Employee, HR Admin, or CEO access. Open <strong className="text-kastros-forest">Setup → User roles</strong> in the
+              sidebar — changes apply after sign-out and sign-in.
+            </p>
+          </Card>
+        </Link>
       ) : null}
 
       <Card className="mt-6" eyebrow="Organization overview" title="Our Story">

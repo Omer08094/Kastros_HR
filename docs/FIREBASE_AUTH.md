@@ -8,7 +8,7 @@ Kastros HR uses **Firebase Authentication** for sign-in. There are no hardcoded 
 |-----|---------------------------|------|
 | **First HR admin (you)** | One-time `npm run bootstrap:fresh` script | `hr_admin` or `ceo` |
 | **Employees** | HR adds them under **People → Add team member** | `employee` (Firebase user + custom claim) |
-| **Promote to HR / CEO** | **Settings → User roles** (CEO only) | Updates Firebase custom claim `role` |
+| **Promote to HR / CEO** | **Setup → User roles** (HR Admin or CEO) | Updates Firebase custom claim `role` |
 
 Sign-in flow:
 
@@ -97,8 +97,8 @@ npm run bootstrap:fresh -- --email ceo@yourcompany.com --password "..." --name "
 **Option B — promote in the app:**
 
 1. Bootstrap or add a user as `employee`.
-2. Sign in as **CEO** (bootstrap a CEO first if needed).
-3. **Settings → User roles** → set their role to `hr_admin` or `ceo`.
+2. Sign in as **HR Admin or CEO**.
+3. **Setup → User roles** → set their role to `hr_admin` or `ceo`.
 4. They must **sign out and sign in again** for the new role to apply.
 
 ## Local demo accounts (optional)

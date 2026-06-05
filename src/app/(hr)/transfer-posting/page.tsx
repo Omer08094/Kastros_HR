@@ -13,7 +13,11 @@ export default async function TransferPage() {
 
   return (
     <PageShell title="Transfer / Posting" subtitle="Move employees across business units and departments.">
-      <TransferClient transfers={store.transfers} employees={store.employees} />
+      <TransferClient
+        transfers={store.transfers}
+        employees={store.employees}
+        departmentNames={store.departments.map((d) => d.name)}
+      />
     </PageShell>
   );
 }

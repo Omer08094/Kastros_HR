@@ -3,6 +3,7 @@ import { PageShell } from "@/components/PageShell";
 import { Card } from "@/components/Card";
 import { LeavePolicySettings } from "@/components/hr/LeavePolicySettings";
 import { SalaryAllowanceTypesSettings } from "@/components/hr/SalaryAllowanceTypesSettings";
+import Link from "next/link";
 import { SettingsClient } from "@/components/hr/SettingsClient";
 import { readStore } from "@/lib/store/persist";
 import { getSession } from "@/lib/auth";
@@ -52,6 +53,18 @@ export default async function SettingsPage() {
           </ul>
         </Card>
       </div>
+
+      {canReset ? (
+        <Card className="mt-5" eyebrow="Access" title="User roles">
+          <p className="text-sm text-kastros-sage">
+            Assign Employee, HR Admin, or CEO access under{" "}
+            <Link href="/user-roles" className="font-semibold text-kastros-forest underline">
+              Setup → User roles
+            </Link>
+            . The user must sign out and back in after a change.
+          </p>
+        </Card>
+      ) : null}
 
       {canReset ? (
         <>

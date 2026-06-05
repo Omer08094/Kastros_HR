@@ -16,7 +16,12 @@ export default async function PerformancePage() {
 
   return (
     <PageShell title="Performance" subtitle="Formal reviews recorded by HR Admin and CEO">
-      <PerformanceClient reviews={reviews} session={session} />
+      <PerformanceClient
+        reviews={reviews}
+        session={session}
+        employees={store.employees}
+        departmentNames={store.departments.map((d) => d.name)}
+      />
     </PageShell>
   );
 }

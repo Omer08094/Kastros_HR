@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
 import { Card } from "@/components/Card";
+import Link from "next/link";
 import { getSession } from "@/lib/auth";
+import { hasExecAccess } from "@/lib/roles";
 import { readStore } from "@/lib/store/persist";
 
 export default async function SecurityPage() {
@@ -65,6 +67,18 @@ export default async function SecurityPage() {
           </div>
         </Card>
       </div>
+
+      {hasExecAccess(session.role) ? (
+        <Card className="mt-5" eyebrow="Access" title="User roles">
+          <p className="text-sm text-kastros-sage">
+            Manage Firebase Auth roles under{" "}
+            <Link href="/user-roles" className="font-semibold text-kastros-forest underline">
+              Setup → User roles
+            </Link>
+            .
+          </p>
+        </Card>
+      ) : null}
     </PageShell>
   );
 }

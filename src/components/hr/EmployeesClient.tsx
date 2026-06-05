@@ -5,10 +5,12 @@ import { useEffect, useMemo, useState, useTransition, type FormEvent } from "rea
 import type {
   AcademicRecord,
   BusinessUnitRecord,
+  DepartmentRecord,
   DocumentRow,
   Employee,
   PolicyAcknowledgement,
   PolicyManual,
+  SubDepartmentRecord,
 } from "@/lib/store/types";
 import { ToastStack, useToasts } from "@/components/ui/ToastStack";
 import { deleteEmployee, deleteDocument, updateEmployee } from "@/lib/store/hr-actions";
@@ -78,6 +80,10 @@ export function EmployeesClient({
   policies,
   persistence,
   businessUnits,
+  departmentNames,
+  departmentRecords,
+  subDepartments,
+  managerRoster,
 }: {
   employees: Employee[];
   canManage: boolean;
@@ -88,6 +94,10 @@ export function EmployeesClient({
   policies: PolicyManual[];
   persistence: PersistenceInfo;
   businessUnits: BusinessUnitRecord[];
+  departmentNames: string[];
+  departmentRecords: DepartmentRecord[];
+  subDepartments: SubDepartmentRecord[];
+  managerRoster: { email: string; name: string }[];
 }) {
   const router = useRouter();
   const { toasts, push, dismiss } = useToasts();
@@ -349,6 +359,10 @@ export function EmployeesClient({
                 policies={policies}
                 pending={pending}
                 policyTitle={(id) => policyTitle(policies, id)}
+                departmentNames={departmentNames}
+                departmentRecords={departmentRecords}
+                subDepartments={subDepartments}
+                managerRoster={managerRoster}
                 onError={setError}
                 onSaved={() => router.refresh()}
                 onCancel={() => setEditingId(null)}

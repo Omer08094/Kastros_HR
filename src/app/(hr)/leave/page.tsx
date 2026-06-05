@@ -14,7 +14,6 @@ export default async function LeavePage() {
   const store = await readStore();
   const requests = visibleLeaveRequests(store, session);
   const canCreate = session.role === "employee" || session.role === "hr_admin" || session.role === "ceo";
-  const canDecide = session.role === "hr_admin" || session.role === "ceo";
   const canManageEntitlements = hasExecAccess(session.role);
   const year = new Date().getFullYear();
   const balanceRows = buildLeaveBalanceRows(store, session.email, year);
@@ -28,7 +27,6 @@ export default async function LeavePage() {
         requests={requests}
         session={session}
         canCreate={canCreate}
-        canDecide={canDecide}
         canManageEntitlements={canManageEntitlements}
         categories={store.leaveCategories}
         balanceRows={balanceRows}

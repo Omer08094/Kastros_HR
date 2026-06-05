@@ -7,6 +7,7 @@ import { mutateStore, readStore } from "@/lib/store/persist";
 import { createInitialStore } from "@/lib/store/seed";
 import { createEmployeeAuth, sendFirebasePasswordResetEmail, syncEmployeeAuthIdentity } from "@/lib/firebase-auth";
 import { EXECUTIVE_DEPARTMENT } from "@/lib/executive-org";
+import { firstEducationEntry, parseEducationFormRows, parseLegacyEducationFields } from "@/lib/education-form";
 import { normalizeStoredJobDescription } from "@/lib/job-description-html";
 import { hasExecAccess } from "@/lib/roles";
 import {
@@ -16,7 +17,7 @@ import {
   leaveDaysOverlappingYear,
   requestMatchesCategory,
 } from "@/lib/leave-policy";
-import { canDecideLeave } from "@/lib/store/policy";
+import { canApproveLeaveCeoStep, canApproveLeaveHrStep } from "@/lib/store/policy";
 import {
   BUSINESS_UNITS,
   BLOOD_GROUPS,
@@ -126,12 +127,12 @@ export async function resetDemoData(): Promise<ActionResult> {
 }
 
 /**
- * CEO-only: update a Firebase Auth user's `role` custom claim.
+ * HR Admin / CEO: update a Firebase Auth user's `role` custom claim.
  * The target user must sign out and sign back in for the new role to take effect.
  */
 export async function setEmployeeRole(formData: FormData): Promise<ActionResult> {
   const session = await getSession();
-  if (!session || session.role !== "ceo") return { error: "Only the CEO can change user roles." };
+  if (!session || !hasExecAccess(session.role)) return { error: "Only HR Admin or CEO can change user roles." };
 
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const role = String(formData.get("role") ?? "").trim();
@@ -159,6 +160,9 @@ export async function setEmployeeRole(formData: FormData): Promise<ActionResult>
   }));
 
   revalidatePath("/dashboard");
+  revalidatePath("/settings");
+  revalidatePath("/security");
+  revalidatePath("/user-roles");
   return ok();
 }
 
@@ -209,30 +213,31 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
     ? optionalTrimmedField(formData, "drivingLicenceExpiry")
     : null;
 
-  const eduTitle = String(formData.get("eduTitle") ?? "").trim();
-  const eduInstitute = String(formData.get("eduInstitute") ?? "").trim();
-  const eduYear = String(formData.get("eduYear") ?? "").trim();
+  const eduParsed = parseEducationFormRows(formData);
+  if (!eduParsed.ok) return { error: eduParsed.error };
+  const legacyEdu = parseLegacyEducationFields(formData);
+  const primaryEdu = firstEducationEntry(eduParsed.entries, legacyEdu);
+
   const certTitle = String(formData.get("certTitle") ?? "").trim();
   const certIssuer = String(formData.get("certIssuer") ?? "").trim();
   const certYear = String(formData.get("certYear") ?? "").trim();
   const eduFile = formData.get("eduDocument");
   const certFile = formData.get("certDocument");
   const profilePhotoFile = formData.get("profilePhoto");
+  const cnicFrontFile = formData.get("cnicFront");
+  const cnicBackFile = formData.get("cnicBack");
   const employeeIdDisplayOverride = optionalTrimmedField(formData, "employeeIdDisplay");
   const cnic = optionalTrimmedField(formData, "cnic");
   const eduFallbackName = optionalTrimmedField(formData, "eduAttachmentName");
   const certFallbackName = optionalTrimmedField(formData, "certAttachmentName");
 
   const eduAny = !!(
-    eduTitle ||
-    eduInstitute ||
-    eduYear ||
+    primaryEdu ||
     eduFallbackName ||
     (eduFile instanceof File && eduFile.size > 0)
   );
-  const eduComplete = !!(eduTitle && eduInstitute && eduYear);
-  if (eduAny && !eduComplete) {
-    return { error: "Education: enter degree title, institution, and year together, or leave education fields empty." };
+  if (eduAny && !primaryEdu && (eduFallbackName || (eduFile instanceof File && eduFile.size > 0))) {
+    return { error: "Education: add degree, institution, and year before attaching an education document." };
   }
 
   if (!name || !fatherName || !email || !title || !location || !joiningDate) return { error: "Fill required fields." };
@@ -241,6 +246,8 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
   let eduSaved: Awaited<ReturnType<typeof saveFormDataFile>> = null;
   let certSaved: Awaited<ReturnType<typeof saveFormDataFile>> = null;
   let photoSaved: Awaited<ReturnType<typeof saveFormDataFile>> = null;
+  let cnicFrontSaved: Awaited<ReturnType<typeof saveFormDataFile>> = null;
+  let cnicBackSaved: Awaited<ReturnType<typeof saveFormDataFile>> = null;
   try {
     if (eduFile instanceof File && eduFile.size > 0) {
       eduSaved = await saveFormDataFile(eduFile);
@@ -255,8 +262,22 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
       }
       photoSaved = await saveFormDataFile(profilePhotoFile);
     }
+    if (cnicFrontFile instanceof File && cnicFrontFile.size > 0) {
+      if (!isAllowedLibraryDocumentFile(cnicFrontFile)) {
+        await deleteStoredFiles([eduSaved?.ref, certSaved?.ref, photoSaved?.ref]);
+        return { error: "CNIC front: use PNG, JPG, WebP, or PDF." };
+      }
+      cnicFrontSaved = await saveFormDataFile(cnicFrontFile);
+    }
+    if (cnicBackFile instanceof File && cnicBackFile.size > 0) {
+      if (!isAllowedLibraryDocumentFile(cnicBackFile)) {
+        await deleteStoredFiles([eduSaved?.ref, certSaved?.ref, photoSaved?.ref, cnicFrontSaved?.ref]);
+        return { error: "CNIC back: use PNG, JPG, WebP, or PDF." };
+      }
+      cnicBackSaved = await saveFormDataFile(cnicBackFile);
+    }
   } catch (e: any) {
-    await deleteStoredFiles([eduSaved?.ref, certSaved?.ref, photoSaved?.ref]);
+    await deleteStoredFiles([eduSaved?.ref, certSaved?.ref, photoSaved?.ref, cnicFrontSaved?.ref, cnicBackSaved?.ref]);
     return { error: e?.message || "Could not save uploaded files." };
   }
 
@@ -277,15 +298,7 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
   const salutation = salutationOpts.includes(salutationRaw) ? (salutationRaw as Employee["salutation"]) : null;
   const subDepartment = optionalTrimmedField(formData, "subDepartment");
 
-  // Multi-education rows: eduDegree[], eduInstitution[], eduYear[]
-  const eduDegrees = formData.getAll("eduDegree").map((v) => String(v).trim()).filter(Boolean);
-  const eduInstitutions = formData.getAll("eduInstitution").map((v) => String(v).trim());
-  const eduYears = formData.getAll("eduYear").map((v) => String(v).trim());
-  const educationEntries: Employee["education"] = eduDegrees.map((deg, i) => ({
-    degree: deg,
-    institution: eduInstitutions[i] ?? "",
-    year: eduYears[i] ?? "",
-  }));
+  const educationEntries: Employee["education"] = eduParsed.entries;
 
   const hasGratuity = String(formData.get("hasGratuity") ?? "") === "1";
   const hasEobi = String(formData.get("hasEobi") ?? "") === "1";
@@ -300,14 +313,14 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
       auditExtras.push("password reset email not auto-sent");
     }
 
-    if (eduComplete) {
+    if (primaryEdu) {
       newAcademics.push({
         id: `ac-${randomUUID()}`,
         employeeEmail: email,
         type: "Degree",
-        title: eduTitle,
-        institute: eduInstitute,
-        year: eduYear,
+        title: primaryEdu.title,
+        institute: primaryEdu.institute,
+        year: primaryEdu.year,
         attachmentName: eduAttachmentName,
         storedRef: eduSaved?.ref ?? null,
       });
@@ -315,7 +328,7 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
       if (eduAttachmentName) {
         newDocs.push({
           id: `doc-${randomUUID()}`,
-          name: `Education · ${eduTitle} — ${eduAttachmentName}`,
+          name: `Education · ${primaryEdu.title} — ${eduAttachmentName}`,
           owner: "People Ops",
           sensitivity: "Internal",
           createdByEmail: session.email,
@@ -412,8 +425,33 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
       hasProvidentFund,
       firebaseUid,
       photoStoredRef: photoSaved?.ref ?? null,
+      cnicFrontStoredRef: cnicFrontSaved?.ref ?? null,
+      cnicBackStoredRef: cnicBackSaved?.ref ?? null,
       compensation: null,
     };
+
+    if (cnicFrontSaved?.ref) {
+      newDocs.push({
+        id: `doc-${randomUUID()}`,
+        name: `CNIC (front) · ${name}`,
+        owner: "People Ops",
+        sensitivity: "Internal",
+        createdByEmail: session.email,
+        employeeEmail: email,
+        storedRef: cnicFrontSaved.ref,
+      });
+    }
+    if (cnicBackSaved?.ref) {
+      newDocs.push({
+        id: `doc-${randomUUID()}`,
+        name: `CNIC (back) · ${name}`,
+        owner: "People Ops",
+        sensitivity: "Internal",
+        createdByEmail: session.email,
+        employeeEmail: email,
+        storedRef: cnicBackSaved.ref,
+      });
+    }
 
     const year = new Date().getFullYear();
     const seedAllocations = buildAllocationsFromDefaults(store, [email], year);
@@ -544,6 +582,8 @@ export async function addExecutiveMinimal(formData: FormData): Promise<ActionRes
         hasProvidentFund: false,
         firebaseUid,
         photoStoredRef: null,
+        cnicFrontStoredRef: null,
+        cnicBackStoredRef: null,
         compensation: null,
       };
 
@@ -624,7 +664,11 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
   const drivingLicenceNumber = hasCompanyVehicle ? optionalTrimmedField(formData, "drivingLicenceNumber") : null;
   const drivingLicenceExpiry = hasCompanyVehicle ? optionalTrimmedField(formData, "drivingLicenceExpiry") : null;
   const clearPhoto = String(formData.get("clearProfilePhoto") ?? "") === "1";
+  const clearCnicFront = String(formData.get("clearCnicFront") ?? "") === "1";
+  const clearCnicBack = String(formData.get("clearCnicBack") ?? "") === "1";
   const photoFile = formData.get("profilePhoto");
+  const cnicFrontFile = formData.get("cnicFront");
+  const cnicBackFile = formData.get("cnicBack");
   const salutationRaw2 = String(formData.get("salutation") ?? "").trim();
   const salutationOpts2 = ["Mr.", "Mrs.", "Ms.", "Dr.", "Eng.", "Prof."];
   const salutation2 = salutationOpts2.includes(salutationRaw2) ? (salutationRaw2 as Employee["salutation"]) : null;
@@ -662,22 +706,42 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
   }
 
   let nextPhotoRef = current.photoStoredRef;
-  let uploadedRef: string | null = null;
+  let nextCnicFrontRef = current.cnicFrontStoredRef;
+  let nextCnicBackRef = current.cnicBackStoredRef;
+  const uploadedRefs: string[] = [];
   try {
     if (photoFile instanceof File && photoFile.size > 0) {
       if (!isAllowedLibraryDocumentFile(photoFile)) return { error: "Profile photo: use PNG, JPG, or WebP." };
       const saved = await saveFormDataFile(photoFile);
       if (saved) {
-        uploadedRef = saved.ref;
+        uploadedRefs.push(saved.ref);
         nextPhotoRef = saved.ref;
       }
     }
-    if (clearPhoto) {
-      nextPhotoRef = null;
+    if (clearPhoto) nextPhotoRef = null;
+
+    if (cnicFrontFile instanceof File && cnicFrontFile.size > 0) {
+      if (!isAllowedLibraryDocumentFile(cnicFrontFile)) return { error: "CNIC front: use PNG, JPG, WebP, or PDF." };
+      const saved = await saveFormDataFile(cnicFrontFile);
+      if (saved) {
+        uploadedRefs.push(saved.ref);
+        nextCnicFrontRef = saved.ref;
+      }
     }
+    if (clearCnicFront) nextCnicFrontRef = null;
+
+    if (cnicBackFile instanceof File && cnicBackFile.size > 0) {
+      if (!isAllowedLibraryDocumentFile(cnicBackFile)) return { error: "CNIC back: use PNG, JPG, WebP, or PDF." };
+      const saved = await saveFormDataFile(cnicBackFile);
+      if (saved) {
+        uploadedRefs.push(saved.ref);
+        nextCnicBackRef = saved.ref;
+      }
+    }
+    if (clearCnicBack) nextCnicBackRef = null;
   } catch (e: any) {
-    await deleteStoredFile(uploadedRef);
-    return { error: e?.message || "Could not save profile photo." };
+    await deleteStoredFiles(uploadedRefs);
+    return { error: e?.message || "Could not save uploaded files." };
   }
 
   let result: ActionResult;
@@ -746,6 +810,8 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
       hasEobi: hasEobi2,
       hasProvidentFund: hasProvidentFund2,
       photoStoredRef: nextPhotoRef,
+      cnicFrontStoredRef: nextCnicFrontRef,
+      cnicBackStoredRef: nextCnicBackRef,
     };
     const nextEmail = email.toLowerCase();
     const mapEmail = (v: string | null | undefined): string | null =>
@@ -803,17 +869,19 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
     return { next: audit(next, session.email, `Updated employee ${copy[idx].email}`), result: ok() };
   });
   } catch (e) {
-    await deleteStoredFile(uploadedRef);
+    await deleteStoredFiles(uploadedRefs);
     const msg = e instanceof Error ? e.message : "Could not save profile.";
     return { error: msg };
   }
   if ("error" in result) {
-    await deleteStoredFile(uploadedRef);
+    await deleteStoredFiles(uploadedRefs);
     return result;
   }
-  if (current.photoStoredRef && current.photoStoredRef !== nextPhotoRef) {
-    await deleteStoredFile(uploadedRef);
-  }
+  const refsToDelete: string[] = [];
+  if (current.photoStoredRef && current.photoStoredRef !== nextPhotoRef) refsToDelete.push(current.photoStoredRef);
+  if (current.cnicFrontStoredRef && current.cnicFrontStoredRef !== nextCnicFrontRef) refsToDelete.push(current.cnicFrontStoredRef);
+  if (current.cnicBackStoredRef && current.cnicBackStoredRef !== nextCnicBackRef) refsToDelete.push(current.cnicBackStoredRef);
+  if (refsToDelete.length) await deleteStoredFiles(refsToDelete);
   revalidatePath("/employees");
   revalidatePath("/dashboard");
   return ok();
@@ -853,6 +921,8 @@ export async function deleteEmployee(formData: FormData): Promise<ActionResult> 
   const emailLower = victim.email.toLowerCase();
   const refSet = new Set<string>();
   if (victim.photoStoredRef) refSet.add(victim.photoStoredRef);
+  if (victim.cnicFrontStoredRef) refSet.add(victim.cnicFrontStoredRef);
+  if (victim.cnicBackStoredRef) refSet.add(victim.cnicBackStoredRef);
   for (const d of snapshot.documents) {
     if ((d.employeeEmail?.toLowerCase() ?? "") === emailLower && d.storedRef) refSet.add(d.storedRef);
   }
@@ -972,12 +1042,12 @@ export async function decideLeaveRequest(formData: FormData): Promise<ActionResu
     const nextReq: HrStore["leaveRequests"] = s.leaveRequests.map((r) => {
       if (r.id !== id) return r;
       if (r.status === "PendingHR") {
-        if (!hasExecAccess(session.role) || !canDecideLeave(store, session, r.requesterEmail)) return r;
+        if (!canApproveLeaveHrStep(session, r)) return r;
         if (decision === "Denied") return { ...r, status: "Denied" as LeaveStatus, decidedByEmail: session.email, hrDecisionByEmail: session.email };
         return { ...r, status: "PendingCEO", hrDecisionByEmail: session.email, decidedByEmail: session.email };
       }
       if (r.status === "PendingCEO") {
-        if (!hasExecAccess(session.role)) return r;
+        if (!canApproveLeaveCeoStep(session, r)) return r;
         return { ...r, status: decision as LeaveStatus, ceoDecisionByEmail: session.email, decidedByEmail: session.email };
       }
       return r;
@@ -1335,9 +1405,11 @@ export async function submitJobApplication(formData: FormData): Promise<ActionRe
   const familyLinked = String(formData.get("familyLinked") ?? "no") === "yes";
   const reportsToEmail = String(formData.get("reportsToEmail") ?? "").trim().toLowerCase() || null;
 
-  const eduTitle = String(formData.get("eduTitle") ?? "").trim();
-  const eduInstitute = String(formData.get("eduInstitute") ?? "").trim();
-  const eduYear = String(formData.get("eduYear") ?? "").trim();
+  const eduParsed = parseEducationFormRows(formData);
+  if (!eduParsed.ok) return { error: eduParsed.error };
+  const legacyEdu = parseLegacyEducationFields(formData);
+  const primaryEdu = firstEducationEntry(eduParsed.entries, legacyEdu);
+
   const certTitle = String(formData.get("certTitle") ?? "").trim();
   const certIssuer = String(formData.get("certIssuer") ?? "").trim();
   const certYear = String(formData.get("certYear") ?? "").trim();
@@ -1358,40 +1430,14 @@ export async function submitJobApplication(formData: FormData): Promise<ActionRe
     : null;
   if (!employmentType) return { error: "Invalid employment type." };
 
-  const eduDegrees = formData.getAll("eduDegree").map((v) => String(v).trim());
-  const eduInstitutions = formData.getAll("eduInstitution").map((v) => String(v).trim());
-  const eduYears = formData.getAll("eduYear").map((v) => String(v).trim());
-  for (let i = 0; i < Math.max(eduDegrees.length, eduInstitutions.length, eduYears.length); i++) {
-    const deg = eduDegrees[i] ?? "";
-    const inst = eduInstitutions[i] ?? "";
-    const year = eduYears[i] ?? "";
-    const any = !!(deg || inst || year);
-    const complete = !!(deg && inst && year);
-    if (any && !complete) {
-      return { error: "Education: enter degree title, institution, and year together, or leave education fields empty." };
-    }
+  const educationEntries = eduParsed.entries;
+  const eduAny = !!(primaryEdu || (eduFile instanceof File && eduFile.size > 0));
+  if (eduAny && !primaryEdu && eduFile instanceof File && eduFile.size > 0) {
+    return { error: "Education: add degree, institution, and year before attaching an education document." };
   }
-  const educationEntries = eduDegrees
-    .map((degree, i) => ({
-      degree,
-      institution: eduInstitutions[i] ?? "",
-      year: eduYears[i] ?? "",
-    }))
-    .filter((e) => e.degree && e.institution && e.year);
-  const firstEduIdx = eduDegrees.findIndex((deg, i) => !!(deg && (eduInstitutions[i] ?? "") && (eduYears[i] ?? "")));
-  const normalizedEduTitle = firstEduIdx >= 0 ? eduDegrees[firstEduIdx]! : eduTitle;
-  const normalizedEduInstitute = firstEduIdx >= 0 ? eduInstitutions[firstEduIdx]! : eduInstitute;
-  const normalizedEduYear = firstEduIdx >= 0 ? eduYears[firstEduIdx]! : eduYear;
-  const eduAny = !!(
-    normalizedEduTitle ||
-    normalizedEduInstitute ||
-    normalizedEduYear ||
-    (eduFile instanceof File && eduFile.size > 0)
-  );
-  const eduComplete = !!(normalizedEduTitle && normalizedEduInstitute && normalizedEduYear);
-  if (eduAny && !eduComplete) {
-    return { error: "Education: enter degree title, institution, and year together, or leave education fields empty." };
-  }
+  const normalizedEduTitle = primaryEdu?.title ?? "";
+  const normalizedEduInstitute = primaryEdu?.institute ?? "";
+  const normalizedEduYear = primaryEdu?.year ?? "";
 
   const file = formData.get("cv");
   if (!(file instanceof File) || file.size === 0) return { error: "Please upload your CV (PDF or Word)." };

@@ -7,6 +7,7 @@ import type { LeaveBalanceRow } from "@/lib/leave-policy";
 import { createLeaveRequest, decideLeaveRequest } from "@/lib/store/hr-actions";
 import { SelectField } from "@/components/Field";
 import type { Session } from "@/lib/auth";
+import { canDecideLeaveStep } from "@/lib/store/policy";
 import { EmployeeLeaveEntitlements } from "./EmployeeLeaveEntitlements";
 
 function NotesModal({ note, onClose }: { note: string; onClose: () => void }) {
@@ -80,7 +81,6 @@ export function LeaveClient({
   requests,
   session,
   canCreate,
-  canDecide,
   canManageEntitlements,
   categories,
   balanceRows,
@@ -91,7 +91,6 @@ export function LeaveClient({
   requests: LeaveRequest[];
   session: Session;
   canCreate: boolean;
-  canDecide: boolean;
   canManageEntitlements: boolean;
   categories: LeaveCategory[];
   balanceRows: LeaveBalanceRow[];
@@ -177,7 +176,9 @@ export function LeaveClient({
       <section className="rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm">
         <h2 className="font-display text-lg font-semibold text-kastros-forest">Requests you can see</h2>
         <p className="mt-1 text-sm text-kastros-sage">
-          Signed in as <span className="font-medium text-kastros-ink">{session.email}</span>. Flow: Pending HR → Pending CEO → Approved.
+          Signed in as <span className="font-medium text-kastros-ink">{session.email}</span>. Flow:{" "}
+          <strong className="text-kastros-ink">HR Admin</strong> approves first, then <strong className="text-kastros-ink">CEO</strong>{" "}
+          gives final sign-off.
         </p>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[760px] text-left text-sm">
@@ -216,7 +217,7 @@ export function LeaveClient({
                     )}
                   </td>
                   <td className="py-3">
-                    {canDecide && (r.status === "PendingHR" || r.status === "PendingCEO") ? (
+                    {canDecideLeaveStep(session, r) ? (
                       <div className="flex flex-wrap gap-2">
                         <form action={(fd) => handle(decideLeaveRequest(fd))}>
                           <input type="hidden" name="id" value={r.id} />

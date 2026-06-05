@@ -251,6 +251,10 @@ function normalizeEmployee(raw: Record<string, unknown>): Employee {
     typeof raw.photoStoredRef === "string" && /^[0-9a-f-]{36}$/i.test(raw.photoStoredRef.trim())
       ? raw.photoStoredRef.trim().toLowerCase()
       : base.photoStoredRef ?? null;
+  const normalizeStoredRef = (v: unknown, fallback: string | null | undefined) =>
+    typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v.trim()) ? v.trim().toLowerCase() : (fallback ?? null);
+  const cnicFrontStoredRef = normalizeStoredRef(raw.cnicFrontStoredRef, base.cnicFrontStoredRef);
+  const cnicBackStoredRef = normalizeStoredRef(raw.cnicBackStoredRef, base.cnicBackStoredRef);
 
   const licences = Array.isArray(raw.licences)
     ? (raw.licences as Employee["licences"]).filter((l) => l && typeof (l as { id?: unknown }).id === "string")
@@ -308,6 +312,8 @@ function normalizeEmployee(raw: Record<string, unknown>): Employee {
     hasProvidentFund: boolOr(raw.hasProvidentFund, false),
     firebaseUid,
     photoStoredRef,
+    cnicFrontStoredRef,
+    cnicBackStoredRef,
     compensation: normalizeCompensation(raw.compensation, normalizeBusinessUnit(raw.businessUnit)),
   };
 }

@@ -48,6 +48,10 @@ export default async function EmployeesPage() {
         policies={store.policies}
         persistence={persistence}
         businessUnits={store.businessUnits}
+        departmentNames={store.departments.map((d) => d.name)}
+        departmentRecords={store.departments}
+        subDepartments={store.subDepartments}
+        managerRoster={store.employees.map((emp) => ({ email: emp.email, name: emp.name }))}
       />
     </PageShell>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type {
   AcademicRecord,
   DocumentRow,
@@ -21,6 +21,13 @@ import {
 } from "@/lib/store/hr-actions";
 import { EmployeeSalarySection } from "@/components/hr/EmployeeSalarySection";
 import { formatEmployeeDepartment } from "@/lib/executive-org";
+import {
+  buildDepartmentOptions,
+  buildReportsToOptions,
+  buildSubDepartmentOptions,
+  filterSubDepartmentsForDepartment,
+  type RosterEntry,
+} from "@/lib/hr-picker-options";
 
 const INP = "w-full rounded-lg border border-kastros-sand px-2 py-1.5 text-sm";
 
@@ -298,6 +305,10 @@ export function EmployeeProfileCard({
   policies,
   pending,
   policyTitle,
+  departmentNames,
+  departmentRecords,
+  subDepartments,
+  managerRoster,
   onError,
   onSaved,
   onCancel,
@@ -314,6 +325,10 @@ export function EmployeeProfileCard({
   policies: PolicyManual[];
   pending: boolean;
   policyTitle: (id: string) => string;
+  departmentNames: string[];
+  departmentRecords: { id: string; name: string }[];
+  subDepartments: { id: string; name: string; departmentId: string }[];
+  managerRoster: RosterEntry[];
   onError: (msg: string | null) => void;
   onSaved: () => void;
   onCancel: () => void;
@@ -324,6 +339,28 @@ export function EmployeeProfileCard({
   const familyRelations = e.familyRelations ?? [];
   const ec0 = emergencyContacts[0];
   const fr0 = familyRelations[0];
+  const [selectedDept, setSelectedDept] = useState(e.department);
+
+  useEffect(() => {
+    if (editing) setSelectedDept(e.department);
+  }, [editing, e.department, e.id]);
+
+  const departmentOptions = useMemo(
+    () => buildDepartmentOptions(departmentNames, e.department),
+    [departmentNames, e.department],
+  );
+  const filteredSubDepts = useMemo(
+    () => filterSubDepartmentsForDepartment(subDepartments, departmentRecords, selectedDept),
+    [subDepartments, departmentRecords, selectedDept],
+  );
+  const subDepartmentOptions = useMemo(
+    () => buildSubDepartmentOptions(filteredSubDepts, e.subDepartment),
+    [filteredSubDepts, e.subDepartment],
+  );
+  const reportsToOptions = useMemo(
+    () => buildReportsToOptions(managerRoster, e.email, e.reportsToEmail),
+    [managerRoster, e.email, e.reportsToEmail],
+  );
 
   const body = (
     <>
@@ -435,6 +472,54 @@ export function EmployeeProfileCard({
             editing={editing}
             view={e.cnicExpiry ?? "—"}
             edit={<input type="date" name="cnicExpiry" defaultValue={e.cnicExpiry ?? ""} className={INP} />}
+          />
+          <Row
+            label="CNIC (front)"
+            editing={editing}
+            view={
+              e.cnicFrontStoredRef ? (
+                <a href={`/api/hr-file/${e.cnicFrontStoredRef}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-kastros-forest underline">
+                  View front
+                </a>
+              ) : (
+                "—"
+              )
+            }
+            edit={
+              <div className="space-y-2">
+                <input type="file" name="cnicFront" accept="image/png,image/jpeg,image/webp,application/pdf" className={FILE_INP} />
+                {e.cnicFrontStoredRef ? (
+                  <label className="flex items-center gap-2 text-xs text-kastros-sage">
+                    <input type="checkbox" name="clearCnicFront" value="1" className="rounded border-kastros-sand" />
+                    Remove current front image
+                  </label>
+                ) : null}
+              </div>
+            }
+          />
+          <Row
+            label="CNIC (back)"
+            editing={editing}
+            view={
+              e.cnicBackStoredRef ? (
+                <a href={`/api/hr-file/${e.cnicBackStoredRef}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-kastros-forest underline">
+                  View back
+                </a>
+              ) : (
+                "—"
+              )
+            }
+            edit={
+              <div className="space-y-2">
+                <input type="file" name="cnicBack" accept="image/png,image/jpeg,image/webp,application/pdf" className={FILE_INP} />
+                {e.cnicBackStoredRef ? (
+                  <label className="flex items-center gap-2 text-xs text-kastros-sage">
+                    <input type="checkbox" name="clearCnicBack" value="1" className="rounded border-kastros-sand" />
+                    Remove current back image
+                  </label>
+                ) : null}
+              </div>
+            }
           />
           <Row
             label="Address"
@@ -610,19 +695,34 @@ export function EmployeeProfileCard({
             editing={editing}
             view={formatEmployeeDepartment(e)}
             edit={
-              <input
+              <select
                 name="department"
+                required
                 defaultValue={e.department}
                 className={INP}
-                placeholder="Executive Office for CEO"
-              />
+                onChange={(ev) => setSelectedDept(ev.target.value)}
+              >
+                {departmentOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             }
           />
           <Row
             label="Sub-department"
             editing={editing}
             view={e.subDepartment ?? "—"}
-            edit={<input name="subDepartment" defaultValue={e.subDepartment ?? ""} className={INP} />}
+            edit={
+              <select name="subDepartment" defaultValue={e.subDepartment ?? ""} className={INP} key={selectedDept}>
+                {subDepartmentOptions.map((opt) => (
+                  <option key={opt.value || "__none"} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            }
           />
           <Row
             label="Location"
@@ -691,13 +791,13 @@ export function EmployeeProfileCard({
             editing={editing}
             view={e.reportsToEmail ?? "—"}
             edit={
-              <input
-                name="reportsToEmail"
-                type="email"
-                defaultValue={e.reportsToEmail ?? ""}
-                className={INP}
-                placeholder="Leave blank for CEO"
-              />
+              <select name="reportsToEmail" defaultValue={e.reportsToEmail ?? ""} className={INP}>
+                {reportsToOptions.map((opt) => (
+                  <option key={opt.value || "__none"} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             }
           />
           <Row

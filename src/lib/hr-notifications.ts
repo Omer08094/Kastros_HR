@@ -74,7 +74,7 @@ export function deriveHrNotifications(
         href: "/leave",
         at: iso(now),
         kind: "approval",
-      }, ["hr_admin", "ceo"]);
+      }, ["hr_admin"]);
     }
     if (r.status === "PendingCEO") {
       push({
@@ -84,7 +84,7 @@ export function deriveHrNotifications(
         href: "/leave",
         at: iso(now),
         kind: "approval",
-      }, ["hr_admin", "ceo"]);
+      }, ["ceo"]);
     }
     if (r.requesterEmail === email && (r.status === "PendingHR" || r.status === "PendingCEO")) {
       push({

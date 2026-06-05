@@ -103,7 +103,7 @@ export function QuickAddExecutiveForm({
           </button>
           <p className="text-xs text-kastros-sage">
             Department is set to <strong className="text-kastros-ink">Executive Office</strong>. For CEO / HR Admin app access, use{" "}
-            <strong className="text-kastros-ink">Overview → Manage user roles</strong> after they sign in.
+            <strong className="text-kastros-ink">Setup → User roles</strong> after they sign in.
           </p>
         </div>
       </form>

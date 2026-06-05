@@ -2,11 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import type { PerformanceReview } from "@/lib/store/types";
+import type { Employee, PerformanceReview } from "@/lib/store/types";
 import { addPerformanceReview } from "@/lib/store/hr-actions";
 import type { Session } from "@/lib/auth";
+import { buildDepartmentOptions } from "@/lib/hr-picker-options";
 
 type ActionResult = { ok: true } | { error: string };
+
+const INPUT =
+  "mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm text-kastros-ink focus:outline-none focus:ring-2 focus:ring-kastros-brandGreen/30";
 
 async function runAction(p: Promise<ActionResult>, onOk: () => void): Promise<string | null> {
   const r = await p;
@@ -18,13 +22,18 @@ async function runAction(p: Promise<ActionResult>, onOk: () => void): Promise<st
 export function PerformanceClient({
   reviews,
   session,
+  employees,
+  departmentNames,
 }: {
   reviews: PerformanceReview[];
   session: Session;
+  employees: Employee[];
+  departmentNames: string[];
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const departmentOptions = buildDepartmentOptions(departmentNames);
 
   function handle(p: Promise<ActionResult>) {
     setError(null);
@@ -47,20 +56,45 @@ export function PerformanceClient({
         {session.role === "hr_admin" || session.role === "ceo" ? (
           <form className="mt-4 grid gap-3 sm:grid-cols-2" action={(fd) => handle(addPerformanceReview(fd))}>
             <label className="text-sm">
-              <span className="text-kastros-sage">Employee email</span>
-              <input name="employeeEmail" required className="mt-1 w-full rounded-xl border border-kastros-sand px-3 py-2 text-sm" />
+              <span className="text-kastros-sage">Employee</span>
+              <select name="employeeEmail" required className={INPUT}>
+                <option value="" disabled>
+                  Select employee…
+                </option>
+                {employees.map((e) => (
+                  <option key={e.email} value={e.email}>
+                    {e.name} · {e.email}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="text-sm">
-              <span className="text-kastros-sage">Reviewer / line manager email</span>
-              <input name="managerEmail" className="mt-1 w-full rounded-xl border border-kastros-sand px-3 py-2 text-sm" placeholder={session.email} />
+              <span className="text-kastros-sage">Reviewer / line manager</span>
+              <select name="managerEmail" defaultValue={session.email} className={INPUT}>
+                <option value="">— None —</option>
+                {employees.map((e) => (
+                  <option key={e.email} value={e.email}>
+                    {e.name} · {e.email}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="text-sm">
               <span className="text-kastros-sage">Department</span>
-              <input name="department" required className="mt-1 w-full rounded-xl border border-kastros-sand px-3 py-2 text-sm" />
+              <select name="department" required className={INPUT}>
+                <option value="" disabled>
+                  Select department…
+                </option>
+                {departmentOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="text-sm">
               <span className="text-kastros-sage">Criteria set</span>
-              <select name="criteriaType" className="mt-1 w-full rounded-xl border border-kastros-sand px-3 py-2 text-sm">
+              <select name="criteriaType" className={INPUT}>
                 <option>Technical</option>
                 <option>Leadership</option>
                 <option>Operations</option>
@@ -68,7 +102,7 @@ export function PerformanceClient({
             </label>
             <label className="text-sm">
               <span className="text-kastros-sage">Grade</span>
-              <select name="grade" className="mt-1 w-full rounded-xl border border-kastros-sand px-3 py-2 text-sm">
+              <select name="grade" className={INPUT}>
                 <option>A</option>
                 <option>B</option>
                 <option>C</option>
@@ -77,11 +111,11 @@ export function PerformanceClient({
             </label>
             <label className="text-sm sm:col-span-2">
               <span className="text-kastros-sage">Manager comments</span>
-              <textarea name="comments" rows={2} className="mt-1 w-full rounded-xl border border-kastros-sand px-3 py-2 text-sm" />
+              <textarea name="comments" rows={2} className={INPUT} />
             </label>
             <label className="text-sm">
               <span className="text-kastros-sage">Cycle</span>
-              <input name="cycle" defaultValue="H1 2026" className="mt-1 w-full rounded-xl border border-kastros-sand px-3 py-2 text-sm" />
+              <input name="cycle" defaultValue="H1 2026" className={INPUT} />
             </label>
             <div className="sm:col-span-2">
               <button type="submit" disabled={pending} className="rounded-xl bg-kastros-forest px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">

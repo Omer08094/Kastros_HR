@@ -33,9 +33,11 @@ function canAccessStoredRef(
     return visibleEmployees(store, session).some((e) => e.email.toLowerCase() === email);
   }
 
-  const profilePhoto = store.employees.find((e) => e.photoStoredRef === ref);
-  if (profilePhoto) {
-    const email = profilePhoto.email.toLowerCase();
+  const profileFile = store.employees.find(
+    (e) => e.photoStoredRef === ref || e.cnicFrontStoredRef === ref || e.cnicBackStoredRef === ref,
+  );
+  if (profileFile) {
+    const email = profileFile.email.toLowerCase();
     return visibleEmployees(store, session).some((e) => e.email.toLowerCase() === email);
   }
 
@@ -78,7 +80,12 @@ export async function GET(_req: Request, context: { params: Promise<{ ref: strin
         a.certStoredRef === normalizedRef,
     ) ||
     store.training.some((t) => t.trainingMaterialStoredRef === normalizedRef) ||
-    store.employees.some((e) => e.photoStoredRef === normalizedRef) ||
+    store.employees.some(
+      (e) =>
+        e.photoStoredRef === normalizedRef ||
+        e.cnicFrontStoredRef === normalizedRef ||
+        e.cnicBackStoredRef === normalizedRef,
+    ) ||
     store.coiSubmissions.some((s) => s.storedRef === normalizedRef) ||
     store.expenses.some((e) => e.receiptRef === normalizedRef);
 

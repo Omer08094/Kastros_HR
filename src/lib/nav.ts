@@ -72,6 +72,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Setup",
     items: [
       { href: "/organization", label: "Organization setup", icon: Building2, description: "BUs, departments, JD" },
+      { href: "/user-roles", label: "User roles", icon: UsersRound, description: "Employee / HR / CEO access" },
       { href: "/security", label: "Security", icon: Shield, description: "Access and audit trail" },
       { href: "/settings", label: "Settings", icon: Settings, description: "Company and HR admin" },
     ],
@@ -82,4 +83,4 @@ export const NAV_GROUPS: NavGroup[] = [
 export const mainNav: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
 
 /** Currently-unused icon import guard for tree-shaking confusion. */
-export const _navIconsUsed = [Briefcase, Mail, UsersRound];
+export const _navIconsUsed = [Briefcase, Mail];

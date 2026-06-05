@@ -1,6 +1,6 @@
 import type { Session } from "@/lib/auth";
 import { hasExecAccess, type RoleId } from "@/lib/roles";
-import type { Employee, HrStore } from "@/lib/store/types";
+import type { Employee, HrStore, LeaveRequest } from "@/lib/store/types";
 
 export function isDirectReport(store: HrStore, managerEmail: string, employeeEmail: string): boolean {
   const e = store.employees.find((x) => x.email.toLowerCase() === employeeEmail.toLowerCase());
@@ -17,8 +17,26 @@ export function visibleLeaveRequests(store: HrStore, session: Session) {
   return store.leaveRequests.filter((r) => r.requesterEmail.toLowerCase() === session.email.toLowerCase());
 }
 
-export function canDecideLeave(_store: HrStore, session: Session, _requesterEmail: string): boolean {
-  return hasExecAccess(session.role);
+function isSelfLeaveRequest(session: Session, requesterEmail: string): boolean {
+  return requesterEmail.toLowerCase() === session.email.toLowerCase();
+}
+
+/** Step 1 — HR Admin clears operational checks; cannot approve own leave. */
+export function canApproveLeaveHrStep(session: Session, request: LeaveRequest): boolean {
+  if (request.status !== "PendingHR") return false;
+  if (session.role !== "hr_admin") return false;
+  return !isSelfLeaveRequest(session, request.requesterEmail);
+}
+
+/** Step 2 — CEO gives final sign-off; cannot approve own leave. */
+export function canApproveLeaveCeoStep(session: Session, request: LeaveRequest): boolean {
+  if (request.status !== "PendingCEO") return false;
+  if (session.role !== "ceo") return false;
+  return !isSelfLeaveRequest(session, request.requesterEmail);
+}
+
+export function canDecideLeaveStep(session: Session, request: LeaveRequest): boolean {
+  return canApproveLeaveHrStep(session, request) || canApproveLeaveCeoStep(session, request);
 }
 
 export function visibleGoals(store: HrStore, session: Session) {

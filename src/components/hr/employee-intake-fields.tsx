@@ -193,6 +193,24 @@ export function EmployeeIntakeFields({
         defaultValue={d.cnicExpiry}
         hint="Used for renewal reminders."
       />
+
+      <SectionTitle
+        title="CNIC copies"
+        hint="Upload clear photos or scans of the front and back of the CNIC / national ID card."
+      />
+      <FileField
+        name="cnicFront"
+        label="CNIC — front"
+        accept="image/png,image/jpeg,image/webp,application/pdf"
+        hint="PNG, JPG, WebP, or PDF."
+      />
+      <FileField
+        name="cnicBack"
+        label="CNIC — back"
+        accept="image/png,image/jpeg,image/webp,application/pdf"
+        hint="PNG, JPG, WebP, or PDF."
+      />
+
       <TextareaField
         name="address"
         label="Address *"
@@ -447,7 +465,10 @@ export function EmployeeIntakeFields({
         ]}
       />
 
-      <SectionTitle title="Education" hint="Add one row per degree or qualification. Degree, institution, and year on one line." />
+      <SectionTitle
+        title="Education"
+        hint="Add one row per degree or qualification — fill degree, institution, and year in the three fields (optional)."
+      />
       {eduRows.map((row, i) => (
         <div key={i} className="sm:col-span-2 flex flex-wrap items-end gap-2 rounded-xl bg-kastros-cream/40 p-3 ring-1 ring-kastros-sand/60">
           <div className="flex-1 min-w-[150px]">

@@ -31,6 +31,7 @@ export const ROUTE_ACCESS: Record<string, RoleId[]> = {
   "/organization": EXEC,
   "/security": EXEC,
   "/settings": EXEC,
+  "/user-roles": EXEC,
 };
 
 export function topRoute(pathname: string): string {

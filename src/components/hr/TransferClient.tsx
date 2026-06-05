@@ -1,13 +1,23 @@
 "use client";
 
 import type { Employee, TransferRecord } from "@/lib/store/types";
+import { buildDepartmentOptions } from "@/lib/hr-picker-options";
 import { BUSINESS_UNITS } from "@/lib/store/types";
 import { Field, SelectField, TextareaField } from "@/components/Field";
 import { Card } from "@/components/Card";
 import { decideTransfer, requestTransfer } from "@/lib/store/hr-actions-extra";
 import { EmptyState, GhostButton, PrimaryButton, StatusBanner, useAction } from "./ModuleHelpers";
 
-export function TransferClient({ transfers, employees }: { transfers: TransferRecord[]; employees: Employee[] }) {
+export function TransferClient({
+  transfers,
+  employees,
+  departmentNames,
+}: {
+  transfers: TransferRecord[];
+  employees: Employee[];
+  departmentNames: string[];
+}) {
+  const departmentOptions = buildDepartmentOptions(departmentNames);
   const { pending, error, success, run } = useAction();
   return (
     <div className="space-y-6">
@@ -22,7 +32,12 @@ export function TransferClient({ transfers, employees }: { transfers: TransferRe
             options={employees.map((e) => ({ value: e.email, label: `${e.name} · ${e.email} (${e.businessUnit ?? "—"})` }))}
           />
           <SelectField name="toBusinessUnit" label="Target business unit" required options={BUSINESS_UNITS as readonly string[]} />
-          <Field name="toDepartment" label="Target department" required />
+          <SelectField
+            name="toDepartment"
+            label="Target department"
+            required
+            options={departmentOptions}
+          />
           <Field name="effectiveDate" label="Effective date" kind="date" required />
           <Field name="tillDate" label="Till date (optional)" kind="date" hint="Leave blank if permanent transfer." />
           <div className="sm:col-span-2 lg:col-span-4">
