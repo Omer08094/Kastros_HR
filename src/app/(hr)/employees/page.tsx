@@ -1,4 +1,5 @@
 import dynamic from "next/dynamic";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
 import { getSession } from "@/lib/auth";
@@ -38,21 +39,33 @@ export default async function EmployeesPage() {
           : "Your profile — directory visibility is limited for employees"
       }
     >
-      <EmployeesClient
-        employees={rows}
-        canManage={canManage}
-        allowanceTypes={store.salaryAllowanceTypes}
-        documents={store.documents}
-        academics={store.academics}
-        policyAcknowledgements={store.policyAcknowledgements}
-        policies={store.policies}
-        persistence={persistence}
-        businessUnits={store.businessUnits}
-        departmentNames={store.departments.map((d) => d.name)}
-        departmentRecords={store.departments}
-        subDepartments={store.subDepartments}
-        managerRoster={store.employees.map((emp) => ({ email: emp.email, name: emp.name }))}
-      />
+      <Suspense
+        fallback={
+          <div className="animate-pulse space-y-6">
+            <div className="h-10 max-w-md rounded-xl bg-kastros-sand/80" />
+            <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+              <div className="h-96 rounded-2xl bg-white ring-1 ring-kastros-sand/80" />
+              <div className="h-96 rounded-2xl bg-white ring-1 ring-kastros-sand/80" />
+            </div>
+          </div>
+        }
+      >
+        <EmployeesClient
+          employees={rows}
+          canManage={canManage}
+          allowanceTypes={store.salaryAllowanceTypes}
+          documents={store.documents}
+          academics={store.academics}
+          policyAcknowledgements={store.policyAcknowledgements}
+          policies={store.policies}
+          persistence={persistence}
+          businessUnits={store.businessUnits}
+          departmentNames={store.departments.map((d) => d.name)}
+          departmentRecords={store.departments}
+          subDepartments={store.subDepartments}
+          managerRoster={store.employees.map((emp) => ({ email: emp.email, name: emp.name }))}
+        />
+      </Suspense>
     </PageShell>
   );
 }

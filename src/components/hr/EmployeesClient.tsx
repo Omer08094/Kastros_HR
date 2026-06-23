@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition, type FormEvent } from "react";
 import type {
   AcademicRecord,
@@ -13,10 +13,11 @@ import type {
   SubDepartmentRecord,
 } from "@/lib/store/types";
 import { ToastStack, useToasts } from "@/components/ui/ToastStack";
-import { deleteEmployee, deleteDocument, updateEmployee } from "@/lib/store/hr-actions";
+import { deleteEmployee } from "@/lib/store/hr-actions";
 import { AppointmentLetterDialog } from "@/components/hr/AppointmentLetterDialog";
 import { CorporateCardDialog } from "@/components/hr/CorporateCardDialog";
 import { EmployeeProfileCard } from "@/components/hr/EmployeeProfileCard";
+import { isProbationEndingSoon, probationDaysRemaining } from "@/lib/probation";
 import type { PersistenceInfo } from "@/lib/store/persistence-info";
 import type { SalaryAllowanceCatalogItem } from "@/lib/store/types";
 import { Cloud, HardDrive, AlertTriangle } from "lucide-react";
@@ -100,49 +101,77 @@ export function EmployeesClient({
   managerRoster: { email: string; name: string }[];
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toasts, push, dismiss } = useToasts();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [nameInput, setNameInput] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(5);
   const [letterFor, setLetterFor] = useState<Employee | null>(null);
   const [cardFor, setCardFor] = useState<Employee | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const probFilter = searchParams.get("probation") === "1";
+  const idFromUrl = searchParams.get("id");
+
+  const sortedEmployees = useMemo(
+    () => [...employees].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })),
+    [employees],
+  );
 
   const filteredEmployees = useMemo(() => {
+    let list = sortedEmployees;
+    if (probFilter) list = list.filter((e) => isProbationEndingSoon(e));
     const q = appliedQuery.trim().toLowerCase();
-    if (!q) return employees;
-    return employees.filter(
-      (e) => e.name.toLowerCase().includes(q) || e.email.toLowerCase().includes(q),
-    );
-  }, [employees, appliedQuery]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredEmployees.length / pageSize) || 1);
-  const safePage = Math.min(page, totalPages);
+    if (!q) return list;
+    return list.filter((e) => e.name.toLowerCase().includes(q) || e.email.toLowerCase().includes(q));
+  }, [sortedEmployees, appliedQuery, probFilter]);
 
   useEffect(() => {
-    setPage((p) => Math.min(p, totalPages));
-  }, [totalPages]);
+    if (filteredEmployees.length === 0) {
+      setSelectedId(null);
+      return;
+    }
+    if (idFromUrl && filteredEmployees.some((e) => e.id === idFromUrl)) {
+      setSelectedId(idFromUrl);
+      return;
+    }
+    if (selectedId && filteredEmployees.some((e) => e.id === selectedId)) return;
+    setSelectedId(filteredEmployees[0]!.id);
+  }, [filteredEmployees, idFromUrl, selectedId]);
 
-  const pagedEmployees = useMemo(() => {
-    const start = (safePage - 1) * pageSize;
-    return filteredEmployees.slice(start, start + pageSize);
-  }, [filteredEmployees, safePage, pageSize]);
+  const selected = useMemo(
+    () => filteredEmployees.find((e) => e.id === selectedId) ?? null,
+    [filteredEmployees, selectedId],
+  );
 
-  const rangeStart = filteredEmployees.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
-  const rangeEnd = Math.min(safePage * pageSize, filteredEmployees.length);
+  function updateUrl(nextId: string | null, probation = probFilter) {
+    const params = new URLSearchParams();
+    if (probation) params.set("probation", "1");
+    if (nextId) params.set("id", nextId);
+    const qs = params.toString();
+    router.replace(qs ? `/employees?${qs}` : "/employees", { scroll: false });
+  }
+
+  function selectEmployee(id: string) {
+    setSelectedId(id);
+    setEditingId(null);
+    updateUrl(id);
+  }
+
+  function clearProbationFilter() {
+    const keepId = selectedId;
+    router.replace(keepId ? `/employees?id=${keepId}` : "/employees", { scroll: false });
+  }
 
   function applySearch() {
     setAppliedQuery(nameInput);
-    setPage(1);
   }
 
   function clearSearch() {
     setNameInput("");
     setAppliedQuery("");
-    setPage(1);
   }
 
   function onSearchSubmit(e: FormEvent) {
@@ -181,6 +210,11 @@ export function EmployeesClient({
     });
   }
 
+  const isEditing = canManage && selected && editingId === selected.id;
+  const personDocs = selected ? byEmail(selected.email).documents : [];
+  const personAcademics = selected ? byEmail(selected.email).academics : [];
+  const personAcks = selected ? byEmail(selected.email).acknowledgements : [];
+
   return (
     <div className="space-y-6">
       <ToastStack toasts={toasts} onDismiss={dismiss} />
@@ -196,9 +230,24 @@ export function EmployeesClient({
         </div>
       ) : null}
 
+      {probFilter ? (
+        <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            <strong>Probation ending soon</strong> — showing {filteredEmployees.length} employee
+            {filteredEmployees.length === 1 ? "" : "s"} with probation completing within 10 days.
+          </p>
+          <button
+            type="button"
+            onClick={clearProbationFilter}
+            className="shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-950 hover:bg-amber-100"
+          >
+            Show all people
+          </button>
+        </div>
+      ) : null}
+
       <p className="text-sm text-kastros-sage">
-        Each profile lists education, personnel documents, and policy acknowledgements below. While editing a profile, HR can add records in
-        those sections. Company-wide notices live under Documents · Company library.
+        Select a name from the list to view full profile details, documents, and policy acknowledgements.
       </p>
 
       <div className="rounded-2xl border border-kastros-sand bg-white p-4 shadow-sm sm:p-5">
@@ -229,27 +278,11 @@ export function EmployeesClient({
               Clear
             </button>
           </div>
-          <label className="flex flex-col text-sm sm:ml-auto">
-            <span className="text-kastros-sage">Per page</span>
-            <select
-              value={pageSize}
-              onChange={(ev) => {
-                setPageSize(Number(ev.target.value));
-                setPage(1);
-              }}
-              className="mt-1 rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm"
-            >
-              <option value={5}>5</option>
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-            </select>
-          </label>
         </form>
         <p className="mt-4 text-sm text-kastros-sage">
           {filteredEmployees.length === 0 ? (
             <>
-              No people match this search.
+              No people match{probFilter ? " this probation filter" : " this search"}.
               {employees.length > 0 ? (
                 <>
                   {" "}
@@ -259,47 +292,83 @@ export function EmployeesClient({
             </>
           ) : (
             <>
-              Showing <span className="tabular-nums font-medium text-kastros-forest">{rangeStart}</span>–
-              <span className="tabular-nums font-medium text-kastros-forest">{rangeEnd}</span> of{" "}
-              <span className="tabular-nums font-medium text-kastros-forest">{filteredEmployees.length}</span>
+              <span className="tabular-nums font-medium text-kastros-forest">{filteredEmployees.length}</span> in list
               {appliedQuery.trim() ? (
                 <>
                   {" "}
                   · matching &quot;{appliedQuery.trim()}&quot;
-                  {filteredEmployees.length < employees.length ? (
-                    <>
-                      {" "}
-                      (<span className="tabular-nums">{employees.length}</span> in full directory)
-                    </>
-                  ) : null}
                 </>
-              ) : (
-                <> in directory</>
-              )}
+              ) : null}
+              {probFilter ? " · probation filter active" : null}
             </>
           )}
         </p>
       </div>
 
-      <div className="space-y-8">
-        {pagedEmployees.map((e) => {
-          const { documents: personDocs, academics: personAcademics, acknowledgements: personAcks } = byEmail(e.email);
-          const isEditing = canManage && editingId === e.id;
-          return (
-            <article
-              key={e.id}
-              className="rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm ring-1 ring-kastros-forest/[0.02]"
-            >
+      <div className="grid gap-4 lg:grid-cols-[minmax(220px,280px)_1fr] lg:items-start">
+        <nav
+          aria-label="People directory"
+          className="max-h-[min(70vh,640px)] overflow-y-auto rounded-2xl border border-kastros-sand bg-white shadow-sm ring-1 ring-kastros-forest/[0.02]"
+        >
+          <ul className="divide-y divide-kastros-sand/80">
+            {filteredEmployees.map((e) => {
+              const active = e.id === selectedId;
+              const onProbation = isProbationEndingSoon(e);
+              const daysLeft = probationDaysRemaining(e.probationCompletionDate);
+              return (
+                <li key={e.id}>
+                  <button
+                    type="button"
+                    onClick={() => selectEmployee(e.id)}
+                    className={`flex w-full flex-col gap-0.5 px-4 py-3 text-left transition ${
+                      active
+                        ? "bg-kastros-forest/10 ring-2 ring-inset ring-kastros-forest/25"
+                        : onProbation
+                          ? "bg-amber-50/80 hover:bg-amber-50"
+                          : "hover:bg-kastros-cream/50"
+                    }`}
+                  >
+                    <span className={`text-sm font-semibold ${active ? "text-kastros-forest" : "text-kastros-ink"}`}>
+                      {e.name}
+                    </span>
+                    <span className="truncate text-xs text-kastros-sage">{e.title}</span>
+                    {onProbation && daysLeft !== null ? (
+                      <span className="mt-0.5 text-[11px] font-medium text-amber-800">
+                        Probation · {daysLeft === 0 ? "ends today" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`}
+                      </span>
+                    ) : null}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        <div className="min-w-0">
+          {!selected ? (
+            <div className="rounded-2xl border border-kastros-sand bg-white p-8 text-center text-sm text-kastros-sage shadow-sm">
+              {filteredEmployees.length === 0 ? "No employees to display." : "Select a person from the list."}
+            </div>
+          ) : (
+            <article className="rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm ring-1 ring-kastros-forest/[0.02]">
               <header className="flex flex-col gap-2 border-b border-kastros-sand pb-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <h2 className="font-display text-xl font-semibold text-kastros-forest">{e.name}</h2>
-                  <p className="mt-0.5 text-sm text-kastros-sage">{e.email}</p>
+                  <h2 className="font-display text-xl font-semibold text-kastros-forest">{selected.name}</h2>
+                  <p className="mt-0.5 text-sm text-kastros-sage">{selected.email}</p>
+                  {isProbationEndingSoon(selected) ? (
+                    <p className="mt-2 inline-flex rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-900 ring-1 ring-amber-200">
+                      Probation ends {selected.probationCompletionDate}
+                      {probationDaysRemaining(selected.probationCompletionDate) !== null
+                        ? ` (${probationDaysRemaining(selected.probationCompletionDate)} days left)`
+                        : ""}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                   {canManage ? (
                     <button
                       type="button"
-                      onClick={() => setEditingId((prev) => (prev === e.id ? null : e.id))}
+                      onClick={() => setEditingId((prev) => (prev === selected.id ? null : selected.id))}
                       className="rounded-xl border border-kastros-sand bg-white px-3 py-1.5 text-xs font-semibold text-kastros-forest shadow-sm hover:bg-kastros-cream/60"
                     >
                       {isEditing ? "Done editing" : "Edit profile"}
@@ -307,50 +376,52 @@ export function EmployeesClient({
                   ) : null}
                   <button
                     type="button"
-                    onClick={() => setLetterFor(e)}
+                    onClick={() => setLetterFor(selected)}
                     className="rounded-xl border border-kastros-brandBlue/22 bg-kastros-cream/80 px-3 py-1.5 text-xs font-semibold text-kastros-forest shadow-sm ring-1 ring-kastros-brandGreen/20 hover:bg-kastros-cream"
                   >
                     Appointment letter
                   </button>
                   <button
                     type="button"
-                    onClick={() => setCardFor(e)}
+                    onClick={() => setCardFor(selected)}
                     className="rounded-xl border border-kastros-sand bg-white px-3 py-1.5 text-xs font-semibold text-kastros-forest shadow-sm hover:bg-kastros-cream/60"
                   >
                     Corporate card
                   </button>
                   <span className="inline-flex w-fit rounded-full bg-kastros-cream px-3 py-1 text-xs font-medium ring-1 ring-kastros-sand">
-                    {e.status}
+                    {selected.status}
                   </span>
                 </div>
               </header>
 
-              {e.cnicExpiry && cnicExpiryStatus(e.cnicExpiry) ? (
+              {selected.cnicExpiry && cnicExpiryStatus(selected.cnicExpiry) ? (
                 <div
                   className={`mt-4 rounded-xl px-3 py-2 text-xs font-medium ${
-                    cnicExpiryStatus(e.cnicExpiry) === "expired"
+                    cnicExpiryStatus(selected.cnicExpiry) === "expired"
                       ? "bg-red-50 text-red-800 ring-1 ring-red-200"
                       : "bg-amber-50 text-amber-900 ring-1 ring-amber-200"
                   }`}
                 >
-                  CNIC {cnicExpiryStatus(e.cnicExpiry) === "expired" ? "expired" : "expires soon"} ({e.cnicExpiry}).
+                  CNIC {cnicExpiryStatus(selected.cnicExpiry) === "expired" ? "expired" : "expires soon"} ({selected.cnicExpiry}).
                 </div>
               ) : null}
-              {e.drivingLicenceExpiry && cnicExpiryStatus(e.drivingLicenceExpiry) ? (
+              {selected.drivingLicenceExpiry && cnicExpiryStatus(selected.drivingLicenceExpiry) ? (
                 <div
                   className={`mt-2 rounded-xl px-3 py-2 text-xs font-medium ${
-                    cnicExpiryStatus(e.drivingLicenceExpiry) === "expired"
+                    cnicExpiryStatus(selected.drivingLicenceExpiry) === "expired"
                       ? "bg-red-50 text-red-800 ring-1 ring-red-200"
                       : "bg-amber-50 text-amber-900 ring-1 ring-amber-200"
                   }`}
                 >
-                  Driving licence {cnicExpiryStatus(e.drivingLicenceExpiry) === "expired" ? "expired" : "expires soon"} ({e.drivingLicenceExpiry}).
+                  Driving licence{" "}
+                  {cnicExpiryStatus(selected.drivingLicenceExpiry) === "expired" ? "expired" : "expires soon"} (
+                  {selected.drivingLicenceExpiry}).
                 </div>
               ) : null}
 
               <EmployeeProfileCard
-                employee={e}
-                editing={isEditing}
+                employee={selected}
+                editing={!!isEditing}
                 canManage={canManage}
                 allowanceTypes={allowanceTypes}
                 documents={personDocs}
@@ -372,7 +443,7 @@ export function EmployeesClient({
 
               {isEditing ? (
                 <form className="mt-4" action={(fd) => handle(deleteEmployee(fd))}>
-                  <input type="hidden" name="id" value={e.id} />
+                  <input type="hidden" name="id" value={selected.id} />
                   <button
                     type="submit"
                     disabled={pending}
@@ -383,39 +454,9 @@ export function EmployeesClient({
                 </form>
               ) : null}
             </article>
-          );
-        })}
+          )}
+        </div>
       </div>
-
-      {filteredEmployees.length > 0 && totalPages > 1 ? (
-        <nav
-          className="flex flex-col items-stretch justify-between gap-3 rounded-2xl border border-kastros-sand bg-white px-4 py-4 shadow-sm sm:flex-row sm:items-center sm:px-5"
-          aria-label="People pagination"
-        >
-          <p className="text-sm text-kastros-sage">
-            Page <span className="tabular-nums font-semibold text-kastros-forest">{safePage}</span> of{" "}
-            <span className="tabular-nums font-semibold text-kastros-forest">{totalPages}</span>
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={safePage <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="rounded-xl border border-kastros-sand bg-white px-4 py-2 text-sm font-semibold text-kastros-forest disabled:cursor-not-allowed disabled:opacity-40 hover:bg-kastros-cream/50"
-            >
-              Previous
-            </button>
-            <button
-              type="button"
-              disabled={safePage >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              className="rounded-xl border border-kastros-sand bg-white px-4 py-2 text-sm font-semibold text-kastros-forest disabled:cursor-not-allowed disabled:opacity-40 hover:bg-kastros-cream/50"
-            >
-              Next
-            </button>
-          </div>
-        </nav>
-      ) : null}
 
       {letterFor ? (
         <AppointmentLetterDialog

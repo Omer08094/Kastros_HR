@@ -49,7 +49,7 @@ export default async function DashboardPage() {
     >
       {probationAlerts.length ? (
         <Link
-          href="/employees"
+          href="/employees?probation=1"
           className="mb-5 block rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 transition hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-kastros-forest"
         >
           <strong>Probation alert:</strong> {probationAlerts.length} employee(s) are within 10 days of probation completion. HR should

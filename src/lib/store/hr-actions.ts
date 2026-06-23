@@ -686,6 +686,9 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
   const familyRelationFirm = String(formData.get("familyRelationFirm") ?? "").trim();
   const familyLinked = String(formData.get("familyLinked") ?? "no") === "yes";
 
+  const eduParsed = parseEducationFormRows(formData);
+  if (!eduParsed.ok) return { error: eduParsed.error };
+
   if (!id || !name || !fatherName || !email || !title || !location || !joiningDate) return { error: "Missing fields." };
   if (!["Active", "On leave", "Offboarding", "Separated"].includes(status)) return { error: "Invalid status." };
 
@@ -812,6 +815,7 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
       photoStoredRef: nextPhotoRef,
       cnicFrontStoredRef: nextCnicFrontRef,
       cnicBackStoredRef: nextCnicBackRef,
+      education: eduParsed.entries,
     };
     const nextEmail = email.toLowerCase();
     const mapEmail = (v: string | null | undefined): string | null =>

@@ -59,6 +59,7 @@ export default async function OnboardingPage({ searchParams }: PageProps) {
         departments={store.departments.map((d) => d.name)}
         subDepartments={store.subDepartments}
         employees={store.employees.map((e) => ({ email: e.email, name: e.name }))}
+        persistence={persistence}
       />
     </PageShell>
   );

@@ -8,7 +8,7 @@ import { businessUnitLabel, resolveCardReturnAddress } from "@/lib/corporate-car
 import { printInnerHtmlInIframe } from "@/lib/print-in-iframe";
 
 /** Portrait ID-1 (54 × 85.6 mm) — vertical badge */
-const PREVIEW_FRAME = "h-[280px] w-[176px] sm:h-[320px] sm:w-[202px]";
+const PREVIEW_FRAME = "h-[300px] w-[188px] sm:h-[340px] sm:w-[214px]";
 const PRINT_FRAME = "h-[85.6mm] w-[54mm]";
 
 function initials(name: string): string {
@@ -43,23 +43,33 @@ function CorporateCardFront({
   employee,
   frameClass,
   origin,
+  compact,
 }: {
   employee: Employee;
   frameClass: string;
   origin: string;
+  compact?: boolean;
 }) {
   const logoSrc = `${origin}${BRAND_LOGO}`;
   const photoSrc = employee.photoStoredRef ? `${origin}/api/hr-file/${employee.photoStoredRef}` : null;
 
   return (
     <CardShell frameClass={frameClass}>
-      <div className="flex h-full w-full flex-col bg-gradient-to-b from-white via-[#f4f7fb] to-[#e8eef6] px-3 pb-3 pt-3 text-[#2B3990] print:px-[2.5mm] print:pb-[2.5mm] print:pt-[2.5mm]">
+      <div className="flex h-full w-full flex-col bg-gradient-to-b from-white via-[#f4f7fb] to-[#e8eef6] px-3 pb-2.5 pt-2.5 text-[#2B3990] print:px-[2.5mm] print:pb-[2.5mm] print:pt-[2.5mm]">
         <div className="flex shrink-0 justify-center">
-          <img src={logoSrc} alt="" className="h-7 w-auto max-w-[90%] object-contain print:h-[8mm]" />
+          <img
+            src={logoSrc}
+            alt=""
+            className={`w-auto max-w-[90%] object-contain print:h-[8mm] ${compact ? "h-6" : "h-7"}`}
+          />
         </div>
 
-        <div className="mt-2 flex flex-1 flex-col">
-          <div className="relative mx-auto aspect-[3/4] w-[56%] overflow-hidden rounded-lg bg-[#dce3f0] ring-1 ring-[#2B3990]/20">
+        <div className="mt-1.5 flex min-h-0 flex-1 flex-col">
+          <div
+            className={`relative mx-auto overflow-hidden rounded-lg bg-[#dce3f0] ring-1 ring-[#2B3990]/20 ${
+              compact ? "aspect-[3/4] w-[48%]" : "aspect-[3/4] w-[56%]"
+            }`}
+          >
             {photoSrc ? (
               <img src={photoSrc} alt="" className="h-full w-full object-cover" />
             ) : (
@@ -69,12 +79,26 @@ function CorporateCardFront({
             )}
           </div>
 
-          <p className="mt-2.5 text-center font-display text-[16px] font-bold leading-tight text-[#2B3990] print:text-[12pt]">
+          <p
+            className={`text-center font-display font-bold leading-tight text-[#2B3990] print:text-[12pt] ${
+              compact ? "mt-1.5 text-[14px]" : "mt-2.5 text-[16px]"
+            }`}
+          >
             {employee.name}
           </p>
-          <p className="mt-1 text-center text-[12px] font-semibold leading-snug text-[#006837] print:text-[9.5pt]">{employee.title}</p>
+          <p
+            className={`text-center font-semibold leading-snug text-[#006837] print:text-[9.5pt] ${
+              compact ? "mt-0.5 text-[11px]" : "mt-1 text-[12px]"
+            }`}
+          >
+            {employee.title}
+          </p>
 
-          <div className="mt-auto space-y-1 border-t border-[#2B3990]/15 pt-2 text-[10px] leading-snug text-[#2B3990]/90 print:text-[8pt]">
+          <div
+            className={`mt-auto shrink-0 space-y-0.5 border-t border-[#2B3990]/15 pt-1.5 text-[#2B3990]/90 print:text-[8pt] ${
+              compact ? "text-[9px] leading-tight" : "text-[10px] leading-snug"
+            }`}
+          >
             <p>
               <span className="font-semibold text-[#2B3990]">Employee ID</span>
               <br />
@@ -263,7 +287,7 @@ export function CorporateCardDialog({
         <div className="mt-4 flex min-h-0 flex-1 flex-col items-center overflow-y-auto overscroll-contain rounded-2xl border border-kastros-sand/80 bg-kastros-cream/40 p-6 shadow-inner">
           <div className="flex flex-col items-center gap-3">
             {face === "front" ? (
-              <CorporateCardFront employee={employee} frameClass={PREVIEW_FRAME} origin={origin} />
+              <CorporateCardFront employee={employee} frameClass={PREVIEW_FRAME} origin={origin} compact />
             ) : (
               <CorporateCardBack
                 frameClass={PREVIEW_FRAME}

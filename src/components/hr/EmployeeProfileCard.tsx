@@ -19,6 +19,7 @@ import {
   resendEmployeePasswordReset,
   updateEmployee,
 } from "@/lib/store/hr-actions";
+import { EducationRowsFields } from "@/components/hr/EducationRowsFields";
 import { EmployeeSalarySection } from "@/components/hr/EmployeeSalarySection";
 import { formatEmployeeDepartment } from "@/lib/executive-org";
 import {
@@ -132,7 +133,7 @@ function ProfileLinkedRecordsSection({
         ) : (
           <p className="text-sm text-kastros-sage">No academic records on file.</p>
         )}
-        {e.education.length > 0 ? (
+        {e.education.length > 0 && !editing ? (
           <div className="mt-4 border-t border-kastros-sand/60 pt-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">On employee record</p>
             <ul className="mt-2 space-y-1 text-sm">
@@ -864,6 +865,18 @@ export function EmployeeProfileCard({
           </div>
         ) : null}
       </Section>
+
+      {editing ? (
+        <Section title="Education history">
+          <p className="mb-3 text-xs text-kastros-sage">
+            Edit every degree on the employee record. Each row needs degree, institution, and year — or leave all three blank.
+          </p>
+          <EducationRowsFields
+            key={`${e.id}:${e.education.map((x) => `${x.degree}|${x.institution}|${x.year}`).join(";")}`}
+            entries={e.education}
+          />
+        </Section>
+      ) : null}
     </>
   );
 

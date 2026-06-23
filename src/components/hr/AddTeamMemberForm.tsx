@@ -1,10 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import type { EmployeeIntakeDefaults } from "@/components/hr/employee-intake-fields";
 import { EmployeeIntakeFields } from "@/components/hr/employee-intake-fields";
+import { ToastStack, useToasts } from "@/components/ui/ToastStack";
 import { addEmployee } from "@/lib/store/hr-actions";
+import type { PersistenceInfo } from "@/lib/store/persistence-info";
 
 type ActionResult = { ok: true } | { error: string };
 
@@ -20,26 +22,45 @@ export function AddTeamMemberForm({
   departments = [],
   subDepartments = [],
   employees = [],
+  persistence,
 }: {
   defaults?: EmployeeIntakeDefaults;
   departments?: string[];
   subDepartments?: { id: string; name: string; departmentId: string }[];
   employees?: { email: string; name: string }[];
+  persistence?: PersistenceInfo;
 }) {
   const router = useRouter();
+  const { toasts, push, dismiss } = useToasts();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [formKey, setFormKey] = useState(0);
+  const sectionRef = useRef<HTMLElement>(null);
+
+  function scrollToForm() {
+    sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   function handle(p: Promise<ActionResult>) {
     setError(null);
     start(async () => {
-      const err = await runAction(p, () => router.refresh());
-      if (err) setError(err);
+      const err = await runAction(p, () => {
+        router.refresh();
+        setFormKey((k) => k + 1);
+        push("Profile saved — employee added to the directory.", "success", persistence?.saveHint);
+        scrollToForm();
+      });
+      if (err) {
+        setError(err);
+        push(err, "error");
+        scrollToForm();
+      }
     });
   }
 
   return (
-    <section className="rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm">
+    <section ref={sectionRef} className="rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm">
+      <ToastStack toasts={toasts} onDismiss={dismiss} />
       <h2 className="font-display text-lg font-semibold text-kastros-forest">Add team member</h2>
       <p className="mt-1 text-sm text-kastros-sage">Includes family compliance, onboarding, contact, and probation details.</p>
       {error ? (
@@ -47,7 +68,7 @@ export function AddTeamMemberForm({
           {error}
         </div>
       ) : null}
-      <form className="mt-4 grid gap-3 sm:grid-cols-2" action={(fd) => handle(addEmployee(fd))}>
+      <form key={formKey} className="mt-4 grid gap-3 sm:grid-cols-2" action={(fd) => handle(addEmployee(fd))}>
         <EmployeeIntakeFields defaults={defaults} showSubtitle={false} departments={departments} subDepartments={subDepartments} employees={employees} />
         <div className="sm:col-span-2">
           <button
