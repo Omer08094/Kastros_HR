@@ -58,3 +58,91 @@ body {
 .rich-text-editor .rich-editor-prose a {
   @apply font-medium text-kastros-forest underline;
 }
+
+/* Organization chart — top-down hierarchy with connector lines */
+.org-tree,
+.org-tree ul,
+.org-tree li {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.org-tree ul {
+  display: flex;
+  justify-content: center;
+  padding-top: 1rem;
+  position: relative;
+}
+
+.org-tree > ul {
+  padding-top: 0;
+}
+
+.org-tree li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  padding: 1rem 0.25rem 0;
+}
+
+.org-tree ul::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  height: 1.25rem;
+  border-left: 1px solid rgb(201 184 163 / 0.9);
+}
+
+.org-tree > ul::before {
+  display: none;
+}
+
+.org-tree li::before,
+.org-tree li::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 50%;
+  height: 1.25rem;
+  border-top: 1px solid rgb(201 184 163 / 0.9);
+}
+
+.org-tree li::before {
+  right: 50%;
+  border-right: 1px solid rgb(201 184 163 / 0.9);
+}
+
+.org-tree li::after {
+  left: 50%;
+  border-left: 1px solid rgb(201 184 163 / 0.9);
+}
+
+.org-tree li:only-child::before,
+.org-tree li:only-child::after {
+  display: none;
+}
+
+.org-tree li:only-child {
+  padding-top: 0;
+}
+
+.org-tree li:first-child::before {
+  border: none;
+}
+
+.org-tree li:last-child::after {
+  border: none;
+}
+
+.org-tree li:last-child::before {
+  border-right: 1px solid rgb(201 184 163 / 0.9);
+  border-radius: 0 0.35rem 0 0;
+}
+
+.org-tree li:first-child::after {
+  border-left: 1px solid rgb(201 184 163 / 0.9);
+  border-radius: 0.35rem 0 0 0;
+}

@@ -50,7 +50,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/onboarding", label: "Onboarding", icon: UserPlus, description: "Add to roster" },
       { href: "/recruiting", label: "Recruiting", icon: Search, description: "Roles and pipeline" },
       { href: "/transfer-posting", label: "Transfer / Posting", icon: Repeat, description: "Cross-BU movement" },
-      { href: "/org-chart", label: "Reporting channel", icon: Network, description: "Reporting tree" },
+      { href: "/org-chart", label: "Org chart", icon: Network, description: "Reporting hierarchy" },
     ],
   },
   {

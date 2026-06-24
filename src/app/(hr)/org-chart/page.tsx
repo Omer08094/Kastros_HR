@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
-import { Card } from "@/components/Card";
 import { OrgChart } from "@/components/hr/OrgChart";
 import { getSession } from "@/lib/auth";
 import { readStore } from "@/lib/store/persist";
@@ -11,10 +10,11 @@ export default async function OrgChartPage() {
   const store = await readStore();
 
   return (
-    <PageShell title="Reporting channel" subtitle="Org chart derived from the “Reports to” field on each employee.">
-      <Card title="Organization">
-        <OrgChart employees={store.employees} />
-      </Card>
+    <PageShell
+      title="Organization chart"
+      subtitle="Reporting hierarchy built from each employee’s Reports to field — top-down tree with direct reports nested below."
+    >
+      <OrgChart employees={store.employees} />
     </PageShell>
   );
 }
