@@ -126,8 +126,9 @@ export function OrgChartViewport({ children, exportFilename }: { children: React
       if (!blob) throw new Error("Export failed");
       const date = new Date().toISOString().slice(0, 10);
       downloadBlob(blob, exportFilename ?? `kastros-org-chart-${date}.png`);
-    } catch {
-      window.alert("Could not download the chart. Try Fit view, then download again.");
+    } catch (err) {
+      console.error("[org-chart] export failed", err);
+      window.alert("Could not download the chart. Please try again in a moment.");
     } finally {
       setExporting(false);
     }
