@@ -17,7 +17,9 @@ import {
   leaveDaysOverlappingYear,
   requestMatchesCategory,
 } from "@/lib/leave-policy";
-import { canApproveLeaveCeoStep, canApproveLeaveHrStep } from "@/lib/store/policy";
+import { sendLeaveApprovalEmail } from "@/lib/hr-emails";
+import { loadEmployeeAuthRoles } from "@/lib/firebase-auth-roles";
+import { canApproveLeaveHrStep, canApproveLeaveManagerStep } from "@/lib/store/policy";
 import {
   BUSINESS_UNITS,
   BLOOD_GROUPS,
@@ -115,6 +117,22 @@ function probationDate(joiningDate: string, months: number): string {
   const dt = new Date(joiningDate);
   dt.setMonth(dt.getMonth() + months);
   return dt.toISOString().slice(0, 10);
+}
+
+function appBaseUrl(): string {
+  return process.env.NEXT_PUBLIC_APP_URL?.trim() || "http://localhost:3000";
+}
+
+function dedupeEmails(emails: Array<string | null | undefined>): string[] {
+  return [...new Set(emails.map((v) => (v ?? "").trim().toLowerCase()).filter(Boolean))];
+}
+
+async function hrApproverEmails(store: HrStore): Promise<string[]> {
+  const emails = store.employees.map((e) => e.email.toLowerCase());
+  const roles = await loadEmployeeAuthRoles(emails);
+  const hr = roles.filter((r) => r.role === "hr_admin").map((r) => r.email);
+  if (hr.length > 0) return hr;
+  return dedupeEmails(["admin@kastros.co"]);
 }
 
 export async function resetDemoData(): Promise<ActionResult> {
@@ -991,7 +1009,7 @@ export async function createLeaveRequest(formData: FormData): Promise<ActionResu
     let pending = 0;
     for (const r of store.leaveRequests) {
       if (r.requesterEmail.toLowerCase() !== session.email.toLowerCase()) continue;
-      if (r.status !== "PendingHR" && r.status !== "PendingCEO") continue;
+      if (r.status !== "PendingManager" && r.status !== "PendingHR") continue;
       if (!requestMatchesCategory(r, category)) continue;
       pending += leaveDaysOverlappingYear(r.start, r.end, year);
     }
@@ -1002,31 +1020,63 @@ export async function createLeaveRequest(formData: FormData): Promise<ActionResu
     }
   }
 
-  await mutateStore((s) => {
+  const created = await mutateStore((s) => {
     const requester = s.employees.find((e) => e.email.toLowerCase() === session.email.toLowerCase());
-    const isDirectCeoReport = !!requester?.reportsToEmail && requester.reportsToEmail.toLowerCase() === "ceo@kastros.demo";
-    const status: LeaveStatus = isDirectCeoReport || session.role === "ceo" ? "PendingCEO" : "PendingHR";
+    const managerEmail = requester?.reportsToEmail?.trim().toLowerCase() ?? null;
+    const status: LeaveStatus = managerEmail ? "PendingManager" : "PendingHR";
+    const newRequest = {
+      id: `lv-${randomUUID()}`,
+      requesterEmail: session.email,
+      kind,
+      categoryId: category?.id ?? null,
+      start,
+      end,
+      status,
+      decidedByEmail: null,
+      managerDecisionByEmail: null,
+      hrDecisionByEmail: null,
+      ceoDecisionByEmail: null,
+      note,
+    };
     const next: HrStore = {
       ...s,
       leaveRequests: [
-        {
-          id: `lv-${randomUUID()}`,
-          requesterEmail: session.email,
-          kind,
-          categoryId: category?.id ?? null,
-          start,
-          end,
-          status,
-          decidedByEmail: null,
-          hrDecisionByEmail: null,
-          ceoDecisionByEmail: null,
-          note,
-        },
+        newRequest,
         ...s.leaveRequests,
       ],
     };
-    return { next: audit(next, session.email, `Requested leave (${kind})`), result: ok() };
+    return { next: audit(next, session.email, `Requested leave (${kind})`), result: { ok: true as const, request: newRequest } };
   });
+  if ("error" in created) return created;
+
+  const snapshot = await readStore();
+  const requester = snapshot.employees.find((e) => e.email.toLowerCase() === session.email.toLowerCase());
+  const managerEmail = requester?.reportsToEmail?.trim().toLowerCase() ?? null;
+  const hrEmails = await hrApproverEmails(snapshot);
+  const approveUrl = `${appBaseUrl()}/leave`;
+  const requesterEmail = session.email.toLowerCase();
+
+  if (managerEmail) {
+    await sendLeaveApprovalEmail({
+      to: [managerEmail, ...hrEmails, requesterEmail],
+      subject: `Leave approval needed: ${created.request.kind} (${requesterEmail})`,
+      headline: "Leave request submitted",
+      intro: `${requesterEmail} submitted a leave request. Line manager review is required first, and HR has been copied for visibility.`,
+      request: created.request,
+      actionLabel: "Review leave request",
+      actionUrl: approveUrl,
+    });
+  } else {
+    await sendLeaveApprovalEmail({
+      to: [...hrEmails, requesterEmail],
+      subject: `Leave approval needed: ${created.request.kind} (${requesterEmail})`,
+      headline: "Leave request submitted",
+      intro: `${requesterEmail} submitted a leave request. No line manager is set, so this is routed directly to HR.`,
+      request: created.request,
+      actionLabel: "Review leave request",
+      actionUrl: approveUrl,
+    });
+  }
   revalidatePath("/leave");
   revalidatePath("/dashboard");
   return ok();
@@ -1041,25 +1091,92 @@ export async function decideLeaveRequest(formData: FormData): Promise<ActionResu
   const store = await readStore();
   const req = store.leaveRequests.find((r) => r.id === id);
   if (!req) return { error: "Not found." };
+  const requester = store.employees.find((e) => e.email.toLowerCase() === req.requesterEmail.toLowerCase());
+  const managerEmail = requester?.reportsToEmail?.trim().toLowerCase() ?? null;
+  const hrEmails = await hrApproverEmails(store);
 
-  await mutateStore((s) => {
+  const outcome = await mutateStore<{ error: string } | { ok: true; changed: NonNullable<typeof req> }>((s) => {
+    let allowed = false;
+
     const nextReq: HrStore["leaveRequests"] = s.leaveRequests.map((r) => {
       if (r.id !== id) return r;
+      if (r.status === "PendingManager") {
+        if (!canApproveLeaveManagerStep(s.employees, session, r)) return r;
+        allowed = true;
+        if (decision === "Denied") {
+          return {
+            ...r,
+            status: "Denied" as LeaveStatus,
+            decidedByEmail: session.email,
+            managerDecisionByEmail: session.email,
+          };
+        }
+        return {
+          ...r,
+          status: "PendingHR",
+          managerDecisionByEmail: session.email,
+          decidedByEmail: session.email,
+        };
+      }
       if (r.status === "PendingHR") {
         if (!canApproveLeaveHrStep(session, r)) return r;
-        if (decision === "Denied") return { ...r, status: "Denied" as LeaveStatus, decidedByEmail: session.email, hrDecisionByEmail: session.email };
-        return { ...r, status: "PendingCEO", hrDecisionByEmail: session.email, decidedByEmail: session.email };
-      }
-      if (r.status === "PendingCEO") {
-        if (!canApproveLeaveCeoStep(session, r)) return r;
-        return { ...r, status: decision as LeaveStatus, ceoDecisionByEmail: session.email, decidedByEmail: session.email };
+        allowed = true;
+        return {
+          ...r,
+          status: decision as LeaveStatus,
+          hrDecisionByEmail: session.email,
+          ceoDecisionByEmail: session.role === "ceo" ? session.email : r.ceoDecisionByEmail,
+          decidedByEmail: session.email,
+        };
       }
       return r;
     });
     const changed = nextReq.find((r) => r.id === id);
-    if (!changed || changed.status === req.status) return { next: s, result: { error: "You do not have permission for this step." } };
-    return { next: audit({ ...s, leaveRequests: nextReq }, session.email, `${decision} leave ${id}`), result: ok() };
+    if (!allowed || !changed || changed.status === req.status) {
+      return { next: s, result: { error: "You do not have permission for this step." } };
+    }
+    return {
+      next: audit({ ...s, leaveRequests: nextReq }, session.email, `${decision} leave ${id}`),
+      result: { ok: true as const, changed },
+    };
   });
+  if ("error" in outcome) return outcome;
+
+  const approveUrl = `${appBaseUrl()}/leave`;
+  const changed = outcome.changed;
+  const recipientsForRequester = dedupeEmails([req.requesterEmail, managerEmail, ...hrEmails]);
+
+  if (req.status === "PendingManager" && changed.status === "PendingHR") {
+    await sendLeaveApprovalEmail({
+      to: hrEmails,
+      subject: `HR review needed: ${req.kind} (${req.requesterEmail})`,
+      headline: "Manager approved leave request",
+      intro: `Line manager approved this leave request. HR final review is now required.`,
+      request: req,
+      actionLabel: "Open HR review",
+      actionUrl: approveUrl,
+    });
+    await sendLeaveApprovalEmail({
+      to: recipientsForRequester,
+      subject: `Leave update: manager approved (${req.kind})`,
+      headline: "Leave request moved to HR review",
+      intro: `The line manager approved this request. HR has been notified for final approval.`,
+      request: req,
+      actionLabel: "View leave status",
+      actionUrl: approveUrl,
+    });
+  } else if (changed.status === "Approved" || changed.status === "Denied") {
+    await sendLeaveApprovalEmail({
+      to: recipientsForRequester,
+      subject: `Leave ${changed.status.toLowerCase()}: ${req.kind} (${req.requesterEmail})`,
+      headline: `Leave request ${changed.status.toLowerCase()}`,
+      intro: `Final decision has been recorded on this leave request.`,
+      request: req,
+      actionLabel: "View leave status",
+      actionUrl: approveUrl,
+    });
+  }
+
   revalidatePath("/leave");
   revalidatePath("/dashboard");
   return ok();

@@ -376,12 +376,31 @@ function normalizeStore(parsed: unknown): HrStore {
     });
 
   const leaveRequests = Array.isArray(p.leaveRequests)
-    ? p.leaveRequests
-        .filter((r): r is LeaveRequest => isPlainObject(r) && typeof r.requesterEmail === "string")
-        .map((r) => ({
-          ...r,
-          categoryId: typeof r.categoryId === "string" ? r.categoryId : null,
-        }))
+    ? (p.leaveRequests as unknown[])
+        .filter((r): r is Record<string, unknown> => isPlainObject(r) && typeof (r as { requesterEmail?: unknown }).requesterEmail === "string")
+        .map((r) => {
+          const statusRaw = typeof r.status === "string" ? r.status : "PendingHR";
+          const status: LeaveRequest["status"] =
+            statusRaw === "PendingCEO"
+              ? "PendingHR"
+              : statusRaw === "PendingManager" || statusRaw === "PendingHR" || statusRaw === "Approved" || statusRaw === "Denied"
+                ? statusRaw
+                : "PendingHR";
+          return {
+            id: typeof r.id === "string" ? r.id : `lv-legacy-${Math.random().toString(36).slice(2, 10)}`,
+            requesterEmail: String(r.requesterEmail),
+            kind: typeof r.kind === "string" ? r.kind : "Leave",
+            categoryId: typeof r.categoryId === "string" ? r.categoryId : null,
+            start: typeof r.start === "string" ? r.start : "",
+            end: typeof r.end === "string" ? r.end : "",
+            status,
+            decidedByEmail: typeof r.decidedByEmail === "string" ? r.decidedByEmail : null,
+            managerDecisionByEmail: typeof r.managerDecisionByEmail === "string" ? r.managerDecisionByEmail : null,
+            hrDecisionByEmail: typeof r.hrDecisionByEmail === "string" ? r.hrDecisionByEmail : null,
+            ceoDecisionByEmail: typeof r.ceoDecisionByEmail === "string" ? r.ceoDecisionByEmail : null,
+            note: typeof r.note === "string" ? r.note : null,
+          };
+        })
     : fb.leaveRequests;
 
   const training = Array.isArray(p.training)
@@ -543,6 +562,14 @@ function normalizeStore(parsed: unknown): HrStore {
     })),
     coiDocs: normalizeArray<ConflictOfInterestDoc>(p.coiDocs, isObjWithId),
     coiSubmissions: normalizeArray<CoiSubmission>(p.coiSubmissions, isObjWithId),
+    notificationEmailsSent:
+      p.notificationEmailsSent && typeof p.notificationEmailsSent === "object" && !Array.isArray(p.notificationEmailsSent)
+        ? (Object.fromEntries(
+            Object.entries(p.notificationEmailsSent as Record<string, unknown>).filter(
+              (entry): entry is [string, string] => typeof entry[0] === "string" && typeof entry[1] === "string",
+            ),
+          ) as Record<string, string>)
+        : (fb.notificationEmailsSent ?? {}),
   };
 }
 

@@ -170,7 +170,7 @@ export type EmployeeCompensation = {
   updatedByEmail: string | null;
 };
 
-export type LeaveStatus = "PendingHR" | "PendingCEO" | "Approved" | "Denied";
+export type LeaveStatus = "PendingManager" | "PendingHR" | "Approved" | "Denied";
 
 /** HR-defined leave type (e.g. Sick leave, Annual leave) with company-wide default entitlement. */
 export type LeaveCategory = {
@@ -202,6 +202,7 @@ export type LeaveRequest = {
   end: string;
   status: LeaveStatus;
   decidedByEmail: string | null;
+  managerDecisionByEmail: string | null;
   hrDecisionByEmail: string | null;
   ceoDecisionByEmail: string | null;
   note: string | null;
@@ -765,4 +766,6 @@ export type HrStore = {
   /** Conflict of Interest documents */
   coiDocs: ConflictOfInterestDoc[];
   coiSubmissions: CoiSubmission[];
+  /** `${recipientEmail}:${notificationId}` → ISO timestamp when portal notification was emailed. */
+  notificationEmailsSent: Record<string, string>;
 };

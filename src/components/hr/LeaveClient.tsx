@@ -177,7 +177,7 @@ export function LeaveClient({
         <h2 className="font-display text-lg font-semibold text-kastros-forest">Requests you can see</h2>
         <p className="mt-1 text-sm text-kastros-sage">
           Signed in as <span className="font-medium text-kastros-ink">{session.email}</span>. Flow:{" "}
-          <strong className="text-kastros-ink">HR Admin</strong> approves first, then <strong className="text-kastros-ink">CEO</strong>{" "}
+          <strong className="text-kastros-ink">Line manager</strong> approves first, then <strong className="text-kastros-ink">HR</strong>{" "}
           gives final sign-off.
         </p>
         <div className="mt-4 overflow-x-auto">
@@ -217,7 +217,7 @@ export function LeaveClient({
                     )}
                   </td>
                   <td className="py-3">
-                    {canDecideLeaveStep(session, r) ? (
+                    {canDecideLeaveStep(employees, session, r) ? (
                       <div className="flex flex-wrap gap-2">
                         <form action={(fd) => handle(decideLeaveRequest(fd))}>
                           <input type="hidden" name="id" value={r.id} />
@@ -236,7 +236,7 @@ export function LeaveClient({
                       </div>
                     ) : (
                       <span className="text-xs text-kastros-sage">
-                        HR: {r.hrDecisionByEmail ?? "—"} · CEO: {r.ceoDecisionByEmail ?? "—"}
+                        Manager: {r.managerDecisionByEmail ?? "—"} · HR: {r.hrDecisionByEmail ?? "—"}
                       </span>
                     )}
                   </td>

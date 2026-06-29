@@ -7,6 +7,11 @@ export function isDirectReport(store: HrStore, managerEmail: string, employeeEma
   return !!e && !!e.reportsToEmail && e.reportsToEmail.toLowerCase() === managerEmail.toLowerCase();
 }
 
+function isDirectReportInEmployees(employees: Employee[], managerEmail: string, employeeEmail: string): boolean {
+  const e = employees.find((x) => x.email.toLowerCase() === employeeEmail.toLowerCase());
+  return !!e && !!e.reportsToEmail && e.reportsToEmail.toLowerCase() === managerEmail.toLowerCase();
+}
+
 export function visibleEmployees(store: HrStore, session: Session): Employee[] {
   if (hasExecAccess(session.role)) return store.employees;
   return store.employees.filter((e) => e.email.toLowerCase() === session.email.toLowerCase());
@@ -14,29 +19,35 @@ export function visibleEmployees(store: HrStore, session: Session): Employee[] {
 
 export function visibleLeaveRequests(store: HrStore, session: Session) {
   if (hasExecAccess(session.role)) return store.leaveRequests;
-  return store.leaveRequests.filter((r) => r.requesterEmail.toLowerCase() === session.email.toLowerCase());
+  const me = session.email.toLowerCase();
+  return store.leaveRequests.filter((r) => {
+    const requester = r.requesterEmail.toLowerCase();
+    if (requester === me) return true;
+    if (r.status !== "PendingManager") return false;
+    return isDirectReport(store, me, requester);
+  });
 }
 
 function isSelfLeaveRequest(session: Session, requesterEmail: string): boolean {
   return requesterEmail.toLowerCase() === session.email.toLowerCase();
 }
 
-/** Step 1 — HR Admin clears operational checks; cannot approve own leave. */
+/** Step 1 — line manager approves or denies; cannot approve own leave. */
+export function canApproveLeaveManagerStep(employees: Employee[], session: Session, request: LeaveRequest): boolean {
+  if (request.status !== "PendingManager") return false;
+  if (isSelfLeaveRequest(session, request.requesterEmail)) return false;
+  return isDirectReportInEmployees(employees, session.email, request.requesterEmail);
+}
+
+/** Step 2 — HR Admin/CEO clears operational checks; cannot approve own leave. */
 export function canApproveLeaveHrStep(session: Session, request: LeaveRequest): boolean {
   if (request.status !== "PendingHR") return false;
-  if (session.role !== "hr_admin") return false;
+  if (session.role !== "hr_admin" && session.role !== "ceo") return false;
   return !isSelfLeaveRequest(session, request.requesterEmail);
 }
 
-/** Step 2 — CEO gives final sign-off; cannot approve own leave. */
-export function canApproveLeaveCeoStep(session: Session, request: LeaveRequest): boolean {
-  if (request.status !== "PendingCEO") return false;
-  if (session.role !== "ceo") return false;
-  return !isSelfLeaveRequest(session, request.requesterEmail);
-}
-
-export function canDecideLeaveStep(session: Session, request: LeaveRequest): boolean {
-  return canApproveLeaveHrStep(session, request) || canApproveLeaveCeoStep(session, request);
+export function canDecideLeaveStep(employees: Employee[], session: Session, request: LeaveRequest): boolean {
+  return canApproveLeaveManagerStep(employees, session, request) || canApproveLeaveHrStep(session, request);
 }
 
 export function visibleGoals(store: HrStore, session: Session) {

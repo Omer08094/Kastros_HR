@@ -24,7 +24,7 @@ export default async function DashboardPage() {
 
   const people = visibleEmployees(store, session);
   const leave = visibleLeaveRequests(store, session);
-  const pendingLeave = leave.filter((l) => l.status === "PendingHR" || l.status === "PendingCEO").length;
+  const pendingLeave = leave.filter((l) => l.status === "PendingManager" || l.status === "PendingHR").length;
   const openJobs = store.jobs.length;
   const openCases = store.cases.filter((c) => c.status !== "Resolved" && c.status !== "Closed").length;
   const today = new Date();
@@ -40,7 +40,7 @@ export default async function DashboardPage() {
   const deptCount = new Set(store.employees.map((e) => e.department)).size;
   const pendingApps = store.jobApplications.filter((a) => a.reviewStatus === "submitted").length;
   const trainingOpen = store.training.filter((t) => t.status === "Required").length;
-  const companyPendingLeave = store.leaveRequests.filter((l) => l.status === "PendingHR" || l.status === "PendingCEO").length;
+  const companyPendingLeave = store.leaveRequests.filter((l) => l.status === "PendingManager" || l.status === "PendingHR").length;
 
   return (
     <PageShell
@@ -69,7 +69,7 @@ export default async function DashboardPage() {
             </Card>
             <Card eyebrow="Leave" title="Approval pipeline (company)">
               <p className="font-display text-3xl font-semibold text-kastros-forest">{companyPendingLeave}</p>
-              <p className="mt-2 text-sm text-kastros-sage">Requests in HR review or executive sign-off</p>
+              <p className="mt-2 text-sm text-kastros-sage">Requests in manager or HR review</p>
             </Card>
             <Card eyebrow="Talent" title="Open jobs · new CVs">
               <p className="font-display text-3xl font-semibold text-kastros-forest">{openJobs}</p>

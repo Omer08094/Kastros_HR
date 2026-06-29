@@ -74,5 +74,6 @@ export function createInitialStore(): HrStore {
     letters: [],
     coiDocs: [],
     coiSubmissions: [],
+    notificationEmailsSent: {},
   };
 }

@@ -66,6 +66,20 @@ export function deriveHrNotifications(
 
   /** Approvals inbox — parity with dashboards in tools like BambooHR / Workday (pending approvals). */
   for (const r of store.leaveRequests) {
+    if (r.status === "PendingManager") {
+      const requester = store.employees.find((e) => e.email.toLowerCase() === r.requesterEmail.toLowerCase());
+      const managerEmail = requester?.reportsToEmail?.toLowerCase() ?? "";
+      if (managerEmail && managerEmail === email.toLowerCase()) {
+        push({
+          id: `leave-mgr:${r.id}`,
+          title: "Leave pending your manager approval",
+          detail: `${r.kind} (${r.start}→${r.end}) · requested by ${findName(store, r.requesterEmail)}`,
+          href: "/leave",
+          at: iso(now),
+          kind: "approval",
+        });
+      }
+    }
     if (r.status === "PendingHR") {
       push({
         id: `leave-hr:${r.id}`,
@@ -76,17 +90,7 @@ export function deriveHrNotifications(
         kind: "approval",
       }, ["hr_admin"]);
     }
-    if (r.status === "PendingCEO") {
-      push({
-        id: `leave-ceo:${r.id}`,
-        title: "Leave pending executive approval",
-        detail: `${r.kind} (${r.start}→${r.end}) · HR cleared · ${findName(store, r.requesterEmail)}`,
-        href: "/leave",
-        at: iso(now),
-        kind: "approval",
-      }, ["ceo"]);
-    }
-    if (r.requesterEmail === email && (r.status === "PendingHR" || r.status === "PendingCEO")) {
+    if (r.requesterEmail === email && (r.status === "PendingManager" || r.status === "PendingHR")) {
       push({
         id: `leave-self:${r.id}`,
         title: "Your leave is awaiting approval",

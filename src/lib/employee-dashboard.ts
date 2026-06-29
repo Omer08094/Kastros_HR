@@ -33,7 +33,7 @@ export function buildEmployeeDashboard(store: HrStore, email: string): EmployeeD
 
   const year = new Date().getUTCFullYear();
   const myLeave = store.leaveRequests.filter((r) => r.requesterEmail.toLowerCase() === email.toLowerCase());
-  const pendingLeaveCount = myLeave.filter((r) => r.status === "PendingHR" || r.status === "PendingCEO").length;
+  const pendingLeaveCount = myLeave.filter((r) => r.status === "PendingManager" || r.status === "PendingHR").length;
   const leaveBalances = buildLeaveBalanceRows(store, email, year);
   const annualRow =
     leaveBalances.find((b) => /\bannual\b/i.test(b.category.name)) ?? leaveBalances[0];
