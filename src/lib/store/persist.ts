@@ -32,7 +32,12 @@ import type {
   MaritalStatus,
   OvertimeRecord,
   PayrollEntry,
+  PerformanceCycle,
   PerformanceReview,
+  PmdfAssignment,
+  PmdfBusinessObjective,
+  PmdfDevelopmentObjective,
+  PmdfForm,
   PolicyAcknowledgement,
   Salutation,
   StatutoryEntry,
@@ -61,7 +66,125 @@ function strOrNull(v: unknown): string | null {
 }
 
 function numOrNull(v: unknown): number | null {
-  return typeof v === "number" && Number.isFinite(v) ? v : null;
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function normalizeBusinessObjectives(raw: unknown): PmdfBusinessObjective[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((r): r is Record<string, unknown> => isPlainObject(r))
+    .map((r, idx) => ({
+      id: typeof r.id === "string" ? r.id : `bo-${idx}`,
+      sortOrder: numOrNull(r.sortOrder) ?? idx + 1,
+      objectiveSmart: typeof r.objectiveSmart === "string" ? r.objectiveSmart : "",
+      action: typeof r.action === "string" ? r.action : "",
+      employeeComments: typeof r.employeeComments === "string" ? r.employeeComments : "",
+      percentage: Math.max(0, numOrNull(r.percentage) ?? 0),
+      selfScoreFy: numOrNull(r.selfScoreFy),
+      finalScoreFy: numOrNull(r.finalScoreFy),
+      managerCommentsHalfYear: typeof r.managerCommentsHalfYear === "string" ? r.managerCommentsHalfYear : "",
+      managerCommentsFullYear: typeof r.managerCommentsFullYear === "string" ? r.managerCommentsFullYear : "",
+    }));
+}
+
+function normalizeDevelopmentObjectives(raw: unknown): PmdfDevelopmentObjective[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((r): r is Record<string, unknown> => isPlainObject(r))
+    .map((r, idx) => ({
+      id: typeof r.id === "string" ? r.id : `do-${idx}`,
+      sortOrder: numOrNull(r.sortOrder) ?? idx + 1,
+      pillar: typeof r.pillar === "string" ? r.pillar : "",
+      developmentArea: typeof r.developmentArea === "string" ? r.developmentArea : "",
+      actionPlan: typeof r.actionPlan === "string" ? r.actionPlan : "",
+      percentage: Math.max(0, numOrNull(r.percentage) ?? 0),
+      selfScoreFy: numOrNull(r.selfScoreFy),
+      finalScoreFy: numOrNull(r.finalScoreFy),
+      managerCommentsHalfYear: typeof r.managerCommentsHalfYear === "string" ? r.managerCommentsHalfYear : "",
+      managerCommentsFullYear: typeof r.managerCommentsFullYear === "string" ? r.managerCommentsFullYear : "",
+    }));
+}
+
+function normalizePmdfForms(raw: unknown): PmdfForm[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((r): r is Record<string, unknown> => isPlainObject(r) && typeof r.employeeEmail === "string")
+    .map((r) => ({
+      id: typeof r.id === "string" ? r.id : `pmdf-${Math.random().toString(36).slice(2, 10)}`,
+      cycleId: typeof r.cycleId === "string" ? r.cycleId : "",
+      employeeEmail: String(r.employeeEmail).toLowerCase(),
+      employeeName: typeof r.employeeName === "string" ? r.employeeName : "",
+      employeeIdDisplay: typeof r.employeeIdDisplay === "string" ? r.employeeIdDisplay : null,
+      jobTitle: typeof r.jobTitle === "string" ? r.jobTitle : "",
+      department: typeof r.department === "string" ? r.department : "",
+      subDepartment: typeof r.subDepartment === "string" ? r.subDepartment : null,
+      lineManagerEmail: typeof r.lineManagerEmail === "string" ? r.lineManagerEmail.toLowerCase() : null,
+      lineManagerName: typeof r.lineManagerName === "string" ? r.lineManagerName : null,
+      location: typeof r.location === "string" ? r.location : "",
+      functionalArea: typeof r.functionalArea === "string" ? r.functionalArea : null,
+      locationCategory: typeof r.locationCategory === "string" ? r.locationCategory : null,
+      businessObjectives: normalizeBusinessObjectives(r.businessObjectives),
+      developmentObjectives: normalizeDevelopmentObjectives(r.developmentObjectives),
+      employeeFeedbackMidYear: typeof r.employeeFeedbackMidYear === "string" ? r.employeeFeedbackMidYear : "",
+      managerFeedbackMidYear: typeof r.managerFeedbackMidYear === "string" ? r.managerFeedbackMidYear : "",
+      employeeFeedbackFy: typeof r.employeeFeedbackFy === "string" ? r.employeeFeedbackFy : "",
+      managerFeedbackFy: typeof r.managerFeedbackFy === "string" ? r.managerFeedbackFy : "",
+      employeeSignature: typeof r.employeeSignature === "string" ? r.employeeSignature : "",
+      managerSignature: typeof r.managerSignature === "string" ? r.managerSignature : "",
+      employeeSignedAt: typeof r.employeeSignedAt === "string" ? r.employeeSignedAt : null,
+      managerSignedAt: typeof r.managerSignedAt === "string" ? r.managerSignedAt : null,
+      phase: (typeof r.phase === "string" ? r.phase : "objective_setting_employee") as PmdfForm["phase"],
+      locked: r.locked === true,
+      assignedAt: typeof r.assignedAt === "string" ? r.assignedAt : new Date().toISOString(),
+      lastNotifiedAt: typeof r.lastNotifiedAt === "string" ? r.lastNotifiedAt : null,
+      updatedAt: typeof r.updatedAt === "string" ? r.updatedAt : new Date().toISOString(),
+    }));
+}
+
+function normalizePerformanceCycles(raw: unknown): PerformanceCycle[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((r): r is Record<string, unknown> => isPlainObject(r) && typeof r.id === "string")
+    .map((r) => ({
+      id: String(r.id),
+      title: typeof r.title === "string" ? r.title : "Performance cycle",
+      startDate: typeof r.startDate === "string" ? r.startDate : "",
+      endDate: typeof r.endDate === "string" ? r.endDate : "",
+      currentPhase: (typeof r.currentPhase === "string"
+        ? r.currentPhase
+        : "objective_setting_employee") as PerformanceCycle["currentPhase"],
+      objectiveSettingEmployeeDeadline:
+        typeof r.objectiveSettingEmployeeDeadline === "string" ? r.objectiveSettingEmployeeDeadline : null,
+      objectiveSettingManagerDeadline:
+        typeof r.objectiveSettingManagerDeadline === "string" ? r.objectiveSettingManagerDeadline : null,
+      midYearEmployeeDeadline: typeof r.midYearEmployeeDeadline === "string" ? r.midYearEmployeeDeadline : null,
+      midYearManagerDeadline: typeof r.midYearManagerDeadline === "string" ? r.midYearManagerDeadline : null,
+      yearEndEmployeeDeadline: typeof r.yearEndEmployeeDeadline === "string" ? r.yearEndEmployeeDeadline : null,
+      yearEndManagerDeadline: typeof r.yearEndManagerDeadline === "string" ? r.yearEndManagerDeadline : null,
+      locked: r.locked === true,
+      lockedAt: typeof r.lockedAt === "string" ? r.lockedAt : null,
+      createdByEmail: typeof r.createdByEmail === "string" ? r.createdByEmail : "",
+      createdAt: typeof r.createdAt === "string" ? r.createdAt : new Date().toISOString(),
+    }));
+}
+
+function normalizePmdfAssignments(raw: unknown): PmdfAssignment[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((r): r is Record<string, unknown> => isPlainObject(r) && typeof r.id === "string")
+    .map((r) => ({
+      id: String(r.id),
+      cycleId: typeof r.cycleId === "string" ? r.cycleId : "",
+      scope: (r.scope === "organisation" || r.scope === "department" || r.scope === "employee"
+        ? r.scope
+        : "employee") as PmdfAssignment["scope"],
+      department: typeof r.department === "string" ? r.department : null,
+      employeeEmail: typeof r.employeeEmail === "string" ? r.employeeEmail.toLowerCase() : null,
+      assignedAt: typeof r.assignedAt === "string" ? r.assignedAt : new Date().toISOString(),
+      assignedByEmail: typeof r.assignedByEmail === "string" ? r.assignedByEmail : "",
+    }));
 }
 
 function boolOr(v: unknown, fallback: boolean): boolean {
@@ -526,6 +649,9 @@ function normalizeStore(parsed: unknown): HrStore {
     cases,
     goals,
     reviews,
+    performanceCycles: normalizePerformanceCycles(p.performanceCycles),
+    pmdfAssignments: normalizePmdfAssignments(p.pmdfAssignments),
+    pmdfForms: normalizePmdfForms(p.pmdfForms),
     payroll:
       p.payroll && typeof p.payroll === "object" && !Array.isArray(p.payroll)
         ? { ...fb.payroll, ...(p.payroll as Record<string, unknown>) }

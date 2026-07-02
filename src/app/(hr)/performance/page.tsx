@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
-import { PerformanceClient } from "@/components/hr/PerformanceClient";
+import { PmdfClient } from "@/components/hr/PmdfClient";
 import { getSession } from "@/lib/auth";
+import { hasExecAccess } from "@/lib/roles";
 import { readStore } from "@/lib/store/persist";
 
 export default async function PerformancePage() {
@@ -9,16 +10,25 @@ export default async function PerformancePage() {
   if (!session) redirect("/login");
 
   const store = await readStore();
-  const reviews =
-    session.role === "hr_admin" || session.role === "ceo"
-      ? store.reviews
-      : store.reviews.filter((r) => r.employeeEmail.toLowerCase() === session.email.toLowerCase());
+  const email = session.email.toLowerCase();
+
+  const forms = hasExecAccess(session.role)
+    ? store.pmdfForms
+    : store.pmdfForms.filter(
+        (f) =>
+          f.employeeEmail.toLowerCase() === email ||
+          f.lineManagerEmail?.toLowerCase() === email,
+      );
 
   return (
-    <PageShell title="Performance" subtitle="Formal reviews recorded by HR Admin and CEO">
-      <PerformanceClient
-        reviews={reviews}
+    <PageShell
+      title="Performance"
+      subtitle="Performance Management & Development Form (PMDF) — objectives, development goals, ratings, and feedback"
+    >
+      <PmdfClient
         session={session}
+        cycles={store.performanceCycles}
+        forms={forms}
         employees={store.employees}
         departmentNames={store.departments.map((d) => d.name)}
       />

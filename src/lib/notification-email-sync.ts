@@ -64,8 +64,7 @@ export async function syncPortalNotificationEmails(
 
 async function listNotificationRecipients(store: HrStore): Promise<Array<{ email: string; role: RoleId }>> {
   const rosterEmails = store.employees.map((e) => e.email.toLowerCase());
-  const extra = ["admin@kastros.co"];
-  const allEmails = [...new Set([...rosterEmails, ...extra])];
+  const allEmails = [...new Set(rosterEmails)];
   const roles = await loadEmployeeAuthRoles(allEmails);
   const out: Array<{ email: string; role: RoleId }> = [];
   const seen = new Set<string>();

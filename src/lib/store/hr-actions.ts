@@ -131,8 +131,7 @@ async function hrApproverEmails(store: HrStore): Promise<string[]> {
   const emails = store.employees.map((e) => e.email.toLowerCase());
   const roles = await loadEmployeeAuthRoles(emails);
   const hr = roles.filter((r) => r.role === "hr_admin").map((r) => r.email);
-  if (hr.length > 0) return hr;
-  return dedupeEmails(["admin@kastros.co"]);
+  return dedupeEmails(hr);
 }
 
 export async function resetDemoData(): Promise<ActionResult> {

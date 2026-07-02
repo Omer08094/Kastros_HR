@@ -344,6 +344,105 @@ export type PerformanceReview = {
   cycle: string;
 };
 
+/** Performance Management & Development Form (PMDF) — mirrors company Excel template. */
+export type PmdfPhase =
+  | "objective_setting_employee"
+  | "objective_setting_manager"
+  | "mid_year_review_employee"
+  | "mid_year_review_manager"
+  | "year_end_evaluation_employee"
+  | "year_end_evaluation_manager"
+  | "calibration"
+  | "finalization"
+  | "closed";
+
+export type PmdfAssignmentScope = "organisation" | "department" | "employee";
+
+export type PerformanceCycle = {
+  id: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  currentPhase: PmdfPhase;
+  objectiveSettingEmployeeDeadline: string | null;
+  objectiveSettingManagerDeadline: string | null;
+  midYearEmployeeDeadline: string | null;
+  midYearManagerDeadline: string | null;
+  yearEndEmployeeDeadline: string | null;
+  yearEndManagerDeadline: string | null;
+  locked: boolean;
+  lockedAt: string | null;
+  createdByEmail: string;
+  createdAt: string;
+};
+
+export type PmdfAssignment = {
+  id: string;
+  cycleId: string;
+  scope: PmdfAssignmentScope;
+  department: string | null;
+  employeeEmail: string | null;
+  assignedAt: string;
+  assignedByEmail: string;
+};
+
+export type PmdfBusinessObjective = {
+  id: string;
+  sortOrder: number;
+  objectiveSmart: string;
+  action: string;
+  employeeComments: string;
+  percentage: number;
+  selfScoreFy: number | null;
+  finalScoreFy: number | null;
+  managerCommentsHalfYear: string;
+  managerCommentsFullYear: string;
+};
+
+export type PmdfDevelopmentObjective = {
+  id: string;
+  sortOrder: number;
+  pillar: string;
+  developmentArea: string;
+  actionPlan: string;
+  percentage: number;
+  selfScoreFy: number | null;
+  finalScoreFy: number | null;
+  managerCommentsHalfYear: string;
+  managerCommentsFullYear: string;
+};
+
+export type PmdfForm = {
+  id: string;
+  cycleId: string;
+  employeeEmail: string;
+  employeeName: string;
+  employeeIdDisplay: string | null;
+  jobTitle: string;
+  department: string;
+  subDepartment: string | null;
+  lineManagerEmail: string | null;
+  lineManagerName: string | null;
+  location: string;
+  functionalArea: string | null;
+  locationCategory: string | null;
+  businessObjectives: PmdfBusinessObjective[];
+  developmentObjectives: PmdfDevelopmentObjective[];
+  employeeFeedbackMidYear: string;
+  managerFeedbackMidYear: string;
+  employeeFeedbackFy: string;
+  managerFeedbackFy: string;
+  employeeSignature: string;
+  managerSignature: string;
+  employeeSignedAt: string | null;
+  managerSignedAt: string | null;
+  phase: PmdfPhase;
+  locked: boolean;
+  assignedAt: string;
+  lastNotifiedAt: string | null;
+  updatedAt: string;
+};
+
 export type PayrollSnapshot = {
   month: string;
   employeesPaid: number;
@@ -748,6 +847,9 @@ export type HrStore = {
   cases: HrCase[];
   goals: Goal[];
   reviews: PerformanceReview[];
+  performanceCycles: PerformanceCycle[];
+  pmdfAssignments: PmdfAssignment[];
+  pmdfForms: PmdfForm[];
   payroll: PayrollSnapshot;
   payrollEntries: PayrollEntry[];
   audit: AuditRow[];

@@ -54,6 +54,9 @@ export function createInitialStore(): HrStore {
     cases: [],
     goals: [],
     reviews: [],
+    performanceCycles: [],
+    pmdfAssignments: [],
+    pmdfForms: [],
     payroll: {
       month: new Date().toLocaleDateString(undefined, { year: "numeric", month: "long" }),
       employeesPaid: 0,
