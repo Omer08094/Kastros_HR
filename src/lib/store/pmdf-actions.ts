@@ -115,6 +115,20 @@ function resolveAssignmentEmails(store: HrStore, scope: string, department: stri
   return em ? [em] : [];
 }
 
+const MIN_DEVELOPMENT_TRAITS = 3;
+
+function validateDevelopmentObjectives(rows: PmdfDevelopmentObjective[]): string | null {
+  const active = rows.filter((r) => r.actionPlan.trim() || r.percentage > 0);
+  if (active.length === 0) return null;
+  if (active.length < MIN_DEVELOPMENT_TRAITS) {
+    return `At least ${MIN_DEVELOPMENT_TRAITS} development traits are required (currently ${active.length}).`;
+  }
+  for (const row of active) {
+    if (!row.pillar.trim()) return "Each development trait needs a name.";
+  }
+  return null;
+}
+
 function clampPercentage(v: unknown): number {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0;
@@ -403,6 +417,8 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
   if (doHasPct && Math.abs(doTotal - 100) > 0.01) {
     return { error: `Development objectives must total 100% (currently ${doTotal}%).` };
   }
+  const doValidation = validateDevelopmentObjectives(developmentObjectives);
+  if (doValidation) return { error: doValidation };
 
   calcPmdfScores(businessObjectives, developmentObjectives);
 

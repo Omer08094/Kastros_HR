@@ -148,7 +148,7 @@ export function buildPmdfPrintHtml(cycle: PerformanceCycle, form: PmdfForm): str
   </section>
 
   <section style="margin-bottom:16px;">
-    <h2 style="font-size:13px;background:#f3f4f6;padding:6px 8px;margin:0 0 8px;">Development Objectives — minimum 2 DO mandatory (must total 100%)</h2>
+    <h2 style="font-size:13px;background:#f3f4f6;padding:6px 8px;margin:0 0 8px;">Development Objectives — minimum 3 traits mandatory (must total 100%)</h2>
     <table style="width:100%;border-collapse:collapse;font-size:11px;">
       <thead>
         <tr style="background:#e5e7eb;">

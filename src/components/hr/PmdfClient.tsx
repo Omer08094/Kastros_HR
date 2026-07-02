@@ -11,6 +11,7 @@ import {
   PMDF_FUNCTIONAL_AREAS,
   PMDF_LOCATION_CATEGORIES,
   PMDF_PHASES,
+  PMDF_PILLARS,
   phaseLabel,
 } from "@/lib/pmdf-reference";
 import { calcPmdfScores } from "@/lib/pmdf-scoring";
@@ -67,6 +68,14 @@ function toPct(raw: string): number {
   if (!Number.isFinite(n)) return 0;
   return Math.min(100, Math.max(0, Math.round(n)));
 }
+
+const BUILT_IN_PILLARS = new Set<string>(PMDF_PILLARS);
+
+function isBuiltInPillar(name: string): boolean {
+  return BUILT_IN_PILLARS.has(name);
+}
+
+const MIN_DEVELOPMENT_TRAITS = 3;
 
 function canEditForm(form: PmdfForm, cycle: PerformanceCycle | undefined, session: Session): boolean {
   if (hasExecAccess(session.role)) return true;
@@ -324,6 +333,7 @@ function PmdfFormEditor({
   const [managerFeedbackFy, setManagerFeedbackFy] = useState(form.managerFeedbackFy);
   const [employeeSignature, setEmployeeSignature] = useState(form.employeeSignature);
   const [managerSignature, setManagerSignature] = useState(form.managerSignature);
+  const [lastAddedTraitId, setLastAddedTraitId] = useState<string | null>(null);
 
   const scores = useMemo(
     () => calcPmdfScores(businessObjectives, developmentObjectives),
@@ -363,10 +373,46 @@ function PmdfFormEditor({
   }
 
   function updateDo(idx: number, patch: Partial<PmdfDevelopmentObjective>) {
-    setDevelopmentObjectives((rows) => rows.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+    setDevelopmentObjectives((rows) => {
+      const targetId = rows[idx]?.id;
+      if (patch.pillar?.trim() && targetId) {
+        setLastAddedTraitId((cur) => (cur === targetId ? null : cur));
+      }
+      return rows.map((r, i) => (i === idx ? { ...r, ...patch } : r));
+    });
   }
 
-  const filledDo = developmentObjectives.filter((r) => r.actionPlan.trim()).length;
+  function addDevelopmentRow() {
+    const id = `do-new-${Date.now()}`;
+    setDevelopmentObjectives((rows) => [
+      {
+        id,
+        sortOrder: 1,
+        pillar: "",
+        developmentArea: "",
+        actionPlan: "",
+        percentage: 0,
+        selfScoreFy: null,
+        finalScoreFy: null,
+        managerCommentsHalfYear: "",
+        managerCommentsFullYear: "",
+      },
+      ...rows.map((r, i) => ({ ...r, sortOrder: i + 2 })),
+    ]);
+    setLastAddedTraitId(id);
+  }
+
+  function removeDevelopmentRow(idx: number) {
+    setDevelopmentObjectives((rows) => {
+      const row = rows[idx];
+      if (!row || isBuiltInPillar(row.pillar)) return rows;
+      if (row.id === lastAddedTraitId) setLastAddedTraitId(null);
+      return rows.filter((_, i) => i !== idx).map((r, i) => ({ ...r, sortOrder: i + 1 }));
+    });
+  }
+
+  const activeDo = developmentObjectives.filter((r) => r.actionPlan.trim() || r.percentage > 0);
+  const filledDo = activeDo.length;
 
   return (
     <section className="rounded-2xl border border-kastros-sand bg-white shadow-sm overflow-hidden">
@@ -619,20 +665,87 @@ function PmdfFormEditor({
 
         {tab === "do" ? (
           <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="font-semibold text-kastros-forest">Development Objectives (min. 2 required · must total 100%)</h3>
-              <span className={`text-xs font-semibold ${filledDo >= 2 ? "text-emerald-700" : "text-amber-700"}`}>
-                {filledDo} of 5 with action plan · weight total {scores.developmentTotalPercentage}%
-              </span>
+            <div className="rounded-xl border border-kastros-sand bg-kastros-cream/40 p-4 text-sm text-kastros-ink">
+              <p className="font-semibold text-kastros-forest">What are these pillars?</p>
+              <p className="mt-1 text-kastros-sage">
+                Empathy, Accountability, Initiative, Collaboration, Integrity and other similar traits are behaviour
+                areas. Choose at least three where you want to grow, assign a weight %, and write a concrete action plan
+                for the year.
+              </p>
+              <p className="mt-2 text-xs text-kastros-sage">
+                <strong className="text-kastros-ink">Example:</strong> Under <em>Accountability</em>, your action plan
+                might be: &ldquo;I will send my manager a weekly progress update every Friday and flag any blockers within
+                24 hours.&rdquo; You are not repeating the pillar name — you are describing what you will actually do
+                differently.
+              </p>
             </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="font-semibold text-kastros-forest">
+                Development Objectives (min. {MIN_DEVELOPMENT_TRAITS} required · must total 100%)
+              </h3>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className={`text-xs font-semibold ${filledDo >= MIN_DEVELOPMENT_TRAITS ? "text-emerald-700" : "text-amber-700"}`}>
+                  {filledDo} of {developmentObjectives.length} traits in use · weight total {scores.developmentTotalPercentage}%
+                </span>
+                {editable ? (
+                  <button
+                    type="button"
+                    onClick={addDevelopmentRow}
+                    className="text-xs font-semibold text-kastros-brandGreen"
+                  >
+                    + Add trait
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {lastAddedTraitId ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800">
+                New trait added — it appears at the top of the list below.
+              </div>
+            ) : null}
             {developmentObjectives.map((row, idx) => {
+              const customTrait = !isBuiltInPillar(row.pillar);
+              const justAdded = row.id === lastAddedTraitId;
               return (
-                <details key={row.id} open className="rounded-xl border border-kastros-sand group">
-                  <summary className="cursor-pointer px-4 py-3 font-semibold text-kastros-forest flex justify-between">
-                    <span>{row.pillar}</span>
-                    <span className="text-xs text-kastros-sage">{row.percentage}%</span>
+                <details
+                  key={row.id}
+                  open
+                  className={`rounded-xl border group ${
+                    justAdded ? "border-emerald-400 bg-emerald-50/40 ring-2 ring-emerald-300" : "border-kastros-sand"
+                  }`}
+                >
+                  <summary className="cursor-pointer px-4 py-3 font-semibold text-kastros-forest flex justify-between gap-2">
+                    <span>
+                      {justAdded && !row.pillar.trim()
+                        ? "New trait added"
+                        : row.pillar.trim() || "New trait"}
+                    </span>
+                    <span className="text-xs text-kastros-sage shrink-0">{row.percentage}%</span>
                   </summary>
                   <div className="border-t border-kastros-sand p-4 space-y-3">
+                    {customTrait ? (
+                      <div className="flex flex-wrap items-end gap-3">
+                        <label className="block text-sm flex-1 min-w-[200px]">
+                          <span className="text-kastros-sage">Trait name</span>
+                          <input
+                            value={row.pillar}
+                            onChange={(e) => updateDo(idx, { pillar: e.target.value })}
+                            disabled={!editable || (!isEmployee && !hasExecAccess(session.role))}
+                            placeholder="e.g. Adaptability, Communication"
+                            className={INPUT}
+                          />
+                        </label>
+                        {editable && (isEmployee || hasExecAccess(session.role)) ? (
+                          <button
+                            type="button"
+                            onClick={() => removeDevelopmentRow(idx)}
+                            className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700"
+                          >
+                            Remove trait
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <label className="block text-sm">
                       <span className="text-kastros-sage">Action Plan</span>
                       <textarea
