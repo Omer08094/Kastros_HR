@@ -11,7 +11,7 @@ export const PMDF_FUNCTIONAL_AREAS = [
   "Audit",
 ] as const;
 
-export const PMDF_LOCATION_CATEGORIES = ["Head Office", "Karachi", "Field Staff"] as const;
+export const PMDF_LOCATION_CATEGORIES = ["Dubai Office", "Karachi Office", "Multan Office"] as const;
 
 export type PmdfFunctionalArea = (typeof PMDF_FUNCTIONAL_AREAS)[number];
 export type PmdfLocationCategory = (typeof PMDF_LOCATION_CATEGORIES)[number];
