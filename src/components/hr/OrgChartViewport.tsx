@@ -6,12 +6,26 @@ import { downloadBlob, exportOrgChartPng } from "@/lib/org-chart-export";
 
 const MIN_ZOOM = 0.08;
 const MAX_ZOOM = 2.5;
+/** ~2% per button click — less jumpy than 15%. */
+const BUTTON_ZOOM_STEP = 1.02;
+/** Scroll/trackpad: scale change per wheel delta (capped per event). */
+const WHEEL_ZOOM_SENSITIVITY = 0.0012;
+const WHEEL_ZOOM_MAX_STEP = 0.025;
 
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
 }
 
-export function OrgChartViewport({ children, exportFilename }: { children: ReactNode; exportFilename?: string }) {
+export function OrgChartViewport({
+  children,
+  exportFilename,
+  resetKey,
+}: {
+  children: ReactNode;
+  exportFilename?: string;
+  /** When this changes, pan/zoom reset to fit (e.g. chart mode toggle). */
+  resetKey?: string | number;
+}) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
@@ -46,6 +60,10 @@ export function OrgChartViewport({ children, exportFilename }: { children: React
   }, []);
 
   useEffect(() => {
+    setUserAdjusted(false);
+  }, [resetKey]);
+
+  useEffect(() => {
     let inner = 0;
     const outer = requestAnimationFrame(() => {
       inner = requestAnimationFrame(() => {
@@ -56,7 +74,7 @@ export function OrgChartViewport({ children, exportFilename }: { children: React
       cancelAnimationFrame(outer);
       cancelAnimationFrame(inner);
     };
-  }, [children, userAdjusted, fitToView]);
+  }, [children, userAdjusted, fitToView, resetKey]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -87,7 +105,8 @@ export function OrgChartViewport({ children, exportFilename }: { children: React
 
   function onWheel(e: React.WheelEvent) {
     e.preventDefault();
-    zoomBy(e.deltaY > 0 ? 0.92 : 1.08, { x: e.clientX, y: e.clientY });
+    const delta = clamp(-e.deltaY * WHEEL_ZOOM_SENSITIVITY, -WHEEL_ZOOM_MAX_STEP, WHEEL_ZOOM_MAX_STEP);
+    zoomBy(1 + delta, { x: e.clientX, y: e.clientY });
   }
 
   function onPointerDown(e: React.PointerEvent) {
@@ -145,7 +164,7 @@ export function OrgChartViewport({ children, exportFilename }: { children: React
         <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
-            onClick={() => zoomBy(0.85)}
+            onClick={() => zoomBy(1 / BUTTON_ZOOM_STEP)}
             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-kastros-sand bg-kastros-cream/50 text-kastros-forest hover:bg-kastros-cream"
             aria-label="Zoom out"
           >
@@ -154,7 +173,7 @@ export function OrgChartViewport({ children, exportFilename }: { children: React
           <span className="min-w-[3rem] text-center text-xs font-semibold tabular-nums text-kastros-forest">{zoomPct}%</span>
           <button
             type="button"
-            onClick={() => zoomBy(1.15)}
+            onClick={() => zoomBy(BUTTON_ZOOM_STEP)}
             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-kastros-sand bg-kastros-cream/50 text-kastros-forest hover:bg-kastros-cream"
             aria-label="Zoom in"
           >
@@ -185,7 +204,7 @@ export function OrgChartViewport({ children, exportFilename }: { children: React
 
       <div
         ref={viewportRef}
-        className="relative h-[min(72vh,780px)] min-h-[360px] cursor-grab overflow-hidden rounded-2xl border border-kastros-sand bg-gradient-to-b from-white to-kastros-cream/30 active:cursor-grabbing"
+        className="relative h-[min(88vh,960px)] min-h-[480px] cursor-grab overflow-hidden rounded-2xl border border-kastros-sand bg-gradient-to-b from-white to-kastros-cream/30 active:cursor-grabbing"
         onWheel={onWheel}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -194,7 +213,7 @@ export function OrgChartViewport({ children, exportFilename }: { children: React
       >
         <div
           ref={contentRef}
-          className="org-tree absolute left-0 top-0 space-y-10 p-6"
+          className="org-tree absolute left-0 top-0 space-y-12 p-10"
           style={{
             transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
             transformOrigin: "0 0",

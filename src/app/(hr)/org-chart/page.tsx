@@ -14,7 +14,7 @@ export default async function OrgChartPage() {
       title="Organization chart"
       subtitle="Reporting hierarchy built from each employee’s Reports to field — top-down tree with direct reports nested below."
     >
-      <OrgChart employees={store.employees} />
+      <OrgChart employees={store.employees} viewerEmail={session.email} />
     </PageShell>
   );
 }

@@ -1,4 +1,5 @@
 import type { Employee } from "@/lib/store/types";
+import { formatEmployeeDepartment } from "@/lib/executive-org";
 
 export type OrgTreeNode = Employee & {
   children: OrgTreeNode[];
@@ -96,4 +97,39 @@ export function buildOrgTree(employees: Employee[]): OrgTreeResult {
       missingManagerCount,
     },
   };
+}
+
+function departmentKey(employee: { department: string; reportsToEmail: string | null }): string {
+  return formatEmployeeDepartment(employee).toLowerCase();
+}
+
+/**
+ * Employees in the viewer's department: same functional department label, plus anyone who
+ * reports to the viewer (direct/indirect) when that person is also in that department.
+ */
+export function filterEmployeesForDepartmentView(employees: Employee[], viewerEmail: string): {
+  filtered: Employee[];
+  departmentLabel: string | null;
+} {
+  const roster = employees.filter((e) => e.status !== "Separated");
+  const viewer = roster.find((e) => e.email.toLowerCase() === viewerEmail.trim().toLowerCase());
+  if (!viewer) {
+    return { filtered: [], departmentLabel: null };
+  }
+
+  const viewerDept = departmentKey(viewer);
+  const departmentLabel = formatEmployeeDepartment(viewer);
+
+  const inDept = roster.filter((e) => departmentKey(e) === viewerDept);
+
+  return { filtered: inDept, departmentLabel };
+}
+
+/** Org tree limited to the viewer's department (peers + reporting lines within that department). */
+export function buildDepartmentOrgTree(employees: Employee[], viewerEmail: string): OrgTreeResult & {
+  departmentLabel: string | null;
+} {
+  const { filtered, departmentLabel } = filterEmployeesForDepartmentView(employees, viewerEmail);
+  const result = buildOrgTree(filtered);
+  return { ...result, departmentLabel };
 }
