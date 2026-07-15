@@ -37,9 +37,68 @@ function smtpConfig() {
   return { host, port, user, pass, from };
 }
 
-/** True when all required SMTP env vars are present for outbound mail. */
-export function isSmtpConfigured(): boolean {
-  return smtpConfig() !== null;
+function isAuthError(err: unknown): boolean {
+  if (typeof err === "object" && err !== null) {
+    const e = err as { code?: string; responseCode?: number };
+    return e.code === "EAUTH" || e.responseCode === 535;
+  }
+  return false;
+}
+
+function smtpAuthHint(host: string, user: string): string {
+  const h = host.toLowerCase();
+  const u = user.toLowerCase();
+  if (u.endsWith("@gmail.com") && !h.includes("gmail")) {
+    return " Your sender is Gmail but SMTP_HOST is not smtp.gmail.com.";
+  }
+  if (h.includes("office365") || h.includes("outlook")) {
+    return " For Microsoft 365, use an app password if MFA is enabled and ensure SMTP AUTH is enabled for the mailbox.";
+  }
+  if (u.endsWith("@gmail.com")) {
+    return " Gmail requires an App Password (not your normal password) when 2FA is on.";
+  }
+  return "";
+}
+
+function createSmtpTransport() {
+  const cfg = smtpConfig();
+  if (!cfg) return null;
+  const transport = nodemailer.createTransport({
+    host: cfg.host,
+    port: cfg.port,
+    secure: cfg.port === 465,
+    auth: { user: cfg.user, pass: cfg.pass },
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
+  });
+  return { cfg, transport };
+}
+
+export type SmtpVerifyResult = { ok: true } | { ok: false; authFailed: boolean; message: string };
+
+/** Verify SMTP credentials once before sending a batch (fails fast on bad login). */
+export async function verifySmtpConnection(): Promise<SmtpVerifyResult> {
+  const created = createSmtpTransport();
+  if (!created) {
+    return { ok: false, authFailed: false, message: "SMTP is not configured." };
+  }
+  try {
+    await created.transport.verify();
+    return { ok: true };
+  } catch (err) {
+    const authFailed = isAuthError(err);
+    const hint = smtpAuthHint(created.cfg.host, created.cfg.user);
+    const message = authFailed
+      ? `SMTP login failed for ${created.cfg.user} on ${created.cfg.host}.${hint}`
+      : err instanceof Error
+        ? err.message
+        : "SMTP connection failed.";
+    console.warn("[kastros-hr] SMTP verify failed", err);
+    return { ok: false, authFailed, message };
+  } finally {
+    created.transport.close();
+  }
 }
 
 function uniqEmails(emails: string[]): string[] {
@@ -80,20 +139,19 @@ function leaveEmailHtml(payload: LeaveEmailPayload): string {
   });
 }
 
+/** True when all required SMTP env vars are present for outbound mail. */
+export function isSmtpConfigured(): boolean {
+  return smtpConfig() !== null;
+}
+
 async function sendMail(payload: { to: string[]; subject: string; html: string; text: string }): Promise<boolean> {
-  const cfg = smtpConfig();
+  const created = createSmtpTransport();
   const recipients = uniqEmails(payload.to);
-  if (!cfg || recipients.length === 0) return false;
+  if (!created || recipients.length === 0) return false;
 
   try {
-    const transport = nodemailer.createTransport({
-      host: cfg.host,
-      port: cfg.port,
-      secure: cfg.port === 465,
-      auth: { user: cfg.user, pass: cfg.pass },
-    });
-    await transport.sendMail({
-      from: cfg.from,
+    await created.transport.sendMail({
+      from: created.cfg.from,
       to: recipients.join(", "),
       subject: payload.subject,
       html: payload.html,
@@ -103,7 +161,47 @@ async function sendMail(payload: { to: string[]; subject: string; html: string; 
   } catch (err) {
     console.warn("[kastros-hr] email send failed", err);
     return false;
+  } finally {
+    created.transport.close();
   }
+}
+
+/** Send using an already-verified transport (for batch sends). */
+export async function sendHrNotificationEmailWithTransport(
+  transport: nodemailer.Transporter,
+  from: string,
+  payload: HrEmailPayload,
+): Promise<boolean> {
+  const recipients = uniqEmails(payload.to);
+  if (recipients.length === 0) return false;
+  const text = [
+    payload.headline,
+    "",
+    payload.body.replace(/<br\s*\/?>/gi, "\n"),
+    payload.actionLabel && payload.actionUrl ? `\n${payload.actionLabel}: ${payload.actionUrl}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  try {
+    await transport.sendMail({
+      from,
+      to: recipients.join(", "),
+      subject: payload.subject,
+      html: notificationHtml(payload),
+      text,
+    });
+    return true;
+  } catch (err) {
+    console.warn("[kastros-hr] email send failed", err);
+    return false;
+  }
+}
+
+/** Open one SMTP connection for multiple sends; caller must call close() in finally. */
+export function openSmtpTransport(): { transport: nodemailer.Transporter; from: string } | null {
+  const created = createSmtpTransport();
+  if (!created) return null;
+  return { transport: created.transport, from: created.cfg.from };
 }
 
 /** Generic portal / HR notification email. */

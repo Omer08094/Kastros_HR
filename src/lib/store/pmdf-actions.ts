@@ -4,7 +4,12 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { loadEmployeeAuthRoles } from "@/lib/firebase-auth-roles";
-import { isSmtpConfigured, sendHrNotificationEmail } from "@/lib/hr-emails";
+import {
+  isSmtpConfigured,
+  openSmtpTransport,
+  sendHrNotificationEmailWithTransport,
+  verifySmtpConnection,
+} from "@/lib/hr-emails";
 import { calcPmdfScores, sumPercentages } from "@/lib/pmdf-scoring";
 import { defaultDevelopmentRows, phaseLabel, type PmdfPhaseId } from "@/lib/pmdf-reference";
 import { hasExecAccess } from "@/lib/roles";
@@ -397,18 +402,41 @@ export async function notifyPmdfDeadline(formData: FormData): Promise<ActionResu
   const url = `${appBaseUrl()}/performance`;
   const hrEmails = await hrAdminEmails(store);
 
+  const smtpCheck = await verifySmtpConnection();
+  if (!smtpCheck.ok) {
+    await mutateStore((s) => ({
+      next: audit(
+        s,
+        session.email,
+        `PMDF deadline reminder failed — SMTP auth (${forms.length} form(s) for "${cycle.title}")`,
+      ),
+      result: ok(),
+    }));
+    revalidatePath("/performance");
+    return { error: smtpCheck.message };
+  }
+
+  const smtp = openSmtpTransport();
+  if (!smtp) {
+    return { error: "Email is not configured." };
+  }
+
   let sent = 0;
-  for (const form of forms) {
-    const to = [...new Set([form.employeeEmail, ...hrEmails])];
-    const okSend = await sendHrNotificationEmail({
-      to,
-      subject: `Reminder: complete your PMDF — ${cycle.title}`,
-      headline: `${cycle.title} — action required`,
-      body: `Please complete your Performance Management & Development Form.<br/><br/><strong>Current phase:</strong> ${phase}<br/><strong>Deadline:</strong> ${deadline}<br/><br/>Sign in to Kastros HR to update your form.`,
-      actionLabel: "Open performance form",
-      actionUrl: url,
-    });
-    if (okSend) sent++;
+  try {
+    for (const form of forms) {
+      const to = [...new Set([form.employeeEmail, ...hrEmails])];
+      const okSend = await sendHrNotificationEmailWithTransport(smtp.transport, smtp.from, {
+        to,
+        subject: `Reminder: complete your PMDF — ${cycle.title}`,
+        headline: `${cycle.title} — action required`,
+        body: `Please complete your Performance Management & Development Form.<br/><br/><strong>Current phase:</strong> ${phase}<br/><strong>Deadline:</strong> ${deadline}<br/><br/>Sign in to Kastros HR to update your form.`,
+        actionLabel: "Open performance form",
+        actionUrl: url,
+      });
+      if (okSend) sent++;
+    }
+  } finally {
+    smtp.transport.close();
   }
 
   console.info("[kastros-hr] notifyPmdfDeadline", {
