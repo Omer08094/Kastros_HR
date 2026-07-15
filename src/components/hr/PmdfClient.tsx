@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import type { Session } from "@/lib/auth";
 import {
   BUSINESS_OBJECTIVE_RATINGS,
@@ -87,6 +87,10 @@ function canEditForm(form: PmdfForm, cycle: PerformanceCycle | undefined, sessio
   );
 }
 
+function storeHasOtherForms(forms: PmdfForm[], cycleId: string): boolean {
+  return forms.some((f) => f.cycleId !== cycleId);
+}
+
 function boStatus(row: PmdfBusinessObjective): "not_started" | "on_track" | "completed" {
   if (row.finalScoreFy != null) return "completed";
   if (row.objectiveSmart.trim() || row.action.trim()) return "on_track";
@@ -95,12 +99,14 @@ function boStatus(row: PmdfBusinessObjective): "not_started" | "on_track" | "com
 
 function PmdfHrPanel({
   cycles,
+  forms,
   departmentNames,
   employees,
   onAction,
   pending,
 }: {
   cycles: PerformanceCycle[];
+  forms: PmdfForm[];
   departmentNames: string[];
   employees: Employee[];
   onAction: (p: Promise<ActionResult>, successMessage?: string) => void;
@@ -108,6 +114,13 @@ function PmdfHrPanel({
 }) {
   const [assignScope, setAssignScope] = useState<"organisation" | "department" | "employee">("organisation");
   const departmentOptions = buildDepartmentOptions(departmentNames);
+  const formsByCycle = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const form of forms) {
+      map.set(form.cycleId, (map.get(form.cycleId) ?? 0) + 1);
+    }
+    return map;
+  }, [forms]);
 
   return (
     <section className="rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm space-y-6">
@@ -168,7 +181,9 @@ function PmdfHrPanel({
       {cycles.length > 0 ? (
         <div className="space-y-4 border-t border-kastros-sand pt-5">
           <h3 className="text-sm font-semibold text-kastros-ink">Manage existing cycle</h3>
-          {cycles.map((cycle) => (
+          {cycles.map((cycle) => {
+            const assignedCount = formsByCycle.get(cycle.id) ?? 0;
+            return (
             <div key={cycle.id} className="rounded-xl border border-kastros-sand bg-kastros-cream/20 p-4 space-y-3">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
@@ -176,6 +191,7 @@ function PmdfHrPanel({
                   <p className="text-xs text-kastros-sage">
                     {fmtDate(cycle.startDate)} – {fmtDate(cycle.endDate)} · Phase: {phaseLabel(cycle.currentPhase)}
                     {cycle.locked ? " · Locked" : ""}
+                    {assignedCount > 0 ? ` · ${assignedCount} form(s) assigned` : " · No forms assigned yet"}
                   </p>
                 </div>
               </div>
@@ -252,14 +268,36 @@ function PmdfHrPanel({
                 </button>
               </form>
 
-              <form action={(fd) => onAction(notifyPmdfDeadline(fd), "Deadline reminders sent.")}>
-                <input type="hidden" name="cycleId" value={cycle.id} />
-                <button type="submit" disabled={pending} className="rounded-xl border border-kastros-sand bg-white px-4 py-2 text-sm font-semibold text-kastros-forest disabled:opacity-60">
-                  Email deadline reminder to all assigned
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={pending || assignedCount === 0}
+                  title={
+                    assignedCount === 0
+                      ? "Distribute forms to this cycle before sending email reminders."
+                      : `Send deadline reminder emails for ${assignedCount} assigned form(s).`
+                  }
+                  onClick={() => {
+                    const fd = new FormData();
+                    fd.set("cycleId", cycle.id);
+                    onAction(
+                      notifyPmdfDeadline(fd),
+                      `Deadline reminders sent for ${assignedCount} form(s).`,
+                    );
+                  }}
+                  className="rounded-xl border border-kastros-sand bg-white px-4 py-2 text-sm font-semibold text-kastros-forest disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Email deadline reminder ({assignedCount} assigned)
                 </button>
-              </form>
+                {assignedCount === 0 && storeHasOtherForms(forms, cycle.id) ? (
+                  <p className="text-xs text-amber-800">
+                    Forms exist under another cycle — use that cycle&apos;s reminder button, or distribute to this cycle.
+                  </p>
+                ) : null}
+              </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       ) : null}
     </section>
@@ -897,6 +935,7 @@ export function PmdfClient({
   departmentNames: string[];
 }) {
   const router = useRouter();
+  const feedbackRef = useRef<HTMLDivElement>(null);
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -905,32 +944,54 @@ export function PmdfClient({
   const cycleMap = useMemo(() => new Map(cycles.map((c) => [c.id, c])), [cycles]);
   const selected = forms.find((f) => f.id === selectedId) ?? forms[0];
 
+  function scrollToFeedback() {
+    feedbackRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
   function handle(p: Promise<ActionResult>, successMessage = "Saved successfully.") {
     setError(null);
     setSuccess(null);
     start(async () => {
-      const err = await runAction(p, () => router.refresh());
-      if (err) setError(err);
-      else setSuccess(successMessage);
+      try {
+        const err = await runAction(p, () => router.refresh());
+        if (err) {
+          setError(err);
+          scrollToFeedback();
+        } else {
+          setSuccess(successMessage);
+          scrollToFeedback();
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
+        scrollToFeedback();
+      }
     });
   }
 
   return (
     <div className="space-y-6">
-      {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-          {error}
-        </div>
-      ) : null}
-      {success ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
-          {success}
-        </div>
-      ) : null}
+      <div ref={feedbackRef}>
+        {error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+            {error}
+          </div>
+        ) : null}
+        {success ? (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
+            {success}
+          </div>
+        ) : null}
+        {pending ? (
+          <div className="rounded-xl border border-kastros-sand bg-kastros-cream/40 px-4 py-2 text-sm text-kastros-sage" role="status">
+            Working…
+          </div>
+        ) : null}
+      </div>
 
       {hasExecAccess(session.role) ? (
         <PmdfHrPanel
           cycles={cycles}
+          forms={forms}
           departmentNames={departmentNames}
           employees={employees}
           onAction={handle}

@@ -4,7 +4,7 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { loadEmployeeAuthRoles } from "@/lib/firebase-auth-roles";
-import { sendHrNotificationEmail } from "@/lib/hr-emails";
+import { isSmtpConfigured, sendHrNotificationEmail } from "@/lib/hr-emails";
 import { calcPmdfScores, sumPercentages } from "@/lib/pmdf-scoring";
 import { defaultDevelopmentRows, phaseLabel, type PmdfPhaseId } from "@/lib/pmdf-reference";
 import { hasExecAccess } from "@/lib/roles";
@@ -249,6 +249,11 @@ export async function assignPmdfForms(formData: FormData): Promise<ActionResult>
   const emails = resolveAssignmentEmails(snapshot, scope, department, employeeEmail);
   if (emails.length === 0) return { error: "No active employees matched this assignment." };
 
+  const existingForCycle = new Set(
+    snapshot.pmdfForms.filter((f) => f.cycleId === cycleId).map((f) => f.employeeEmail.toLowerCase()),
+  );
+  let createdCount = 0;
+
   await mutateStore((store) => {
     const existing = new Set(store.pmdfForms.filter((f) => f.cycleId === cycleId).map((f) => f.employeeEmail.toLowerCase()));
     const newForms: PmdfForm[] = [];
@@ -258,6 +263,7 @@ export async function assignPmdfForms(formData: FormData): Promise<ActionResult>
       if (!emp) continue;
       newForms.push(buildFormFromEmployee(cycleId, emp, store));
     }
+    createdCount = newForms.length;
     return {
       next: audit(
         {
@@ -284,6 +290,14 @@ export async function assignPmdfForms(formData: FormData): Promise<ActionResult>
   });
 
   revalidatePath("/performance");
+  if (createdCount === 0) {
+    if (emails.every((email) => existingForCycle.has(email))) {
+      return {
+        error: "These employees already have a PMDF for this cycle. Use Email deadline reminder to notify them.",
+      };
+    }
+    return { error: "No employees could be assigned. Check that selected employees exist in People." };
+  }
   return ok();
 }
 
@@ -343,6 +357,37 @@ export async function notifyPmdfDeadline(formData: FormData): Promise<ActionResu
   if (!cycle) return { error: "Cycle not found." };
 
   const forms = store.pmdfForms.filter((f) => f.cycleId === cycleId);
+  const otherCycleForms = store.pmdfForms.length - forms.length;
+
+  if (forms.length === 0) {
+    const detail =
+      otherCycleForms > 0
+        ? `This cycle has no assigned forms (${otherCycleForms} form(s) belong to other cycles). Distribute forms to this cycle first, or use the reminder on the cycle that has assignments.`
+        : "No PMDF forms are assigned yet. Use Distribute forms before sending reminders.";
+    await mutateStore((s) => ({
+      next: audit(s, session.email, `PMDF deadline reminder skipped — 0 forms for cycle "${cycle.title}"`),
+      result: ok(),
+    }));
+    revalidatePath("/performance");
+    return { error: detail };
+  }
+
+  if (!isSmtpConfigured()) {
+    await mutateStore((s) => ({
+      next: audit(
+        s,
+        session.email,
+        `PMDF deadline reminder failed — SMTP not configured (${forms.length} form(s) for "${cycle.title}")`,
+      ),
+      result: ok(),
+    }));
+    revalidatePath("/performance");
+    return {
+      error:
+        "Email is not configured. Add SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and SMTP_FROM in Vercel → Settings → Environment Variables, then redeploy.",
+    };
+  }
+
   const deadline =
     cycle.objectiveSettingEmployeeDeadline ??
     cycle.midYearEmployeeDeadline ??
@@ -366,24 +411,50 @@ export async function notifyPmdfDeadline(formData: FormData): Promise<ActionResu
     if (okSend) sent++;
   }
 
-  if (sent > 0) {
-    await mutateStore((s) => ({
-      next: audit(
-        {
-          ...s,
-          pmdfForms: s.pmdfForms.map((f) =>
-            f.cycleId === cycleId ? { ...f, lastNotifiedAt: new Date().toISOString() } : f,
-          ),
-        },
-        session.email,
-        `Sent PMDF deadline reminders (${sent})`,
-      ),
-      result: ok(),
-    }));
-  }
+  console.info("[kastros-hr] notifyPmdfDeadline", {
+    cycleId,
+    cycleTitle: cycle.title,
+    formCount: forms.length,
+    sent,
+    hrAdminRecipients: hrEmails.length,
+  });
+
+  const auditAction =
+    sent === forms.length
+      ? `Sent PMDF deadline reminders (${sent}/${forms.length}) for "${cycle.title}"`
+      : sent > 0
+        ? `Sent PMDF deadline reminders (${sent}/${forms.length}) for "${cycle.title}" — some sends failed`
+        : `PMDF deadline reminder failed — 0/${forms.length} sent for "${cycle.title}" (check Vercel logs / SMTP)`;
+
+  await mutateStore((s) => ({
+    next: audit(
+      {
+        ...s,
+        pmdfForms:
+          sent > 0
+            ? s.pmdfForms.map((f) =>
+                f.cycleId === cycleId ? { ...f, lastNotifiedAt: new Date().toISOString() } : f,
+              )
+            : s.pmdfForms,
+      },
+      session.email,
+      auditAction,
+    ),
+    result: ok(),
+  }));
 
   revalidatePath("/performance");
-  return sent > 0 ? ok() : { error: "Could not send reminder emails. Check SMTP configuration." };
+  if (sent === 0) {
+    return {
+      error: `Could not send any of ${forms.length} reminder email(s). Check Vercel function logs for "[kastros-hr] email send failed" and verify SMTP credentials.`,
+    };
+  }
+  if (sent < forms.length) {
+    return {
+      error: `Only ${sent} of ${forms.length} reminder email(s) were sent. Check Vercel logs and spam folders for the rest.`,
+    };
+  }
+  return ok();
 }
 
 export async function savePmdfForm(formData: FormData): Promise<ActionResult> {

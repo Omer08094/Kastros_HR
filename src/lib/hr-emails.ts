@@ -37,6 +37,11 @@ function smtpConfig() {
   return { host, port, user, pass, from };
 }
 
+/** True when all required SMTP env vars are present for outbound mail. */
+export function isSmtpConfigured(): boolean {
+  return smtpConfig() !== null;
+}
+
 function uniqEmails(emails: string[]): string[] {
   return [...new Set(emails.map((v) => v.trim().toLowerCase()).filter(Boolean))];
 }
