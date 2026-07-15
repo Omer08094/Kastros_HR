@@ -113,6 +113,7 @@ function PmdfHrPanel({
   pending: boolean;
 }) {
   const [assignScope, setAssignScope] = useState<"organisation" | "department" | "employee">("organisation");
+  const [assignEmployeeEmail, setAssignEmployeeEmail] = useState("");
   const departmentOptions = buildDepartmentOptions(departmentNames);
   const formsByCycle = useMemo(() => {
     const map = new Map<string, number>();
@@ -128,6 +129,8 @@ function PmdfHrPanel({
         <h2 className="font-display text-lg font-semibold text-kastros-forest">HR — Performance cycles</h2>
         <p className="mt-1 text-sm text-kastros-sage">
           Create cycles, distribute PMDF forms, set deadlines, send reminders, and lock forms when the period ends.
+          Choose <strong className="text-kastros-ink">Specific employee</strong> above to email one person, or use{" "}
+          <strong className="text-kastros-ink">Email all assigned</strong> for everyone in the cycle.
         </p>
       </div>
 
@@ -183,6 +186,26 @@ function PmdfHrPanel({
           <h3 className="text-sm font-semibold text-kastros-ink">Manage existing cycle</h3>
           {cycles.map((cycle) => {
             const assignedCount = formsByCycle.get(cycle.id) ?? 0;
+            const selectedEmployee = assignEmployeeEmail
+              ? employees.find((e) => e.email.toLowerCase() === assignEmployeeEmail.toLowerCase())
+              : null;
+            const selectedHasFormInCycle =
+              !!selectedEmployee &&
+              forms.some(
+                (f) =>
+                  f.cycleId === cycle.id &&
+                  f.employeeEmail.toLowerCase() === selectedEmployee.email.toLowerCase(),
+              );
+
+            function sendReminder(employeeEmail?: string) {
+              const fd = new FormData();
+              fd.set("cycleId", cycle.id);
+              if (employeeEmail) fd.set("employeeEmail", employeeEmail);
+              const count = employeeEmail ? 1 : assignedCount;
+              const label = employeeEmail && selectedEmployee ? selectedEmployee.name : `${count} form(s)`;
+              onAction(notifyPmdfDeadline(fd), `Deadline reminder sent to ${label}.`);
+            }
+
             return (
             <div key={cycle.id} className="rounded-xl border border-kastros-sand bg-kastros-cream/20 p-4 space-y-3">
               <div className="flex flex-wrap items-start justify-between gap-2">
@@ -236,7 +259,11 @@ function PmdfHrPanel({
                 <input type="hidden" name="scope" value={assignScope} />
                 <select
                   value={assignScope}
-                  onChange={(e) => setAssignScope(e.target.value as typeof assignScope)}
+                  onChange={(e) => {
+                    const next = e.target.value as typeof assignScope;
+                    setAssignScope(next);
+                    if (next !== "employee") setAssignEmployeeEmail("");
+                  }}
                   className="rounded-xl border border-kastros-sand bg-white px-3 py-2 text-sm"
                 >
                   <option value="organisation">Whole organisation</option>
@@ -254,7 +281,13 @@ function PmdfHrPanel({
                   </select>
                 ) : null}
                 {assignScope === "employee" ? (
-                  <select name="employeeEmail" required className="rounded-xl border border-kastros-sand bg-white px-3 py-2 text-sm min-w-[200px]">
+                  <select
+                    name="employeeEmail"
+                    required
+                    value={assignEmployeeEmail}
+                    onChange={(e) => setAssignEmployeeEmail(e.target.value)}
+                    className="rounded-xl border border-kastros-sand bg-white px-3 py-2 text-sm min-w-[200px]"
+                  >
                     <option value="">Select employee…</option>
                     {employees.filter((e) => e.status === "Active").map((e) => (
                       <option key={e.email} value={e.email}>
@@ -275,20 +308,28 @@ function PmdfHrPanel({
                   title={
                     assignedCount === 0
                       ? "Distribute forms to this cycle before sending email reminders."
-                      : `Send deadline reminder emails for ${assignedCount} assigned form(s).`
+                      : `Send deadline reminder emails to all ${assignedCount} assigned form(s).`
                   }
-                  onClick={() => {
-                    const fd = new FormData();
-                    fd.set("cycleId", cycle.id);
-                    onAction(
-                      notifyPmdfDeadline(fd),
-                      `Deadline reminders sent for ${assignedCount} form(s).`,
-                    );
-                  }}
+                  onClick={() => sendReminder()}
                   className="rounded-xl border border-kastros-sand bg-white px-4 py-2 text-sm font-semibold text-kastros-forest disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Email deadline reminder ({assignedCount} assigned)
+                  Email all assigned ({assignedCount})
                 </button>
+                {assignScope === "employee" && assignEmployeeEmail ? (
+                  <button
+                    type="button"
+                    disabled={pending || !selectedHasFormInCycle}
+                    title={
+                      selectedHasFormInCycle
+                        ? `Send deadline reminder to ${selectedEmployee?.name ?? assignEmployeeEmail} only.`
+                        : `${selectedEmployee?.name ?? assignEmployeeEmail} has no PMDF in this cycle yet — distribute first.`
+                    }
+                    onClick={() => sendReminder(assignEmployeeEmail)}
+                    className="rounded-xl bg-kastros-forest px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Email {selectedEmployee?.name ?? "selected"} only
+                  </button>
+                ) : null}
                 {assignedCount === 0 && storeHasOtherForms(forms, cycle.id) ? (
                   <p className="text-xs text-amber-800">
                     Forms exist under another cycle — use that cycle&apos;s reminder button, or distribute to this cycle.

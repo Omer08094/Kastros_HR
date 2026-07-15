@@ -357,20 +357,35 @@ export async function notifyPmdfDeadline(formData: FormData): Promise<ActionResu
   const cycleId = String(formData.get("cycleId") ?? "").trim();
   if (!cycleId) return { error: "Select a cycle." };
 
+  const targetEmployeeEmail = String(formData.get("employeeEmail") ?? "").trim().toLowerCase();
+
   const store = await readStore();
   const cycle = store.performanceCycles.find((c) => c.id === cycleId);
   if (!cycle) return { error: "Cycle not found." };
 
-  const forms = store.pmdfForms.filter((f) => f.cycleId === cycleId);
-  const otherCycleForms = store.pmdfForms.length - forms.length;
+  const cycleForms = store.pmdfForms.filter((f) => f.cycleId === cycleId);
+  const forms = targetEmployeeEmail
+    ? cycleForms.filter((f) => f.employeeEmail.toLowerCase() === targetEmployeeEmail)
+    : cycleForms;
+  const otherCycleForms = store.pmdfForms.length - cycleForms.length;
+  const targetLabel = targetEmployeeEmail ? targetEmployeeEmail : "all assigned";
 
   if (forms.length === 0) {
-    const detail =
-      otherCycleForms > 0
+    const detail = targetEmployeeEmail
+      ? cycleForms.length > 0
+        ? `${targetEmployeeEmail} has no PMDF in this cycle. Distribute a form to them first, or use Email all assigned.`
+        : otherCycleForms > 0
+          ? `This cycle has no assigned forms (${otherCycleForms} form(s) belong to other cycles). Distribute forms to this cycle first.`
+          : "No PMDF forms are assigned yet. Use Distribute forms before sending reminders."
+      : otherCycleForms > 0
         ? `This cycle has no assigned forms (${otherCycleForms} form(s) belong to other cycles). Distribute forms to this cycle first, or use the reminder on the cycle that has assignments.`
         : "No PMDF forms are assigned yet. Use Distribute forms before sending reminders.";
     await mutateStore((s) => ({
-      next: audit(s, session.email, `PMDF deadline reminder skipped — 0 forms for cycle "${cycle.title}"`),
+      next: audit(
+        s,
+        session.email,
+        `PMDF deadline reminder skipped — 0 forms for cycle "${cycle.title}" (${targetLabel})`,
+      ),
       result: ok(),
     }));
     revalidatePath("/performance");
@@ -442,18 +457,21 @@ export async function notifyPmdfDeadline(formData: FormData): Promise<ActionResu
   console.info("[kastros-hr] notifyPmdfDeadline", {
     cycleId,
     cycleTitle: cycle.title,
+    targetEmployeeEmail: targetEmployeeEmail || null,
     formCount: forms.length,
     sent,
     hrAdminRecipients: hrEmails.length,
   });
 
+  const recipientScope = targetEmployeeEmail ? targetEmployeeEmail : "all assigned";
   const auditAction =
     sent === forms.length
-      ? `Sent PMDF deadline reminders (${sent}/${forms.length}) for "${cycle.title}"`
+      ? `Sent PMDF deadline reminders (${sent}/${forms.length}) for "${cycle.title}" — ${recipientScope}`
       : sent > 0
-        ? `Sent PMDF deadline reminders (${sent}/${forms.length}) for "${cycle.title}" — some sends failed`
-        : `PMDF deadline reminder failed — 0/${forms.length} sent for "${cycle.title}" (check Vercel logs / SMTP)`;
+        ? `Sent PMDF deadline reminders (${sent}/${forms.length}) for "${cycle.title}" — ${recipientScope} — some sends failed`
+        : `PMDF deadline reminder failed — 0/${forms.length} sent for "${cycle.title}" — ${recipientScope} (check Vercel logs / SMTP)`;
 
+  const notifiedFormIds = new Set(forms.map((f) => f.id));
   await mutateStore((s) => ({
     next: audit(
       {
@@ -461,7 +479,7 @@ export async function notifyPmdfDeadline(formData: FormData): Promise<ActionResu
         pmdfForms:
           sent > 0
             ? s.pmdfForms.map((f) =>
-                f.cycleId === cycleId ? { ...f, lastNotifiedAt: new Date().toISOString() } : f,
+                notifiedFormIds.has(f.id) ? { ...f, lastNotifiedAt: new Date().toISOString() } : f,
               )
             : s.pmdfForms,
       },
