@@ -35,19 +35,12 @@ import type {
 } from "@/lib/store/types";
 import { buildDepartmentOptions } from "@/lib/hr-picker-options";
 
-type ActionResult = { ok: true } | { error: string };
+type ActionResult = { ok: true; message?: string } | { error: string };
 
 const INPUT =
   "mt-1 w-full rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 text-sm text-kastros-ink focus:outline-none focus:ring-2 focus:ring-kastros-brandGreen/30";
 
 const TEXTAREA = `${INPUT} min-h-[72px] resize-y`;
-
-async function runAction(p: Promise<ActionResult>, onOk: () => void): Promise<string | null> {
-  const r = await p;
-  if ("error" in r) return r.error;
-  onOk();
-  return null;
-}
 
 function fmtDate(d: string | null | undefined): string {
   if (!d) return "—";
@@ -466,9 +459,14 @@ function PmdfFormEditor({
   const isEmployee = form.employeeEmail.toLowerCase() === session.email.toLowerCase();
   const isManager = isPmdfLineManagerFromEmployees(employees, session.email, form);
   const locked = form.locked || cycle?.locked;
+  const effectivePhase = cycle?.currentPhase ?? form.phase;
   const employeeObjectivesLocked = isEmployee && !!form.employeeObjectivesSubmittedAt;
   const submittingObjectives =
-    isEmployee && form.phase === "objective_setting_employee" && !form.employeeObjectivesSubmittedAt;
+    isEmployee &&
+    effectivePhase === "objective_setting_employee" &&
+    !form.employeeObjectivesSubmittedAt;
+  const employeeGoalsComplete =
+    isEmployee && employeeObjectivesLocked && effectivePhase === "objective_setting_employee";
   const canEmployeeEditGoals = isEmployee && !employeeObjectivesLocked;
 
   const [tab, setTab] = useState<"bo" | "do" | "feedback">("bo");
@@ -1064,7 +1062,7 @@ function PmdfFormEditor({
           </div>
         ) : null}
 
-        {editable ? (
+        {editable && !employeeGoalsComplete ? (
           <button
             type="submit"
             disabled={pending}
@@ -1072,6 +1070,10 @@ function PmdfFormEditor({
           >
             {submittingObjectives ? "Submit goals" : "Save form"}
           </button>
+        ) : employeeGoalsComplete ? (
+          <p className="text-sm font-medium text-emerald-800">
+            Your performance and development goals have been submitted. No further changes are needed at this stage.
+          </p>
         ) : (
           <p className="text-sm text-kastros-sage">This form is read-only{locked ? " (locked)" : ""}.</p>
         )}
@@ -1104,9 +1106,13 @@ export function PmdfClient({
   function handle(p: Promise<ActionResult>, successMessage = "Saved successfully.") {
     start(async () => {
       try {
-        const err = await runAction(p, () => router.refresh());
-        if (err) toast.error(err);
-        else toast.success(successMessage);
+        const r = await p;
+        if ("error" in r) {
+          toast.error(r.error);
+          return;
+        }
+        router.refresh();
+        toast.success(r.message ?? successMessage);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Something went wrong. Please try again.");
       }

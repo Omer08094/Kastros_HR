@@ -25,7 +25,7 @@ import type {
   PmdfPhase,
 } from "@/lib/store/types";
 
-type ActionResult = { ok: true } | { error: string };
+type ActionResult = { ok: true; message?: string } | { error: string };
 
 function ok(): ActionResult {
   return { ok: true };
@@ -617,10 +617,21 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
   const incoming = parsePmdfFormFields(formData);
   let merged = mergePmdfFormFields(existingPmdfFormFields(existing), incoming, saveRole);
 
+  const effectivePhase = cycle?.currentPhase ?? existing.phase;
   const submittingObjectives =
     saveRole === "employee" &&
-    existing.phase === "objective_setting_employee" &&
+    effectivePhase === "objective_setting_employee" &&
     !existing.employeeObjectivesSubmittedAt;
+
+  if (
+    saveRole === "employee" &&
+    existing.employeeObjectivesSubmittedAt &&
+    effectivePhase === "objective_setting_employee"
+  ) {
+    return {
+      error: "Your performance and development goals have already been submitted and cannot be changed.",
+    };
+  }
 
   if (saveRole === "employee" && existing.employeeObjectivesSubmittedAt) {
     merged = applyEmployeeObjectiveLock(existingPmdfFormFields(existing), merged);
@@ -639,7 +650,7 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
     });
     if (submitValidation) return { error: submitValidation };
   } else {
-    const draftingPhase = existing.phase === "objective_setting_employee";
+    const draftingPhase = effectivePhase === "objective_setting_employee";
     const validationError = validatePmdfFields(merged, {
       skipWeightValidation: saveRole === "employee" && draftingPhase,
       skipDevTraitValidation: saveRole === "employee" && draftingPhase,
@@ -689,5 +700,8 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
 
   revalidatePath("/performance");
   revalidatePath(`/performance/print/${formId}`);
+  if (submittingObjectives) {
+    return { ok: true, message: "Performance and development goals submitted." };
+  }
   return ok();
 }
