@@ -436,6 +436,8 @@ export type PmdfForm = {
   managerSignature: string;
   employeeSignedAt: string | null;
   managerSignedAt: string | null;
+  /** Set when the employee submits performance + development goals (one-time, objective setting phase). */
+  employeeObjectivesSubmittedAt: string | null;
   phase: PmdfPhase;
   locked: boolean;
   assignedAt: string;

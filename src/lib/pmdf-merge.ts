@@ -122,3 +122,33 @@ export function mergePmdfFormFields(
     managerSignature: incoming.managerSignature,
   };
 }
+
+/** After employee submits objectives once, preserve goal fields on subsequent employee saves. */
+export function applyEmployeeObjectiveLock(existing: PmdfFormFields, merged: PmdfFormFields): PmdfFormFields {
+  return {
+    ...merged,
+    functionalArea: existing.functionalArea,
+    locationCategory: existing.locationCategory,
+    subDepartment: existing.subDepartment,
+    businessObjectives: merged.businessObjectives.map((row, i) => {
+      const prev = findExistingRow(existing.businessObjectives, row, i);
+      return {
+        ...row,
+        objectiveSmart: prev.objectiveSmart,
+        action: prev.action,
+        employeeComments: prev.employeeComments,
+        percentage: prev.percentage,
+      };
+    }),
+    developmentObjectives: merged.developmentObjectives.map((row, i) => {
+      const prev = findExistingRow(existing.developmentObjectives, row, i);
+      return {
+        ...row,
+        pillar: prev.pillar,
+        developmentArea: prev.developmentArea,
+        actionPlan: prev.actionPlan,
+        percentage: prev.percentage,
+      };
+    }),
+  };
+}

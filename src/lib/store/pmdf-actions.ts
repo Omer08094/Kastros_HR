@@ -11,7 +11,7 @@ import {
   verifySmtpConnection,
 } from "@/lib/hr-emails";
 import { isPmdfLineManager, resolvePmdfLineManager } from "@/lib/pmdf-access";
-import { mergePmdfFormFields, type PmdfFormFields, type PmdfSaveRole } from "@/lib/pmdf-merge";
+import { mergePmdfFormFields, applyEmployeeObjectiveLock, type PmdfFormFields, type PmdfSaveRole } from "@/lib/pmdf-merge";
 import { calcPmdfScores, sumPercentages } from "@/lib/pmdf-scoring";
 import { defaultDevelopmentRows, phaseLabel, type PmdfPhaseId } from "@/lib/pmdf-reference";
 import { hasExecAccess } from "@/lib/roles";
@@ -100,6 +100,7 @@ function buildFormFromEmployee(cycleId: string, employee: Employee, store: HrSto
     managerSignature: "",
     employeeSignedAt: null,
     managerSignedAt: null,
+    employeeObjectivesSubmittedAt: null,
     phase: cycle?.currentPhase ?? "objective_setting_employee",
     locked: cycle?.locked ?? false,
     assignedAt: now,
@@ -352,6 +353,36 @@ export async function updatePerformanceCycle(formData: FormData): Promise<Action
   return ok();
 }
 
+export async function deletePerformanceCycle(formData: FormData): Promise<ActionResult> {
+  const session = await getSession();
+  if (!session || !hasExecAccess(session.role)) return { error: "Only HR Admin or CEO can delete performance cycles." };
+
+  const cycleId = String(formData.get("cycleId") ?? "").trim();
+  if (!cycleId) return { error: "Missing cycle." };
+
+  const snapshot = await readStore();
+  const cycle = snapshot.performanceCycles.find((c) => c.id === cycleId);
+  if (!cycle) return { error: "Cycle not found." };
+
+  const formCount = snapshot.pmdfForms.filter((f) => f.cycleId === cycleId).length;
+
+  await mutateStore((store) => ({
+    next: audit(
+      {
+        ...store,
+        performanceCycles: store.performanceCycles.filter((c) => c.id !== cycleId),
+        pmdfForms: store.pmdfForms.filter((f) => f.cycleId !== cycleId),
+        pmdfAssignments: store.pmdfAssignments.filter((a) => a.cycleId !== cycleId),
+      },
+      session.email,
+      `Deleted performance cycle "${cycle.title}" (${formCount} form(s))`,
+    ),
+    result: ok(),
+  }));
+  revalidatePath("/performance");
+  return ok();
+}
+
 export async function notifyPmdfDeadline(formData: FormData): Promise<ActionResult> {
   const session = await getSession();
   if (!session || !hasExecAccess(session.role)) return { error: "Forbidden." };
@@ -584,17 +615,42 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
 
   const saveRole: PmdfSaveRole = isHr ? "hr" : isOwner ? "employee" : "manager";
   const incoming = parsePmdfFormFields(formData);
-  const merged = mergePmdfFormFields(existingPmdfFormFields(existing), incoming, saveRole);
+  let merged = mergePmdfFormFields(existingPmdfFormFields(existing), incoming, saveRole);
 
-  const draftingPhase = existing.phase === "objective_setting_employee";
-  const validationError = validatePmdfFields(merged, {
-    skipWeightValidation: saveRole === "employee" && draftingPhase,
-    skipDevTraitValidation: saveRole === "employee" && draftingPhase,
-  });
-  if (validationError) return { error: validationError };
+  const submittingObjectives =
+    saveRole === "employee" &&
+    existing.phase === "objective_setting_employee" &&
+    !existing.employeeObjectivesSubmittedAt;
+
+  if (saveRole === "employee" && existing.employeeObjectivesSubmittedAt) {
+    merged = applyEmployeeObjectiveLock(existingPmdfFormFields(existing), merged);
+  }
+
+  if (submittingObjectives) {
+    if (formData.get("confirmEmployeeObjectivesSubmit") !== "1") {
+      return {
+        error:
+          "Please confirm that you have reviewed your performance and development goals. This submission can only be done once.",
+      };
+    }
+    const submitValidation = validatePmdfFields(merged, {
+      skipWeightValidation: false,
+      skipDevTraitValidation: false,
+    });
+    if (submitValidation) return { error: submitValidation };
+  } else {
+    const draftingPhase = existing.phase === "objective_setting_employee";
+    const validationError = validatePmdfFields(merged, {
+      skipWeightValidation: saveRole === "employee" && draftingPhase,
+      skipDevTraitValidation: saveRole === "employee" && draftingPhase,
+    });
+    if (validationError) return { error: validationError };
+  }
 
   calcPmdfScores(merged.businessObjectives, merged.developmentObjectives);
   const lineManager = resolvePmdfLineManager(store, existing);
+  const objectivesSubmittedAt =
+    submittingObjectives ? new Date().toISOString() : existing.employeeObjectivesSubmittedAt;
 
   await mutateStore((s) => ({
     next: audit(
@@ -619,13 +675,14 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
                 managerSignature: merged.managerSignature,
                 employeeSignedAt: merged.employeeSignature ? new Date().toISOString() : f.employeeSignedAt,
                 managerSignedAt: merged.managerSignature ? new Date().toISOString() : f.managerSignedAt,
+                employeeObjectivesSubmittedAt: objectivesSubmittedAt,
                 updatedAt: new Date().toISOString(),
               }
             : f,
         ),
       },
       session.email,
-      `Saved PMDF ${formId}`,
+      submittingObjectives ? `Submitted PMDF objectives ${formId}` : `Saved PMDF ${formId}`,
     ),
     result: ok(),
   }));

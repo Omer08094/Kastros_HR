@@ -21,6 +21,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 import {
   assignPmdfForms,
   createPerformanceCycle,
+  deletePerformanceCycle,
   notifyPmdfDeadline,
   savePmdfForm,
   updatePerformanceCycle,
@@ -65,10 +66,54 @@ function toIntOrNull(raw: string): number | null {
   return Math.min(5, Math.max(1, i));
 }
 
-function toPct(raw: string): number {
-  const n = Number(raw);
+function parsePctInput(raw: string): number {
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return 0;
+  const n = parseInt(digits, 10);
   if (!Number.isFinite(n)) return 0;
-  return Math.min(100, Math.max(0, Math.round(n)));
+  return Math.min(100, Math.max(0, n));
+}
+
+/** Weight % input — text field avoids browser number spinners and scroll-wheel decrements (20→19). */
+function PercentageInput({
+  value,
+  onChange,
+  disabled,
+  className,
+}: {
+  value: number;
+  onChange: (pct: number) => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const editing = draft !== null;
+  const display = editing ? draft : value === 0 ? "" : String(value);
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      value={display}
+      disabled={disabled}
+      className={className}
+      onFocus={() => setDraft(value === 0 ? "" : String(value))}
+      onBlur={() => {
+        const next = parsePctInput(draft ?? "");
+        onChange(next);
+        setDraft(null);
+      }}
+      onChange={(e) => {
+        const raw = e.target.value.replace(/\D/g, "");
+        setDraft(raw);
+        onChange(parsePctInput(raw));
+      }}
+      onWheel={(e) => {
+        e.currentTarget.blur();
+      }}
+    />
+  );
 }
 
 const BUILT_IN_PILLARS = new Set<string>(PMDF_PILLARS);
@@ -224,6 +269,16 @@ function PmdfHrPanel({
                     {assignedCount > 0 ? ` · ${assignedCount} form(s) assigned` : " · No forms assigned yet"}
                   </p>
                 </div>
+                <form action={(fd) => onAction(deletePerformanceCycle(fd), "Performance cycle deleted.")}>
+                  <input type="hidden" name="cycleId" value={cycle.id} />
+                  <button
+                    type="submit"
+                    disabled={pending}
+                    className="rounded-lg px-2 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-200 disabled:opacity-50"
+                  >
+                    Delete cycle
+                  </button>
+                </form>
               </div>
 
               <form className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" action={(fd) => onAction(updatePerformanceCycle(fd), "Performance cycle updated.")}>
@@ -411,6 +466,10 @@ function PmdfFormEditor({
   const isEmployee = form.employeeEmail.toLowerCase() === session.email.toLowerCase();
   const isManager = isPmdfLineManagerFromEmployees(employees, session.email, form);
   const locked = form.locked || cycle?.locked;
+  const employeeObjectivesLocked = isEmployee && !!form.employeeObjectivesSubmittedAt;
+  const submittingObjectives =
+    isEmployee && form.phase === "objective_setting_employee" && !form.employeeObjectivesSubmittedAt;
+  const canEmployeeEditGoals = isEmployee && !employeeObjectivesLocked;
 
   const [tab, setTab] = useState<"bo" | "do" | "feedback">("bo");
   const [businessObjectives, setBusinessObjectives] = useState(form.businessObjectives);
@@ -421,6 +480,9 @@ function PmdfFormEditor({
   const [managerFeedbackFy, setManagerFeedbackFy] = useState(form.managerFeedbackFy);
   const [employeeSignature, setEmployeeSignature] = useState(form.employeeSignature);
   const [managerSignature, setManagerSignature] = useState(form.managerSignature);
+  const [subDepartment, setSubDepartment] = useState(form.subDepartment ?? "");
+  const [functionalArea, setFunctionalArea] = useState(form.functionalArea ?? "");
+  const [locationCategory, setLocationCategory] = useState(form.locationCategory ?? "");
   const [lastAddedTraitId, setLastAddedTraitId] = useState<string | null>(null);
 
   const scores = useMemo(
@@ -502,6 +564,58 @@ function PmdfFormEditor({
   const activeDo = developmentObjectives.filter((r) => r.actionPlan.trim() || r.percentage > 0);
   const filledDo = activeDo.length;
 
+  function buildFormData(confirmObjectivesSubmit: boolean): FormData {
+    const fd = new FormData();
+    fd.set("formId", form.id);
+    if (confirmObjectivesSubmit) fd.set("confirmEmployeeObjectivesSubmit", "1");
+    fd.set("boCount", String(businessObjectives.length));
+    businessObjectives.forEach((r, i) => {
+      fd.set(`bo_id_${i}`, r.id);
+      fd.set(`bo_smart_${i}`, r.objectiveSmart);
+      fd.set(`bo_action_${i}`, r.action);
+      fd.set(`bo_comments_${i}`, r.employeeComments);
+      fd.set(`bo_pct_${i}`, String(r.percentage));
+      if (r.selfScoreFy != null) fd.set(`bo_self_${i}`, String(r.selfScoreFy));
+      if (r.finalScoreFy != null) fd.set(`bo_final_${i}`, String(r.finalScoreFy));
+      fd.set(`bo_mgr_hy_${i}`, r.managerCommentsHalfYear);
+      fd.set(`bo_mgr_fy_${i}`, r.managerCommentsFullYear);
+    });
+    fd.set("doCount", String(developmentObjectives.length));
+    developmentObjectives.forEach((r, i) => {
+      fd.set(`do_id_${i}`, r.id);
+      fd.set(`do_pillar_${i}`, r.pillar);
+      fd.set(`do_area_${i}`, r.developmentArea);
+      fd.set(`do_plan_${i}`, r.actionPlan);
+      fd.set(`do_pct_${i}`, String(r.percentage));
+      if (r.selfScoreFy != null) fd.set(`do_self_${i}`, String(r.selfScoreFy));
+      if (r.finalScoreFy != null) fd.set(`do_final_${i}`, String(r.finalScoreFy));
+      fd.set(`do_mgr_hy_${i}`, r.managerCommentsHalfYear);
+      fd.set(`do_mgr_fy_${i}`, r.managerCommentsFullYear);
+    });
+    fd.set("employeeFeedbackMidYear", employeeFeedbackMidYear);
+    fd.set("managerFeedbackMidYear", managerFeedbackMidYear);
+    fd.set("employeeFeedbackFy", employeeFeedbackFy);
+    fd.set("managerFeedbackFy", managerFeedbackFy);
+    fd.set("employeeSignature", employeeSignature);
+    fd.set("managerSignature", managerSignature);
+    fd.set("subDepartment", subDepartment);
+    fd.set("functionalArea", functionalArea);
+    fd.set("locationCategory", locationCategory);
+    return fd;
+  }
+
+  function handleSave() {
+    if (submittingObjectives) {
+      const ok = window.confirm(
+        "You can only submit your performance and development goals once.\n\nAfter saving, you will not be able to edit these goals again.\n\nPlease review all objectives, weights, and development traits carefully before continuing.",
+      );
+      if (!ok) return;
+      onAction(savePmdfForm(buildFormData(true)), "Performance and development goals submitted.");
+      return;
+    }
+    onAction(savePmdfForm(buildFormData(false)), "PMDF form saved successfully.");
+  }
+
   return (
     <section className="rounded-2xl border border-kastros-sand bg-white shadow-sm overflow-hidden">
       <div className="border-b border-kastros-sand bg-kastros-cream/30 px-5 py-4">
@@ -573,41 +687,23 @@ function PmdfFormEditor({
         </div>
       ) : null}
 
+      {employeeObjectivesLocked ? (
+        <div className="mx-5 mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Your performance and development goals were submitted on{" "}
+          {fmtDate(form.employeeObjectivesSubmittedAt)} and can no longer be changed.
+        </div>
+      ) : submittingObjectives ? (
+        <div className="mx-5 mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          You can only submit your performance and development goals once. Review every objective, weight, and
+          development trait carefully before saving.
+        </div>
+      ) : null}
+
       <form
         className="p-5 space-y-5"
-        action={(fd) => {
-          fd.set("formId", form.id);
-          fd.set("boCount", String(businessObjectives.length));
-          businessObjectives.forEach((r, i) => {
-            fd.set(`bo_id_${i}`, r.id);
-            fd.set(`bo_smart_${i}`, r.objectiveSmart);
-            fd.set(`bo_action_${i}`, r.action);
-            fd.set(`bo_comments_${i}`, r.employeeComments);
-            fd.set(`bo_pct_${i}`, String(r.percentage));
-            if (r.selfScoreFy != null) fd.set(`bo_self_${i}`, String(r.selfScoreFy));
-            if (r.finalScoreFy != null) fd.set(`bo_final_${i}`, String(r.finalScoreFy));
-            fd.set(`bo_mgr_hy_${i}`, r.managerCommentsHalfYear);
-            fd.set(`bo_mgr_fy_${i}`, r.managerCommentsFullYear);
-          });
-          fd.set("doCount", String(developmentObjectives.length));
-          developmentObjectives.forEach((r, i) => {
-            fd.set(`do_id_${i}`, r.id);
-            fd.set(`do_pillar_${i}`, r.pillar);
-            fd.set(`do_area_${i}`, r.developmentArea);
-            fd.set(`do_plan_${i}`, r.actionPlan);
-            fd.set(`do_pct_${i}`, String(r.percentage));
-            if (r.selfScoreFy != null) fd.set(`do_self_${i}`, String(r.selfScoreFy));
-            if (r.finalScoreFy != null) fd.set(`do_final_${i}`, String(r.finalScoreFy));
-            fd.set(`do_mgr_hy_${i}`, r.managerCommentsHalfYear);
-            fd.set(`do_mgr_fy_${i}`, r.managerCommentsFullYear);
-          });
-          fd.set("employeeFeedbackMidYear", employeeFeedbackMidYear);
-          fd.set("managerFeedbackMidYear", managerFeedbackMidYear);
-          fd.set("employeeFeedbackFy", employeeFeedbackFy);
-          fd.set("managerFeedbackFy", managerFeedbackFy);
-          fd.set("employeeSignature", employeeSignature);
-          fd.set("managerSignature", managerSignature);
-          onAction(savePmdfForm(fd), "PMDF form saved successfully.");
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSave();
         }}
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
@@ -618,12 +714,22 @@ function PmdfFormEditor({
           <div><span className="text-kastros-sage">Department</span><p className="font-medium">{form.department}</p></div>
           <label className="text-sm">
             <span className="text-kastros-sage">Sub Department</span>
-            <input name="subDepartment" defaultValue={form.subDepartment ?? ""} disabled={!editable} className={INPUT} />
+            <input
+              value={subDepartment}
+              onChange={(e) => setSubDepartment(e.target.value)}
+              disabled={!editable || (isEmployee && employeeObjectivesLocked)}
+              className={INPUT}
+            />
           </label>
           <div><span className="text-kastros-sage">Location</span><p className="font-medium">{form.location}</p></div>
           <label className="text-sm">
             <span className="text-kastros-sage">Functional Area</span>
-            <select name="functionalArea" defaultValue={form.functionalArea ?? ""} disabled={!editable} className={INPUT}>
+            <select
+              value={functionalArea}
+              onChange={(e) => setFunctionalArea(e.target.value)}
+              disabled={!editable || (isEmployee && employeeObjectivesLocked)}
+              className={INPUT}
+            >
               <option value="">— Select —</option>
               {PMDF_FUNCTIONAL_AREAS.map((a) => (
                 <option key={a} value={a}>{a}</option>
@@ -632,7 +738,12 @@ function PmdfFormEditor({
           </label>
           <label className="text-sm">
             <span className="text-kastros-sage">Location Category</span>
-            <select name="locationCategory" defaultValue={form.locationCategory ?? ""} disabled={!editable} className={INPUT}>
+            <select
+              value={locationCategory}
+              onChange={(e) => setLocationCategory(e.target.value)}
+              disabled={!editable || (isEmployee && employeeObjectivesLocked)}
+              className={INPUT}
+            >
               <option value="">— Select —</option>
               {PMDF_LOCATION_CATEGORIES.map((a) => (
                 <option key={a} value={a}>{a}</option>
@@ -645,7 +756,7 @@ function PmdfFormEditor({
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-kastros-forest">Business Objectives (must total 100%)</h3>
-              {editable ? (
+              {editable && (canEmployeeEditGoals || hasExecAccess(session.role)) ? (
                 <button type="button" onClick={addBusinessRow} className="text-xs font-semibold text-kastros-brandGreen">
                   + Add objective
                 </button>
@@ -662,7 +773,7 @@ function PmdfFormEditor({
                   <textarea
                     value={row.objectiveSmart}
                     onChange={(e) => updateBo(idx, { objectiveSmart: e.target.value })}
-                    disabled={!editable || (!isEmployee && !hasExecAccess(session.role))}
+                    disabled={!editable || (!canEmployeeEditGoals && !hasExecAccess(session.role))}
                     className={TEXTAREA}
                   />
                 </label>
@@ -671,7 +782,7 @@ function PmdfFormEditor({
                   <textarea
                     value={row.action}
                     onChange={(e) => updateBo(idx, { action: e.target.value })}
-                    disabled={!editable || (!isEmployee && !hasExecAccess(session.role))}
+                    disabled={!editable || (!canEmployeeEditGoals && !hasExecAccess(session.role))}
                     className={TEXTAREA}
                   />
                 </label>
@@ -680,21 +791,17 @@ function PmdfFormEditor({
                   <textarea
                     value={row.employeeComments}
                     onChange={(e) => updateBo(idx, { employeeComments: e.target.value })}
-                    disabled={!editable || (!isEmployee && !hasExecAccess(session.role))}
+                    disabled={!editable || (!canEmployeeEditGoals && !hasExecAccess(session.role))}
                     className={TEXTAREA}
                   />
                 </label>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <label className="text-sm">
                     <span className="text-kastros-sage">%age (weight)</span>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={row.percentage === 0 ? "" : row.percentage}
-                      onChange={(e) => updateBo(idx, { percentage: toPct(e.target.value) })}
-                      disabled={!editable}
+                    <PercentageInput
+                      value={row.percentage}
+                      onChange={(pct) => updateBo(idx, { percentage: pct })}
+                      disabled={!editable || (isEmployee && employeeObjectivesLocked)}
                       className={INPUT}
                     />
                   </label>
@@ -781,7 +888,7 @@ function PmdfFormEditor({
                 <span className={`text-xs font-semibold ${filledDo >= MIN_DEVELOPMENT_TRAITS ? "text-emerald-700" : "text-amber-700"}`}>
                   {filledDo} of {developmentObjectives.length} traits in use · weight total {scores.developmentTotalPercentage}%
                 </span>
-                {editable ? (
+                {editable && (canEmployeeEditGoals || hasExecAccess(session.role)) ? (
                   <button
                     type="button"
                     onClick={addDevelopmentRow}
@@ -824,12 +931,12 @@ function PmdfFormEditor({
                           <input
                             value={row.pillar}
                             onChange={(e) => updateDo(idx, { pillar: e.target.value })}
-                            disabled={!editable || (!isEmployee && !hasExecAccess(session.role))}
+                            disabled={!editable || (!canEmployeeEditGoals && !hasExecAccess(session.role))}
                             placeholder="e.g. Adaptability, Communication"
                             className={INPUT}
                           />
                         </label>
-                        {editable && (isEmployee || hasExecAccess(session.role)) ? (
+                        {editable && (canEmployeeEditGoals || hasExecAccess(session.role)) ? (
                           <button
                             type="button"
                             onClick={() => removeDevelopmentRow(idx)}
@@ -845,21 +952,17 @@ function PmdfFormEditor({
                       <textarea
                         value={row.actionPlan}
                         onChange={(e) => updateDo(idx, { actionPlan: e.target.value })}
-                        disabled={!editable || (!isEmployee && !hasExecAccess(session.role))}
+                        disabled={!editable || (!canEmployeeEditGoals && !hasExecAccess(session.role))}
                         className={TEXTAREA}
                       />
                     </label>
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                       <label className="text-sm">
                         <span className="text-kastros-sage">%age</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step={1}
-                          value={row.percentage === 0 ? "" : row.percentage}
-                          onChange={(e) => updateDo(idx, { percentage: toPct(e.target.value) })}
-                          disabled={!editable}
+                        <PercentageInput
+                          value={row.percentage}
+                          onChange={(pct) => updateDo(idx, { percentage: pct })}
+                          disabled={!editable || (isEmployee && employeeObjectivesLocked)}
                           className={INPUT}
                         />
                       </label>
@@ -967,7 +1070,7 @@ function PmdfFormEditor({
             disabled={pending}
             className="rounded-xl bg-kastros-forest px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
           >
-            Save form
+            {submittingObjectives ? "Submit goals" : "Save form"}
           </button>
         ) : (
           <p className="text-sm text-kastros-sage">This form is read-only{locked ? " (locked)" : ""}.</p>

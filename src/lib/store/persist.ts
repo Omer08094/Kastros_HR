@@ -135,6 +135,8 @@ function normalizePmdfForms(raw: unknown): PmdfForm[] {
       managerSignature: typeof r.managerSignature === "string" ? r.managerSignature : "",
       employeeSignedAt: typeof r.employeeSignedAt === "string" ? r.employeeSignedAt : null,
       managerSignedAt: typeof r.managerSignedAt === "string" ? r.managerSignedAt : null,
+      employeeObjectivesSubmittedAt:
+        typeof r.employeeObjectivesSubmittedAt === "string" ? r.employeeObjectivesSubmittedAt : null,
       phase: (typeof r.phase === "string" ? r.phase : "objective_setting_employee") as PmdfForm["phase"],
       locked: r.locked === true,
       assignedAt: typeof r.assignedAt === "string" ? r.assignedAt : new Date().toISOString(),
