@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
+import { useToast } from "@/components/ui/ToastProvider";
 import type { Employee, PerformanceReview } from "@/lib/store/types";
 import { addPerformanceReview } from "@/lib/store/hr-actions";
 import type { Session } from "@/lib/auth";
@@ -31,30 +32,28 @@ export function PerformanceClient({
   departmentNames: string[];
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
   const departmentOptions = buildDepartmentOptions(departmentNames);
 
-  function handle(p: Promise<ActionResult>) {
-    setError(null);
+  function handle(p: Promise<ActionResult>, successMessage = "Saved successfully.") {
     start(async () => {
-      const err = await runAction(p, () => router.refresh());
-      if (err) setError(err);
+      try {
+        const err = await runAction(p, () => router.refresh());
+        if (err) toast.error(err);
+        else toast.success(successMessage);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Something went wrong. Please try again.");
+      }
     });
   }
 
   return (
     <div className="space-y-6">
-      {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-          {error}
-        </div>
-      ) : null}
-
       <section className="rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm">
         <h2 className="font-display text-lg font-semibold text-kastros-forest">Performance reviews</h2>
         {session.role === "hr_admin" || session.role === "ceo" ? (
-          <form className="mt-4 grid gap-3 sm:grid-cols-2" action={(fd) => handle(addPerformanceReview(fd))}>
+          <form className="mt-4 grid gap-3 sm:grid-cols-2" action={(fd) => handle(addPerformanceReview(fd), "Performance review added.")}>
             <label className="text-sm">
               <span className="text-kastros-sage">Employee</span>
               <select name="employeeEmail" required className={INPUT}>

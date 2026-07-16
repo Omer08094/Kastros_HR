@@ -14,7 +14,7 @@ import {
   upsertJobDescription,
   upsertSubDepartment,
 } from "@/lib/store/hr-actions-extra";
-import { EmptyState, GhostButton, PrimaryButton, StatusBanner, useAction } from "./ModuleHelpers";
+import { EmptyState, GhostButton, PrimaryButton, useAction } from "./ModuleHelpers";
 
 export function OrganizationClient({
   businessUnits,
@@ -30,12 +30,10 @@ export function OrganizationClient({
   employees: Employee[];
 }) {
   const headEmailOptions = buildHeadEmailOptions(employees.map((e) => ({ email: e.email, name: e.name })));
-  const { pending, error, success, run } = useAction();
+  const { pending, run } = useAction();
 
   return (
     <div className="space-y-6">
-      <StatusBanner error={error} success={success} />
-
       <Card title="Business units" eyebrow="Locations">
         <p className="mb-4 text-sm text-kastros-sage">
           Set the <strong className="text-kastros-ink">return address</strong> for each sector — it prints on the back of corporate ID cards

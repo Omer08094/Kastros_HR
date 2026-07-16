@@ -4,10 +4,10 @@ import { useState } from "react";
 import type { SalaryAllowanceCatalogItem } from "@/lib/store/types";
 import { deleteSalaryAllowanceType, upsertSalaryAllowanceType } from "@/lib/store/hr-actions-extra";
 import { Field } from "@/components/Field";
-import { PrimaryButton, StatusBanner, useAction } from "./ModuleHelpers";
+import { PrimaryButton, useAction } from "./ModuleHelpers";
 
 export function SalaryAllowanceTypesSettings({ types }: { types: SalaryAllowanceCatalogItem[] }) {
-  const { pending, error, success, run } = useAction();
+  const { pending, run } = useAction();
   const [editId, setEditId] = useState<string | null>(null);
 
   const editing = editId ? types.find((t) => t.id === editId) : null;
@@ -15,8 +15,6 @@ export function SalaryAllowanceTypesSettings({ types }: { types: SalaryAllowance
 
   return (
     <div className="space-y-6">
-      <StatusBanner error={error} success={success} />
-
       <p className="text-sm text-kastros-sage">
         Define allowance labels used when setting each employee&apos;s salary on{" "}
         <a href="/employees" className="font-medium text-kastros-forest underline">

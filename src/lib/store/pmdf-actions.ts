@@ -10,6 +10,8 @@ import {
   sendHrNotificationEmailWithTransport,
   verifySmtpConnection,
 } from "@/lib/hr-emails";
+import { isPmdfLineManager, resolvePmdfLineManager } from "@/lib/pmdf-access";
+import { mergePmdfFormFields, type PmdfFormFields, type PmdfSaveRole } from "@/lib/pmdf-merge";
 import { calcPmdfScores, sumPercentages } from "@/lib/pmdf-scoring";
 import { defaultDevelopmentRows, phaseLabel, type PmdfPhaseId } from "@/lib/pmdf-reference";
 import { hasExecAccess } from "@/lib/roles";
@@ -503,6 +505,65 @@ export async function notifyPmdfDeadline(formData: FormData): Promise<ActionResu
   return ok();
 }
 
+function parsePmdfFormFields(formData: FormData): PmdfFormFields {
+  return {
+    functionalArea: String(formData.get("functionalArea") ?? "").trim() || null,
+    locationCategory: String(formData.get("locationCategory") ?? "").trim() || null,
+    subDepartment: String(formData.get("subDepartment") ?? "").trim() || null,
+    businessObjectives: parseBusinessObjectives(formData),
+    developmentObjectives: parseDevelopmentObjectives(formData),
+    employeeFeedbackMidYear: String(formData.get("employeeFeedbackMidYear") ?? "").trim(),
+    managerFeedbackMidYear: String(formData.get("managerFeedbackMidYear") ?? "").trim(),
+    employeeFeedbackFy: String(formData.get("employeeFeedbackFy") ?? "").trim(),
+    managerFeedbackFy: String(formData.get("managerFeedbackFy") ?? "").trim(),
+    employeeSignature: String(formData.get("employeeSignature") ?? "").trim(),
+    managerSignature: String(formData.get("managerSignature") ?? "").trim(),
+  };
+}
+
+function existingPmdfFormFields(form: PmdfForm): PmdfFormFields {
+  return {
+    functionalArea: form.functionalArea,
+    locationCategory: form.locationCategory,
+    subDepartment: form.subDepartment,
+    businessObjectives: form.businessObjectives,
+    developmentObjectives: form.developmentObjectives,
+    employeeFeedbackMidYear: form.employeeFeedbackMidYear,
+    managerFeedbackMidYear: form.managerFeedbackMidYear,
+    employeeFeedbackFy: form.employeeFeedbackFy,
+    managerFeedbackFy: form.managerFeedbackFy,
+    employeeSignature: form.employeeSignature,
+    managerSignature: form.managerSignature,
+  };
+}
+
+function validatePmdfFields(
+  fields: PmdfFormFields,
+  options: { skipWeightValidation: boolean; skipDevTraitValidation: boolean },
+): string | null {
+  const { businessObjectives, developmentObjectives } = fields;
+  const boTotal = sumPercentages(businessObjectives.map((r) => r.percentage));
+  const doTotal = sumPercentages(developmentObjectives.map((r) => r.percentage));
+  const boHasPct = businessObjectives.some((r) => r.percentage > 0);
+  const doHasPct = developmentObjectives.some((r) => r.percentage > 0);
+
+  if (!options.skipWeightValidation) {
+    if (boHasPct && Math.abs(boTotal - 100) > 0.01) {
+      return `Business objectives must total 100% (currently ${boTotal}%).`;
+    }
+    if (doHasPct && Math.abs(doTotal - 100) > 0.01) {
+      return `Development objectives must total 100% (currently ${doTotal}%).`;
+    }
+  }
+
+  if (!options.skipDevTraitValidation) {
+    const doValidation = validateDevelopmentObjectives(developmentObjectives);
+    if (doValidation) return doValidation;
+  }
+
+  return null;
+}
+
 export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
   const session = await getSession();
   if (!session) return { error: "Unauthorized." };
@@ -517,27 +578,23 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
   const cycle = store.performanceCycles.find((c) => c.id === existing.cycleId);
   const isHr = hasExecAccess(session.role);
   const isOwner = existing.employeeEmail.toLowerCase() === session.email.toLowerCase();
-  const isManager =
-    !!existing.lineManagerEmail && existing.lineManagerEmail.toLowerCase() === session.email.toLowerCase();
+  const isManager = isPmdfLineManager(store, session.email, existing);
   if (!isHr && !isOwner && !isManager) return { error: "You cannot edit this form." };
   if ((existing.locked || cycle?.locked) && !isHr) return { error: "This form is locked." };
 
-  const businessObjectives = parseBusinessObjectives(formData);
-  const developmentObjectives = parseDevelopmentObjectives(formData);
-  const boTotal = sumPercentages(businessObjectives.map((r) => r.percentage));
-  const doTotal = sumPercentages(developmentObjectives.map((r) => r.percentage));
-  const boHasPct = businessObjectives.some((r) => r.percentage > 0);
-  const doHasPct = developmentObjectives.some((r) => r.percentage > 0);
-  if (boHasPct && Math.abs(boTotal - 100) > 0.01) {
-    return { error: `Business objectives must total 100% (currently ${boTotal}%).` };
-  }
-  if (doHasPct && Math.abs(doTotal - 100) > 0.01) {
-    return { error: `Development objectives must total 100% (currently ${doTotal}%).` };
-  }
-  const doValidation = validateDevelopmentObjectives(developmentObjectives);
-  if (doValidation) return { error: doValidation };
+  const saveRole: PmdfSaveRole = isHr ? "hr" : isOwner ? "employee" : "manager";
+  const incoming = parsePmdfFormFields(formData);
+  const merged = mergePmdfFormFields(existingPmdfFormFields(existing), incoming, saveRole);
 
-  calcPmdfScores(businessObjectives, developmentObjectives);
+  const draftingPhase = existing.phase === "objective_setting_employee";
+  const validationError = validatePmdfFields(merged, {
+    skipWeightValidation: saveRole === "employee" && draftingPhase,
+    skipDevTraitValidation: saveRole === "employee" && draftingPhase,
+  });
+  if (validationError) return { error: validationError };
+
+  calcPmdfScores(merged.businessObjectives, merged.developmentObjectives);
+  const lineManager = resolvePmdfLineManager(store, existing);
 
   await mutateStore((s) => ({
     next: audit(
@@ -547,23 +604,21 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
           f.id === formId
             ? {
                 ...f,
-                functionalArea: String(formData.get("functionalArea") ?? "").trim() || null,
-                locationCategory: String(formData.get("locationCategory") ?? "").trim() || null,
-                subDepartment: String(formData.get("subDepartment") ?? "").trim() || null,
-                businessObjectives,
-                developmentObjectives,
-                employeeFeedbackMidYear: String(formData.get("employeeFeedbackMidYear") ?? "").trim(),
-                managerFeedbackMidYear: String(formData.get("managerFeedbackMidYear") ?? "").trim(),
-                employeeFeedbackFy: String(formData.get("employeeFeedbackFy") ?? "").trim(),
-                managerFeedbackFy: String(formData.get("managerFeedbackFy") ?? "").trim(),
-                employeeSignature: String(formData.get("employeeSignature") ?? "").trim(),
-                managerSignature: String(formData.get("managerSignature") ?? "").trim(),
-                employeeSignedAt: String(formData.get("employeeSignature") ?? "").trim()
-                  ? new Date().toISOString()
-                  : f.employeeSignedAt,
-                managerSignedAt: String(formData.get("managerSignature") ?? "").trim()
-                  ? new Date().toISOString()
-                  : f.managerSignedAt,
+                lineManagerEmail: lineManager.email,
+                lineManagerName: lineManager.name,
+                functionalArea: merged.functionalArea,
+                locationCategory: merged.locationCategory,
+                subDepartment: merged.subDepartment,
+                businessObjectives: merged.businessObjectives,
+                developmentObjectives: merged.developmentObjectives,
+                employeeFeedbackMidYear: merged.employeeFeedbackMidYear,
+                managerFeedbackMidYear: merged.managerFeedbackMidYear,
+                employeeFeedbackFy: merged.employeeFeedbackFy,
+                managerFeedbackFy: merged.managerFeedbackFy,
+                employeeSignature: merged.employeeSignature,
+                managerSignature: merged.managerSignature,
+                employeeSignedAt: merged.employeeSignature ? new Date().toISOString() : f.employeeSignedAt,
+                managerSignedAt: merged.managerSignature ? new Date().toISOString() : f.managerSignedAt,
                 updatedAt: new Date().toISOString(),
               }
             : f,

@@ -6,7 +6,7 @@ import { Card } from "@/components/Card";
 import { currencyForBusinessUnit } from "@/lib/store/types";
 import { deleteLetter, issueLetter } from "@/lib/store/hr-actions-extra";
 import { buildDepartmentOptions } from "@/lib/hr-picker-options";
-import { EmptyState, GhostButton, PrimaryButton, StatusBanner, formatCurrency, useAction } from "./ModuleHelpers";
+import { EmptyState, GhostButton, PrimaryButton, formatCurrency, useAction } from "./ModuleHelpers";
 
 const LETTER_TYPES: { value: LetterType; label: string; description: string }[] = [
   { value: "Promotion", label: "Promotion", description: "Effective date locked to 1st of the chosen month." },
@@ -29,7 +29,7 @@ export function LettersClient({
   departmentNames: string[];
 }) {
   const departmentOptions = buildDepartmentOptions(departmentNames);
-  const { pending, error, success, run } = useAction();
+  const { pending, run } = useAction();
   const [type, setType] = useState<LetterType>("Promotion");
   const [employeeEmail, setEmployeeEmail] = useState<string>(employees[0]?.email ?? "");
 
@@ -47,8 +47,6 @@ export function LettersClient({
 
   return (
     <div className="space-y-6">
-      <StatusBanner error={error} success={success} />
-
       <Card title="Issue letter" eyebrow="Generate">
         <form
           className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"

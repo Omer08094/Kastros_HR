@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/components/ui/ToastProvider";
 import { setEmployeeRole } from "@/lib/store/hr-actions";
 import type { Employee } from "@/lib/store/types";
 import type { EmployeeAuthRoleInfo } from "@/lib/firebase-auth-roles";
@@ -41,9 +42,8 @@ export function RoleManagerClient({
   authRoles: EmployeeAuthRoleInfo[];
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [selectedEmail, setSelectedEmail] = useState("");
   const [selectedRole, setSelectedRole] = useState<string>("hr_admin");
 
@@ -64,37 +64,28 @@ export function RoleManagerClient({
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError(null);
-    setSuccess(null);
     const fd = new FormData(e.currentTarget);
     start(async () => {
-      const result = await setEmployeeRole(fd);
-      if ("error" in result) {
-        setError(result.error);
-      } else {
-        const emp = employees.find((em) => em.email.toLowerCase() === selectedEmail.toLowerCase());
-        const roleLabel = ROLE_OPTIONS.find((r) => r.value === selectedRole)?.label ?? selectedRole;
-        setSuccess(
-          `Role updated to "${roleLabel}" for ${emp?.name ?? selectedEmail}. They must sign out and sign back in for the change to take effect.`,
-        );
-        router.refresh();
+      try {
+        const result = await setEmployeeRole(fd);
+        if ("error" in result) {
+          toast.error(result.error);
+        } else {
+          const emp = employees.find((em) => em.email.toLowerCase() === selectedEmail.toLowerCase());
+          const roleLabel = ROLE_OPTIONS.find((r) => r.value === selectedRole)?.label ?? selectedRole;
+          toast.success(
+            `Role updated to "${roleLabel}" for ${emp?.name ?? selectedEmail}. They must sign out and sign back in for the change to take effect.`,
+          );
+          router.refresh();
+        }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Could not update role.");
       }
     });
   }
 
   return (
     <div className="space-y-6">
-      {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-          {error}
-        </div>
-      ) : null}
-      {success ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
-          {success}
-        </div>
-      ) : null}
-
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm">

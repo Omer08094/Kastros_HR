@@ -7,7 +7,7 @@ import { buildLeaveBalanceRows } from "@/lib/leave-policy";
 import { resetEmployeeLeaveToDefaults, upsertEmployeeLeaveAllocation } from "@/lib/store/hr-actions-extra";
 import { SelectField } from "@/components/Field";
 import { Card } from "@/components/Card";
-import { GhostButton, PrimaryButton, StatusBanner, useAction } from "./ModuleHelpers";
+import { GhostButton, PrimaryButton, useAction } from "./ModuleHelpers";
 
 export function EmployeeLeaveEntitlements({
   employees,
@@ -18,7 +18,7 @@ export function EmployeeLeaveEntitlements({
   storeSlice: Pick<HrStore, "leaveCategories" | "employeeLeaveAllocations" | "leaveRequests">;
   year: number;
 }) {
-  const { pending, error, success, run } = useAction();
+  const { pending, run } = useAction();
   const [selectedEmail, setSelectedEmail] = useState(employees[0]?.email ?? "");
 
   const rows: LeaveBalanceRow[] = selectedEmail
@@ -29,7 +29,6 @@ export function EmployeeLeaveEntitlements({
 
   return (
     <Card title="Employee leave balances" eyebrow="HR admin">
-      <StatusBanner error={error} success={success} />
       <p className="mb-4 text-sm text-kastros-sage">
         Set how many days each person has per leave type for {year}. Values marked &quot;custom&quot; override the standard
         from Settings. Configure leave types and company defaults under{" "}

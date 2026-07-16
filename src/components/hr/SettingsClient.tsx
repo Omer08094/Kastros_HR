@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
+import { useToast } from "@/components/ui/ToastProvider";
 import { resetDemoData } from "@/lib/store/hr-actions";
 
 type ActionResult = { ok: true } | { error: string };
@@ -15,9 +16,8 @@ async function runAction(p: Promise<ActionResult>, onOk: () => void): Promise<st
 
 export function SettingsClient({ canReset }: { canReset: boolean }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
 
   if (!canReset) {
     return (
@@ -30,28 +30,19 @@ export function SettingsClient({ canReset }: { canReset: boolean }) {
 
   return (
     <div className="space-y-4">
-      {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-          {error}
-        </div>
-      ) : null}
-      {info ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status">
-          {info}
-        </div>
-      ) : null}
-
       <div>
         <button
           type="button"
           disabled={pending}
           onClick={() => {
-            setError(null);
-            setInfo(null);
             start(async () => {
-              const err = await runAction(resetDemoData(), () => router.refresh());
-              if (err) setError(err);
-              else setInfo("Demo dataset reset to seed values.");
+              try {
+                const err = await runAction(resetDemoData(), () => router.refresh());
+                if (err) toast.error(err);
+                else toast.success("Demo dataset reset to seed values.");
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Something went wrong. Please try again.");
+              }
             });
           }}
           className="rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-800 hover:bg-red-50 disabled:opacity-50"

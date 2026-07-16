@@ -3,16 +3,16 @@
 import { useState } from "react";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { signInWithEmailAndPassword } from "firebase/auth";
+import { useToast } from "@/components/ui/ToastProvider";
 import { getFirebaseAuth, isFirebaseWebConfigured } from "@/lib/firebase-client";
 import { verifyFirebaseToken, signInDemo } from "./actions";
 
 export function LoginForm() {
-  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
   const [pending, setPending] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError(null);
     setPending(true);
     
     const formData = new FormData(e.currentTarget);
@@ -25,7 +25,7 @@ export function LoginForm() {
       if (!isFirebaseWebConfigured) {
         const result = await signInDemo(formData);
         if (result?.error) {
-          setError(result.error ?? "Invalid email or password.");
+          toast.error(result.error ?? "Invalid email or password.");
         }
         setPending(false);
         return;
@@ -40,11 +40,11 @@ export function LoginForm() {
             ? String((firebaseErr as { code: string }).code)
             : "";
         if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
-          setError("Invalid email or password.");
+          toast.error("Invalid email or password.");
         } else if (code === "auth/too-many-requests") {
-          setError("Too many attempts. Wait a moment and try again.");
+          toast.error("Too many attempts. Wait a moment and try again.");
         } else {
-          setError(firebaseErr instanceof Error ? firebaseErr.message : "Could not sign in with Firebase.");
+          toast.error(firebaseErr instanceof Error ? firebaseErr.message : "Could not sign in with Firebase.");
         }
         setPending(false);
         return;
@@ -53,12 +53,12 @@ export function LoginForm() {
       if (idToken) {
         const result = await verifyFirebaseToken(idToken);
         if (result && result.error) {
-          setError(result.error);
+          toast.error(result.error);
         }
       }
     } catch (err: unknown) {
       if (isRedirectError(err)) throw err;
-      setError(err instanceof Error ? err.message : "An error occurred");
+      toast.error(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setPending(false);
     }
@@ -102,11 +102,6 @@ export function LoginForm() {
           Firebase sign-in is not configured (set <span className="font-mono">NEXT_PUBLIC_FIREBASE_*</span> in{" "}
           <span className="font-mono">.env.local</span> and redeploy). For local testing only, set{" "}
           <span className="font-mono">KASTROS_DEMO_USERS=true</span> to enable bundled demo accounts.
-        </p>
-      ) : null}
-      {error ? (
-        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-          {error}
         </p>
       ) : null}
       <button

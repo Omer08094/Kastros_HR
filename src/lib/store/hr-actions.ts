@@ -10,6 +10,7 @@ import { EXECUTIVE_DEPARTMENT } from "@/lib/executive-org";
 import { firstEducationEntry, parseEducationFormRows, parseLegacyEducationFields } from "@/lib/education-form";
 import { normalizeStoredJobDescription } from "@/lib/job-description-html";
 import { hasExecAccess } from "@/lib/roles";
+import { syncPmdfFormsLineManager } from "@/lib/pmdf-access";
 import {
   approvedLeaveDaysUsedInYear,
   buildAllocationsFromDefaults,
@@ -886,6 +887,7 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
         ...c,
         employeeEmail: c.employeeEmail.toLowerCase() === replacingEmail ? email : c.employeeEmail,
       })),
+      pmdfForms: syncPmdfFormsLineManager(store.pmdfForms, copy, nextEmail),
     };
     return { next: audit(next, session.email, `Updated employee ${copy[idx].email}`), result: ok() };
   });
@@ -905,6 +907,7 @@ export async function updateEmployee(formData: FormData): Promise<ActionResult> 
   if (refsToDelete.length) await deleteStoredFiles(refsToDelete);
   revalidatePath("/employees");
   revalidatePath("/dashboard");
+  revalidatePath("/performance");
   return ok();
 }
 

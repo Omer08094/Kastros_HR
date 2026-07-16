@@ -8,10 +8,10 @@ import {
   upsertLeaveCategory,
 } from "@/lib/store/hr-actions-extra";
 import { Field } from "@/components/Field";
-import { PrimaryButton, StatusBanner, useAction } from "./ModuleHelpers";
+import { PrimaryButton, useAction } from "./ModuleHelpers";
 
 export function LeavePolicySettings({ categories }: { categories: LeaveCategory[] }) {
-  const { pending, error, success, run } = useAction();
+  const { pending, run } = useAction();
   const [editId, setEditId] = useState<string | null>(null);
   const year = new Date().getFullYear();
 
@@ -20,8 +20,6 @@ export function LeavePolicySettings({ categories }: { categories: LeaveCategory[
 
   return (
     <div className="space-y-6">
-      <StatusBanner error={error} success={success} />
-
       <p className="text-sm text-kastros-sage">
         Define leave types and <strong className="text-kastros-ink">standard days per year</strong>. Use &quot;Apply to all
         employees&quot; to copy these defaults to everyone&apos;s balance for {year}. You can still override individual

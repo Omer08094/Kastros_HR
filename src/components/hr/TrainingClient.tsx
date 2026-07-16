@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/components/ui/ToastProvider";
 import type { Employee, TrainingRow } from "@/lib/store/types";
 import { addTrainingRow, markTrainingAttendance, setTrainingStatus } from "@/lib/store/hr-actions";
 
@@ -21,12 +22,12 @@ function TrainingAssignForm({
 }: {
   employees: Employee[];
   pending: boolean;
-  handle: (p: Promise<ActionResult>) => void;
+  handle: (p: Promise<ActionResult>, successMessage?: string) => void;
 }) {
   const [provider, setProvider] = useState<"Internal" | "External">("Internal");
 
   return (
-    <form className="mt-4 grid gap-3 sm:grid-cols-2" action={(fd) => handle(addTrainingRow(fd))}>
+    <form className="mt-4 grid gap-3 sm:grid-cols-2" action={(fd) => handle(addTrainingRow(fd), "Training assigned.")}>
       <label className="text-sm">
         <span className="text-kastros-sage">Assignee</span>
         <select name="assigneeEmail" className="mt-1 w-full rounded-xl border border-kastros-sand px-3 py-2 text-sm">
@@ -115,10 +116,11 @@ function TrainingSessionsCard({
   roster: Employee[];
   canAssign: boolean;
   pending: boolean;
-  handle: (p: Promise<ActionResult>) => void;
+  handle: (p: Promise<ActionResult>, successMessage?: string) => void;
   onAttendanceError: (msg: string | null) => void;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [attendancePending, startAttendance] = useTransition();
   const [attendanceForId, setAttendanceForId] = useState<string | null>(null);
   const byEmail = useMemo(() => Object.fromEntries(roster.map((e) => [e.email.toLowerCase(), e])), [roster]);
@@ -180,7 +182,7 @@ function TrainingSessionsCard({
                   ) : null}
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
-                  <form action={(fd) => handle(setTrainingStatus(fd))}>
+                  <form action={(fd) => handle(setTrainingStatus(fd), "Training status updated.")}>
                     <input type="hidden" name="id" value={t.id} />
                     <input type="hidden" name="status" value={t.status === "Done" ? "Required" : "Done"} />
                     <button
@@ -218,6 +220,7 @@ function TrainingSessionsCard({
                         router.refresh();
                       });
                       if (err) onAttendanceError(err);
+                      else toast.success("Attendance saved.");
                     });
                   }}
                 >
@@ -273,31 +276,31 @@ export function TrainingClient({
   canAssign: boolean;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const [attendanceError, setAttendanceError] = useState<string | null>(null);
 
   const roster = useMemo(() => [...employees].sort((a, b) => a.name.localeCompare(b.name)), [employees]);
   const internalRows = useMemo(() => rows.filter((r) => r.provider === "Internal"), [rows]);
   const externalRows = useMemo(() => rows.filter((r) => r.provider === "External"), [rows]);
 
-  function handle(p: Promise<ActionResult>) {
-    setError(null);
+  function handle(p: Promise<ActionResult>, successMessage = "Saved successfully.") {
     start(async () => {
-      const err = await runAction(p, () => router.refresh());
-      if (err) setError(err);
+      try {
+        const err = await runAction(p, () => router.refresh());
+        if (err) toast.error(err);
+        else toast.success(successMessage);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Something went wrong. Please try again.");
+      }
     });
+  }
+
+  function onAttendanceError(msg: string | null) {
+    if (msg) toast.error(msg);
   }
 
   return (
     <div className="space-y-6">
-      {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
-      ) : null}
-      {attendanceError ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{attendanceError}</div>
-      ) : null}
-
       {canAssign ? (
         <section className="rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm">
           <h2 className="font-display text-lg font-semibold text-kastros-forest">Assign training</h2>
@@ -314,7 +317,7 @@ export function TrainingClient({
         canAssign={canAssign}
         pending={pending}
         handle={handle}
-        onAttendanceError={setAttendanceError}
+        onAttendanceError={onAttendanceError}
       />
 
       <TrainingSessionsCard
@@ -325,7 +328,7 @@ export function TrainingClient({
         canAssign={canAssign}
         pending={pending}
         handle={handle}
-        onAttendanceError={setAttendanceError}
+        onAttendanceError={onAttendanceError}
       />
     </div>
   );

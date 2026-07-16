@@ -12,7 +12,7 @@ import type {
   PolicyManual,
   SubDepartmentRecord,
 } from "@/lib/store/types";
-import { ToastStack, useToasts } from "@/components/ui/ToastStack";
+import { useToast } from "@/components/ui/ToastProvider";
 import { deleteEmployee } from "@/lib/store/hr-actions";
 import { AppointmentLetterDialog } from "@/components/hr/AppointmentLetterDialog";
 import { CorporateCardDialog } from "@/components/hr/CorporateCardDialog";
@@ -102,9 +102,8 @@ export function EmployeesClient({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { toasts, push, dismiss } = useToasts();
+  const toast = useToast();
   const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
   const [nameInput, setNameInput] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
   const [letterFor, setLetterFor] = useState<Employee | null>(null);
@@ -189,7 +188,6 @@ export function EmployeesClient({
   }, [documents, academics, policyAcknowledgements]);
 
   function handle(p: Promise<ActionResult>, onSuccess?: () => void, successMessage = "Saved") {
-    setError(null);
     start(async () => {
       try {
         const err = await runAction(p, () => {
@@ -197,17 +195,19 @@ export function EmployeesClient({
           onSuccess?.();
         });
         if (err) {
-          setError(err);
-          push(err, "error");
+          toast.error(err);
         } else {
-          push(successMessage, "success", persistence.saveHint);
+          toast.success(successMessage, persistence.saveHint);
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Something went wrong while saving.";
-        setError(msg);
-        push(msg, "error");
+        toast.error(msg);
       }
     });
+  }
+
+  function handleProfileError(message: string | null) {
+    if (message) toast.error(message);
   }
 
   const isEditing = canManage && selected && editingId === selected.id;
@@ -217,16 +217,10 @@ export function EmployeesClient({
 
   return (
     <div className="space-y-6">
-      <ToastStack toasts={toasts} onDismiss={dismiss} />
       {canManage ? (
         <div className="flex flex-wrap items-center gap-2">
           <PersistenceBadge info={persistence} />
           <p className="text-xs text-kastros-sage">{persistence.saveHint}</p>
-        </div>
-      ) : null}
-      {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-          {error}
         </div>
       ) : null}
 
@@ -434,11 +428,11 @@ export function EmployeesClient({
                 departmentRecords={departmentRecords}
                 subDepartments={subDepartments}
                 managerRoster={managerRoster}
-                onError={setError}
+                onError={handleProfileError}
                 onSaved={() => router.refresh()}
                 onCancel={() => setEditingId(null)}
                 onAction={handle}
-                onNotifySuccess={(msg) => push(msg, "success", persistence.saveHint)}
+                onNotifySuccess={(msg) => toast.success(msg, persistence.saveHint)}
               />
 
               {isEditing ? (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useToast } from "@/components/ui/ToastProvider";
 import { JobDescriptionContent } from "@/components/apply/JobDescriptionContent";
 import { submitJobApplication } from "@/lib/store/hr-actions";
 import type { JobPosting } from "@/lib/store/types";
@@ -8,7 +9,7 @@ import type { JobPosting } from "@/lib/store/types";
 type EducationRow = { degree: string; institution: string; year: string };
 
 export function ApplyJobForm({ job }: { job: JobPosting }) {
-  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
   const [done, setDone] = useState(false);
   const [pending, start] = useTransition();
   const [eduRows, setEduRows] = useState<EducationRow[]>([{ degree: "", institution: "", year: "" }]);
@@ -27,11 +28,17 @@ export function ApplyJobForm({ job }: { job: JobPosting }) {
 
   function handleSubmit(formData: FormData) {
     formData.set("jobId", job.id);
-    setError(null);
     start(async () => {
-      const r = await submitJobApplication(formData);
-      if ("error" in r) setError(r.error);
-      else setDone(true);
+      try {
+        const r = await submitJobApplication(formData);
+        if ("error" in r) toast.error(r.error);
+        else {
+          toast.success("Application submitted successfully.");
+          setDone(true);
+        }
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not submit application.");
+      }
     });
   }
 
@@ -58,12 +65,6 @@ export function ApplyJobForm({ job }: { job: JobPosting }) {
           </div>
         ) : null}
       </div>
-
-      {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-          {error}
-        </div>
-      ) : null}
 
       <form action={handleSubmit} className="rounded-2xl border border-kastros-sand bg-white p-6 shadow-sm">
         <input type="hidden" name="jobId" value={job.id} />

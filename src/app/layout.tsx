@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Sans, Fraunces } from "next/font/google";
+import { AppToaster } from "@/components/AppToaster";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -38,7 +39,9 @@ export const maxDuration = 60;
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${dmSans.variable} ${fraunces.variable}`}>
-      <body className="min-h-dvh font-sans">{children}</body>
+      <body className="min-h-dvh font-sans">
+        <AppToaster>{children}</AppToaster>
+      </body>
     </html>
   );
 }

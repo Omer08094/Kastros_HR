@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "npx tsx --test src/lib/pmdf-merge.test.ts",
     "bootstrap:fresh": "node scripts/bootstrap-fresh.js",
     "docs:pdf": "node scripts/generate-executive-pdf.mjs"
   },

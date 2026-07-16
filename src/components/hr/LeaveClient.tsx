@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { useToast } from "@/components/ui/ToastProvider";
 import type { Employee, HrStore, LeaveCategory, LeaveRequest } from "@/lib/store/types";
 import type { LeaveBalanceRow } from "@/lib/leave-policy";
 import { createLeaveRequest, decideLeaveRequest } from "@/lib/store/hr-actions";
@@ -99,28 +100,27 @@ export function LeaveClient({
   storeSlice: Pick<HrStore, "leaveCategories" | "employeeLeaveAllocations" | "leaveRequests">;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
   const [viewingNote, setViewingNote] = useState<string | null>(null);
 
   const activeCategories = categories.filter((c) => c.isActive).sort((a, b) => a.sortOrder - b.sortOrder);
 
-  function handle(p: Promise<ActionResult>) {
-    setError(null);
+  function handle(p: Promise<ActionResult>, successMessage = "Saved successfully.") {
     start(async () => {
-      const err = await runAction(p, () => router.refresh());
-      if (err) setError(err);
+      try {
+        const err = await runAction(p, () => router.refresh());
+        if (err) toast.error(err);
+        else toast.success(successMessage);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Something went wrong. Please try again.");
+      }
     });
   }
 
   return (
     <div className="space-y-6">
       {viewingNote !== null ? <NotesModal note={viewingNote} onClose={() => setViewingNote(null)} /> : null}
-      {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-          {error}
-        </div>
-      ) : null}
 
       <section className="rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm">
         <h2 className="font-display text-lg font-semibold text-kastros-forest">My leave balances</h2>
@@ -134,7 +134,7 @@ export function LeaveClient({
       {canCreate ? (
         <section className="rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm">
           <h2 className="font-display text-lg font-semibold text-kastros-forest">Request time off</h2>
-          <form className="mt-4 grid gap-3 sm:grid-cols-2" action={(fd) => handle(createLeaveRequest(fd))}>
+          <form className="mt-4 grid gap-3 sm:grid-cols-2" action={(fd) => handle(createLeaveRequest(fd), "Leave request submitted.")}>
             {activeCategories.length > 0 ? (
               <SelectField
                 name="categoryId"
@@ -219,14 +219,14 @@ export function LeaveClient({
                   <td className="py-3">
                     {canDecideLeaveStep(employees, session, r) ? (
                       <div className="flex flex-wrap gap-2">
-                        <form action={(fd) => handle(decideLeaveRequest(fd))}>
+                        <form action={(fd) => handle(decideLeaveRequest(fd), "Leave request approved.")}>
                           <input type="hidden" name="id" value={r.id} />
                           <input type="hidden" name="decision" value="Approved" />
                           <button type="submit" disabled={pending} className="rounded-lg bg-emerald-700 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">
                             Approve
                           </button>
                         </form>
-                        <form action={(fd) => handle(decideLeaveRequest(fd))}>
+                        <form action={(fd) => handle(decideLeaveRequest(fd), "Leave request denied.")}>
                           <input type="hidden" name="id" value={r.id} />
                           <input type="hidden" name="decision" value="Denied" />
                           <button type="submit" disabled={pending} className="rounded-lg bg-white px-2 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-200 disabled:opacity-50">

@@ -1,9 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { Field, SelectField } from "@/components/Field";
-import { ToastStack, useToasts } from "@/components/ui/ToastStack";
+import { useToast } from "@/components/ui/ToastProvider";
 import { addExecutiveMinimal } from "@/lib/store/hr-actions";
 import { BUSINESS_UNITS } from "@/lib/store/types";
 import type { PersistenceInfo } from "@/lib/store/persistence-info";
@@ -18,43 +18,32 @@ export function QuickAddExecutiveForm({
   persistence: PersistenceInfo;
 }) {
   const router = useRouter();
-  const { toasts, push, dismiss } = useToasts();
+  const toast = useToast();
   const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
 
   function handleSubmit(formData: FormData) {
-    setError(null);
     start(async () => {
       try {
         const r: ActionResult = await addExecutiveMinimal(formData);
         if ("error" in r) {
-          setError(r.error);
-          push(r.error, "error");
+          toast.error(r.error);
           return;
         }
-        push("Executive added", "success", persistence.saveHint);
+        toast.success("Executive added", persistence.saveHint);
         router.refresh();
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Could not add executive.";
-        setError(msg);
-        push(msg, "error");
+        toast.error(e instanceof Error ? e.message : "Could not add executive.");
       }
     });
   }
 
   return (
     <section className="rounded-2xl border border-kastros-brandBlue/20 bg-gradient-to-br from-white to-kastros-cream/40 p-5 shadow-sm ring-1 ring-kastros-brandGreen/10">
-      <ToastStack toasts={toasts} onDismiss={dismiss} />
       <h2 className="font-display text-lg font-semibold text-kastros-forest">Quick add — C-level executive</h2>
       <p className="mt-1 max-w-2xl text-sm text-kastros-sage">
         Minimal roster entry for CEO, CFO, COO, and similar roles. Skips CNIC, joining date, emergency contacts, education, and other
         full onboarding fields — add those later in <strong className="text-kastros-ink">People → Edit profile</strong> if needed.
       </p>
-      {error ? (
-        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-          {error}
-        </div>
-      ) : null}
       <form className="mt-4 grid gap-3 sm:grid-cols-2" action={handleSubmit}>
         <SelectField
           name="salutation"

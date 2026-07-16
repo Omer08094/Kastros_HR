@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
+import { useToast } from "@/components/ui/ToastProvider";
 import type { HrCase } from "@/lib/store/types";
 import { createCase, updateCaseStatus } from "@/lib/store/hr-actions";
 
@@ -16,29 +17,27 @@ async function runAction(p: Promise<ActionResult>, onOk: () => void): Promise<st
 
 export function CasesClient({ cases, canManage }: { cases: HrCase[]; canManage: boolean }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
 
-  function handle(p: Promise<ActionResult>) {
-    setError(null);
+  function handle(p: Promise<ActionResult>, successMessage = "Saved successfully.") {
     start(async () => {
-      const err = await runAction(p, () => router.refresh());
-      if (err) setError(err);
+      try {
+        const err = await runAction(p, () => router.refresh());
+        if (err) toast.error(err);
+        else toast.success(successMessage);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Something went wrong. Please try again.");
+      }
     });
   }
 
   return (
     <div className="space-y-6">
-      {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-          {error}
-        </div>
-      ) : null}
-
       {canManage ? (
         <section className="rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm">
           <h2 className="font-display text-lg font-semibold text-kastros-forest">Open a case</h2>
-          <form className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end" action={(fd) => handle(createCase(fd))}>
+          <form className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end" action={(fd) => handle(createCase(fd), "Case created.")}>
             <label className="flex-1 text-sm">
               <span className="text-kastros-sage">Topic</span>
               <input name="topic" required className="mt-1 w-full rounded-xl border border-kastros-sand px-3 py-2 text-sm" />
@@ -84,7 +83,7 @@ export function CasesClient({ cases, canManage }: { cases: HrCase[]; canManage: 
                   <td className="py-3 pr-3">{c.status}</td>
                   {canManage ? (
                     <td className="py-3">
-                      <form className="flex flex-wrap items-center gap-2" action={(fd) => handle(updateCaseStatus(fd))}>
+                      <form className="flex flex-wrap items-center gap-2" action={(fd) => handle(updateCaseStatus(fd), "Case status updated.")}>
                         <input type="hidden" name="id" value={c.id} />
                         <select name="status" defaultValue={c.status} className="rounded-lg border border-kastros-sand px-2 py-1 text-xs">
                           <option>Open</option>

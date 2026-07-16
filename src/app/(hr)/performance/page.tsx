@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
 import { PmdfClient } from "@/components/hr/PmdfClient";
 import { getSession } from "@/lib/auth";
-import { hasExecAccess } from "@/lib/roles";
+import { visiblePmdfForms } from "@/lib/pmdf-access";
 import { readStore } from "@/lib/store/persist";
 
 export default async function PerformancePage() {
@@ -10,15 +10,7 @@ export default async function PerformancePage() {
   if (!session) redirect("/login");
 
   const store = await readStore();
-  const email = session.email.toLowerCase();
-
-  const forms = hasExecAccess(session.role)
-    ? store.pmdfForms
-    : store.pmdfForms.filter(
-        (f) =>
-          f.employeeEmail.toLowerCase() === email ||
-          f.lineManagerEmail?.toLowerCase() === email,
-      );
+  const forms = visiblePmdfForms(store, session);
 
   return (
     <PageShell

@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { PrintButton } from "@/components/hr/PrintButton";
 import { getSession } from "@/lib/auth";
 import { buildPmdfPrintHtml } from "@/lib/pmdf-print-html";
-import { hasExecAccess } from "@/lib/roles";
+import { canAccessPmdfForm } from "@/lib/pmdf-access";
 import { readStore } from "@/lib/store/persist";
 
 export default async function PmdfPrintPage({ params }: { params: Promise<{ id: string }> }) {
@@ -17,12 +17,7 @@ export default async function PmdfPrintPage({ params }: { params: Promise<{ id: 
   const cycle = store.performanceCycles.find((c) => c.id === form.cycleId);
   if (!cycle) return notFound();
 
-  const email = session.email.toLowerCase();
-  const canView =
-    hasExecAccess(session.role) ||
-    form.employeeEmail.toLowerCase() === email ||
-    form.lineManagerEmail?.toLowerCase() === email;
-  if (!canView) redirect("/access-denied?from=/performance");
+  if (!canAccessPmdfForm(store, session, form)) redirect("/access-denied?from=/performance");
 
   const html = buildPmdfPrintHtml(cycle, form);
 

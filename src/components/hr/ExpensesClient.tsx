@@ -14,7 +14,6 @@ import {
   EmptyState,
   GhostButton,
   PrimaryButton,
-  StatusBanner,
   formatCurrency,
   useAction,
 } from "./ModuleHelpers";
@@ -59,7 +58,7 @@ export function ExpensesClient({
   selfEmail: string;
   canManage: boolean;
 }) {
-  const { pending, error, success, run } = useAction();
+  const { pending, run } = useAction();
 
   const self = employees.find((e) => e.email.toLowerCase() === selfEmail.toLowerCase());
   const defaultCurrency = currencyForBusinessUnit(self?.businessUnit ?? null);
@@ -81,8 +80,6 @@ export function ExpensesClient({
 
   return (
     <div className="space-y-6">
-      <StatusBanner error={error} success={success} />
-
       <section className="rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm">
         <h2 className="font-display text-lg font-semibold text-kastros-forest">Submit a claim</h2>
         <p className="mt-1 text-sm text-kastros-sage">

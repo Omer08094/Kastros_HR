@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fragment, useMemo, useState, useTransition } from "react";
+import { useToast } from "@/components/ui/ToastProvider";
 import { Card } from "@/components/Card";
 import { JobDescriptionField } from "@/components/hr/JobDescriptionField";
 import { LinkedInJobKitDialog } from "@/components/hr/LinkedInJobKitDialog";
@@ -27,6 +28,9 @@ function formatSubmitted(iso: string) {
 }
 
 function ApplicantsTable({ apps, canMutate }: { apps: JobApplication[]; canMutate: boolean }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [pending, start] = useTransition();
   const [openId, setOpenId] = useState<string | null>(null);
   if (apps.length === 0) {
     return <p className="text-sm text-kastros-sage">No submissions yet for this role.</p>;
@@ -116,14 +120,26 @@ function ApplicantsTable({ apps, canMutate }: { apps: JobApplication[]; canMutat
                         </button>
                         {a.reviewStatus !== "approved" ? (
                           <form
-                            action={async (fd) => {
-                              await approveJobApplication(fd);
+                            action={(fd) => {
+                              start(async () => {
+                                try {
+                                  const r = await approveJobApplication(fd);
+                                  if ("error" in r) toast.error(r.error);
+                                  else {
+                                    toast.success("Application approved.");
+                                    router.refresh();
+                                  }
+                                } catch (e) {
+                                  toast.error(e instanceof Error ? e.message : "Could not approve application.");
+                                }
+                              });
                             }}
                           >
                             <input type="hidden" name="id" value={a.id} />
                             <button
                               type="submit"
-                              className="rounded-lg bg-kastros-forest px-3 py-1.5 text-xs font-semibold text-white hover:opacity-95"
+                              disabled={pending}
+                              className="rounded-lg bg-kastros-forest px-3 py-1.5 text-xs font-semibold text-white hover:opacity-95 disabled:opacity-50"
                             >
                               Approve
                             </button>
@@ -264,8 +280,8 @@ export function RecruitingClient({
   applyOrigin: string;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
   const [linkedInKitJob, setLinkedInKitJob] = useState<JobPosting | null>(null);
   const [editDescriptionJobId, setEditDescriptionJobId] = useState<string | null>(null);
 
@@ -282,32 +298,30 @@ export function RecruitingClient({
     return m;
   }, [jobs, applications]);
 
-  function handle(p: Promise<ActionResult>, onSuccess?: () => void) {
-    setError(null);
+  function handle(p: Promise<ActionResult>, onSuccess?: () => void, successMessage = "Saved successfully.") {
     start(async () => {
-      const err = await runAction(p, () => {
-        router.refresh();
-        onSuccess?.();
-      });
-      if (err) setError(err);
+      try {
+        const err = await runAction(p, () => {
+          router.refresh();
+          onSuccess?.();
+        });
+        if (err) toast.error(err);
+        else toast.success(successMessage);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Something went wrong. Please try again.");
+      }
     });
   }
 
   return (
     <div className="space-y-6">
-      {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-          {error}
-        </div>
-      ) : null}
-
       {canMutate ? (
         <Card title="New requisition" eyebrow="Hiring">
           <p className="text-sm text-kastros-sage">
             Create the role, then use <strong className="text-kastros-ink">LinkedIn post kit</strong> on any row to download a
             branded image, polished post text, and the apply link.
           </p>
-          <form className="mt-4 grid gap-3 sm:grid-cols-2" action={(fd) => handle(createJob(fd))}>
+          <form className="mt-4 grid gap-3 sm:grid-cols-2" action={(fd) => handle(createJob(fd), undefined, "Job posting created.")}>
             <label className="text-sm sm:col-span-2">
               <span className="text-kastros-sage">Title</span>
               <input name="title" required className="mt-1 w-full rounded-xl border border-kastros-sand px-3 py-2 text-sm" />
@@ -392,7 +406,7 @@ export function RecruitingClient({
                             </button>
                           </td>
                           <td className="py-3">
-                            <form action={(fd) => handle(deleteJob(fd))}>
+                            <form action={(fd) => handle(deleteJob(fd), undefined, "Job posting deleted.")}>
                               <input type="hidden" name="id" value={j.id} />
                               <button
                                 type="submit"
@@ -466,7 +480,7 @@ export function RecruitingClient({
                       className="mt-4 rounded-xl border border-kastros-sand bg-white p-4"
                       action={(fd) => {
                         fd.set("id", j.id);
-                        handle(updateJobDescription(fd), () => setEditDescriptionJobId(null));
+                        handle(updateJobDescription(fd), () => setEditDescriptionJobId(null), "Job description updated.");
                       }}
                     >
                       <p className="text-sm font-semibold text-kastros-forest">Public portal description</p>

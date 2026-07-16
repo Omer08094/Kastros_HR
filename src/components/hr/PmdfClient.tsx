@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import type { Session } from "@/lib/auth";
 import {
   BUSINESS_OBJECTIVE_RATINGS,
@@ -15,7 +15,9 @@ import {
   phaseLabel,
 } from "@/lib/pmdf-reference";
 import { calcPmdfScores } from "@/lib/pmdf-scoring";
+import { isPmdfLineManagerFromEmployees } from "@/lib/pmdf-access";
 import { hasExecAccess } from "@/lib/roles";
+import { useToast } from "@/components/ui/ToastProvider";
 import {
   assignPmdfForms,
   createPerformanceCycle,
@@ -77,13 +79,18 @@ function isBuiltInPillar(name: string): boolean {
 
 const MIN_DEVELOPMENT_TRAITS = 3;
 
-function canEditForm(form: PmdfForm, cycle: PerformanceCycle | undefined, session: Session): boolean {
+function canEditForm(
+  form: PmdfForm,
+  cycle: PerformanceCycle | undefined,
+  session: Session,
+  employees: Employee[],
+): boolean {
   if (hasExecAccess(session.role)) return true;
   if (form.locked || cycle?.locked) return false;
   const email = session.email.toLowerCase();
   return (
     form.employeeEmail.toLowerCase() === email ||
-    form.lineManagerEmail?.toLowerCase() === email
+    isPmdfLineManagerFromEmployees(employees, email, form)
   );
 }
 
@@ -389,18 +396,20 @@ function PmdfFormEditor({
   form,
   cycle,
   session,
+  employees,
   onAction,
   pending,
 }: {
   form: PmdfForm;
   cycle: PerformanceCycle | undefined;
   session: Session;
+  employees: Employee[];
   onAction: (p: Promise<ActionResult>, successMessage?: string) => void;
   pending: boolean;
 }) {
-  const editable = canEditForm(form, cycle, session);
-  const isManager = form.lineManagerEmail?.toLowerCase() === session.email.toLowerCase();
+  const editable = canEditForm(form, cycle, session, employees);
   const isEmployee = form.employeeEmail.toLowerCase() === session.email.toLowerCase();
+  const isManager = isPmdfLineManagerFromEmployees(employees, session.email, form);
   const locked = form.locked || cycle?.locked;
 
   const [tab, setTab] = useState<"bo" | "do" | "feedback">("bo");
@@ -557,6 +566,12 @@ function PmdfFormEditor({
           </div>
         ) : null}
       </div>
+
+      {isManager && !isEmployee && !hasExecAccess(session.role) ? (
+        <div className="mx-5 mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          Employee sections are read-only. Your changes only update manager scores, comments, and feedback.
+        </div>
+      ) : null}
 
       <form
         className="p-5 space-y-5"
@@ -976,59 +991,27 @@ export function PmdfClient({
   departmentNames: string[];
 }) {
   const router = useRouter();
-  const feedbackRef = useRef<HTMLDivElement>(null);
+  const toast = useToast();
   const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(forms[0]?.id ?? null);
 
   const cycleMap = useMemo(() => new Map(cycles.map((c) => [c.id, c])), [cycles]);
   const selected = forms.find((f) => f.id === selectedId) ?? forms[0];
 
-  function scrollToFeedback() {
-    feedbackRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }
-
   function handle(p: Promise<ActionResult>, successMessage = "Saved successfully.") {
-    setError(null);
-    setSuccess(null);
     start(async () => {
       try {
         const err = await runAction(p, () => router.refresh());
-        if (err) {
-          setError(err);
-          scrollToFeedback();
-        } else {
-          setSuccess(successMessage);
-          scrollToFeedback();
-        }
+        if (err) toast.error(err);
+        else toast.success(successMessage);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
-        scrollToFeedback();
+        toast.error(e instanceof Error ? e.message : "Something went wrong. Please try again.");
       }
     });
   }
 
   return (
     <div className="space-y-6">
-      <div ref={feedbackRef}>
-        {error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-            {error}
-          </div>
-        ) : null}
-        {success ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
-            {success}
-          </div>
-        ) : null}
-        {pending ? (
-          <div className="rounded-xl border border-kastros-sand bg-kastros-cream/40 px-4 py-2 text-sm text-kastros-sage" role="status">
-            Working…
-          </div>
-        ) : null}
-      </div>
-
       {hasExecAccess(session.role) ? (
         <PmdfHrPanel
           cycles={cycles}
@@ -1080,6 +1063,7 @@ export function PmdfClient({
               form={selected}
               cycle={cycleMap.get(selected.cycleId)}
               session={session}
+              employees={employees}
               onAction={handle}
               pending={pending}
             />

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
+import { useToast } from "@/components/ui/ToastProvider";
 import type { CoiSubmission, ConflictOfInterestDoc, DocumentRow, PolicyAcknowledgement, PolicyManual } from "@/lib/store/types";
 import { acknowledgePolicy, addDocument, deleteDocument } from "@/lib/store/hr-actions";
 import { submitCoiDocument, uploadCoiTemplate } from "@/lib/store/hr-actions-extra";
@@ -69,28 +70,26 @@ export function DocumentsClient({
   coiSubmissions?: CoiSubmission[];
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
 
   const companyLibrary = useMemo(() => documents.filter((d) => !d.employeeEmail), [documents]);
 
-  function handle(p: Promise<ActionResult>) {
-    setError(null);
+  function handle(p: Promise<ActionResult>, successMessage = "Saved successfully.") {
     start(async () => {
-      const err = await runAction(p, () => router.refresh());
-      if (err) setError(err);
+      try {
+        const err = await runAction(p, () => router.refresh());
+        if (err) toast.error(err);
+        else toast.success(successMessage);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Something went wrong. Please try again.");
+      }
     });
   }
 
   return (
     <div className="space-y-6">
-      {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-          {error}
-        </div>
-      ) : null}
-
       {previewSrc ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-kastros-forest/40 p-4 backdrop-blur-sm"
@@ -139,7 +138,7 @@ export function DocumentsClient({
             Upload notices and templates. <strong>Company-wide</strong> entries appear in the library below.{" "}
             <strong>Personnel file</strong> links only appear under that person on People (not in the company library).
           </p>
-          <form className="mt-4 grid gap-3 sm:grid-cols-2" action={(fd) => handle(addDocument(fd))}>
+          <form className="mt-4 grid gap-3 sm:grid-cols-2" action={(fd) => handle(addDocument(fd), "Document added.")}>
             <label className="text-sm sm:col-span-2">
               <span className="text-kastros-sage">Attach file (optional)</span>
               <input
@@ -237,7 +236,7 @@ export function DocumentsClient({
                     <span className="text-xs text-kastros-sage">No file on record</span>
                   )}
                   {canDelete ? (
-                    <form className="inline" action={(fd) => handle(deleteDocument(fd))}>
+                    <form className="inline" action={(fd) => handle(deleteDocument(fd), "Document deleted.")}>
                       <input type="hidden" name="id" value={d.id} />
                       <button type="submit" disabled={pending} className="text-xs font-semibold text-red-700 hover:underline disabled:opacity-50">
                         Delete
@@ -304,7 +303,7 @@ export function DocumentsClient({
                         Acknowledged ({new Date(ack.acknowledgedAt).toLocaleDateString()})
                       </span>
                     ) : (
-                      <form action={(fd) => handle(acknowledgePolicy(fd))}>
+                      <form action={(fd) => handle(acknowledgePolicy(fd), "Policy acknowledged.")}>
                         <input type="hidden" name="policyId" value={p.id} />
                         <button
                           type="submit"
@@ -333,7 +332,7 @@ export function DocumentsClient({
         {canAdd ? (
           <div className="mt-4 rounded-xl bg-kastros-cream/40 p-4 ring-1 ring-kastros-sand/60">
             <p className="text-xs font-semibold uppercase tracking-wide text-kastros-sage">HR — upload template</p>
-            <form className="mt-3 grid gap-3 sm:grid-cols-3" action={(fd) => handle(uploadCoiTemplate(fd))}>
+            <form className="mt-3 grid gap-3 sm:grid-cols-3" action={(fd) => handle(uploadCoiTemplate(fd), "COI template uploaded.")}>
               <label className="text-sm sm:col-span-2">
                 <span className="text-kastros-sage">Template file (PDF / Word)</span>
                 <input
@@ -397,7 +396,7 @@ export function DocumentsClient({
                   </a>
                 </p>
               ) : (
-                <form className="mt-3 grid gap-3 sm:grid-cols-2" action={(fd) => handle(submitCoiDocument(fd))}>
+                <form className="mt-3 grid gap-3 sm:grid-cols-2" action={(fd) => handle(submitCoiDocument(fd), "COI submission saved.")}>
                   <label className="text-sm sm:col-span-2">
                     <span className="text-kastros-sage">Your signed document (PDF / scan)</span>
                     <input

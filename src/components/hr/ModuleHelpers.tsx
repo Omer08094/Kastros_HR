@@ -1,47 +1,33 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition, type ReactNode } from "react";
+import { useTransition, type ReactNode } from "react";
+import { useToast } from "@/components/ui/ToastProvider";
 
 export type ActionResult = { ok: true } | { error: string };
 
 export function useAction() {
   const router = useRouter();
+  const toast = useToast();
   const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   function run(p: Promise<ActionResult>, successMsg?: string) {
-    setError(null);
-    setSuccess(null);
     start(async () => {
-      const r = await p;
-      if ("error" in r) {
-        setError(r.error);
-      } else {
-        if (successMsg) setSuccess(successMsg);
-        router.refresh();
+      try {
+        const r = await p;
+        if ("error" in r) {
+          toast.error(r.error);
+        } else {
+          toast.success(successMsg ?? "Saved successfully");
+          router.refresh();
+        }
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Something went wrong. Please try again.");
       }
     });
   }
 
-  return { pending, error, success, run, clearError: () => setError(null) };
-}
-
-export function StatusBanner({ error, success }: { error: string | null; success: string | null }) {
-  if (!error && !success) return null;
-  if (error) {
-    return (
-      <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-        {error}
-      </div>
-    );
-  }
-  return (
-    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
-      {success}
-    </div>
-  );
+  return { pending, run };
 }
 
 export function PrimaryButton({

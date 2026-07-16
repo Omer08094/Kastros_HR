@@ -6,7 +6,7 @@ import { BUSINESS_UNITS } from "@/lib/store/types";
 import { Field, SelectField, TextareaField } from "@/components/Field";
 import { Card } from "@/components/Card";
 import { decideTransfer, requestTransfer } from "@/lib/store/hr-actions-extra";
-import { EmptyState, GhostButton, PrimaryButton, StatusBanner, useAction } from "./ModuleHelpers";
+import { EmptyState, GhostButton, PrimaryButton, useAction } from "./ModuleHelpers";
 
 export function TransferClient({
   transfers,
@@ -18,11 +18,9 @@ export function TransferClient({
   departmentNames: string[];
 }) {
   const departmentOptions = buildDepartmentOptions(departmentNames);
-  const { pending, error, success, run } = useAction();
+  const { pending, run } = useAction();
   return (
     <div className="space-y-6">
-      <StatusBanner error={error} success={success} />
-
       <Card title="Request transfer" eyebrow="Mobility">
         <form className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" action={(fd) => run(requestTransfer(fd), "Transfer requested.")}>
           <SelectField
