@@ -16,6 +16,7 @@
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
+import { expensesEnabled } from "@/lib/feature-flags";
 import { hasExecAccess } from "@/lib/roles";
 import { mutateStore, readStore } from "@/lib/store/persist";
 import {
@@ -870,7 +871,14 @@ const EXPENSE_CATEGORIES = [
   "Other",
 ] as const;
 
+function expenseClaimsDisabled(): ActionResult | null {
+  if (!expensesEnabled()) return { error: "Expense claims are currently disabled." };
+  return null;
+}
+
 export async function submitExpense(formData: FormData): Promise<ActionResult> {
+  const disabled = expenseClaimsDisabled();
+  if (disabled) return disabled;
   const session = await getSession();
   if (!session) return { error: "Unauthorized." };
 
@@ -936,6 +944,8 @@ export async function submitExpense(formData: FormData): Promise<ActionResult> {
 }
 
 export async function decideExpense(formData: FormData): Promise<ActionResult> {
+  const disabled = expenseClaimsDisabled();
+  if (disabled) return disabled;
   const auth = await requireExec();
   if (!auth.ok) return { error: auth.error };
   const { session } = auth;
@@ -969,6 +979,8 @@ export async function decideExpense(formData: FormData): Promise<ActionResult> {
 }
 
 export async function markExpensePaid(formData: FormData): Promise<ActionResult> {
+  const disabled = expenseClaimsDisabled();
+  if (disabled) return disabled;
   const auth = await requireExec();
   if (!auth.ok) return { error: auth.error };
   const { session } = auth;
@@ -993,6 +1005,8 @@ export async function markExpensePaid(formData: FormData): Promise<ActionResult>
 }
 
 export async function deleteExpense(formData: FormData): Promise<ActionResult> {
+  const disabled = expenseClaimsDisabled();
+  if (disabled) return disabled;
   const session = await getSession();
   if (!session) return { error: "Unauthorized." };
   const id = str(formData.get("id"));

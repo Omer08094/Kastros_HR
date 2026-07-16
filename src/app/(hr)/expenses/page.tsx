@@ -2,12 +2,14 @@ import { redirect } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
 import { ExpensesClient } from "@/components/hr/ExpensesClient";
 import { getSession } from "@/lib/auth";
+import { expensesEnabled } from "@/lib/feature-flags";
 import { hasExecAccess } from "@/lib/roles";
 import { readStore } from "@/lib/store/persist";
 
 export default async function ExpensesPage() {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (!expensesEnabled()) redirect("/dashboard");
 
   const store = await readStore();
 

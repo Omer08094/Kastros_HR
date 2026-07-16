@@ -69,9 +69,38 @@ const HR_MODULE_IDS = new Set([
   "module-20-troubleshooting",
 ]);
 
-export function modulesForRole(role: ManualRole): ManualModule[] {
+export function modulesForRole(role: ManualRole, options?: { expensesEnabled?: boolean }): ManualModule[] {
   const ids = role === "hr" ? HR_MODULE_IDS : EMPLOYEE_MODULE_IDS;
-  return MANUAL_MODULES.filter((m) => ids.has(m.id));
+  let modules = MANUAL_MODULES.filter((m) => ids.has(m.id));
+  if (options?.expensesEnabled === false) {
+    modules = modules.filter((m) => !EXPENSE_MANUAL_MODULE_IDS.has(m.id));
+  }
+  return modules;
+}
+
+export const EXPENSE_MANUAL_MODULE_IDS = new Set(["module-05-expenses", "module-15-hr-expense-ops"]);
+
+export function manualAudienceIntro(role: ManualRole, includeExpenses: boolean) {
+  const base = MANUAL_AUDIENCE_INTRO[role];
+  if (includeExpenses) return base;
+  const startHere = base.startHere.filter((step) => !EXPENSE_MANUAL_MODULE_IDS.has(step.moduleId));
+  if (role === "employee") {
+    return {
+      ...base,
+      subtitle: "The basics — login, leave, and documents",
+      startHere,
+    };
+  }
+  return {
+    ...base,
+    description: base.description.replace(" (e.g. expense approvals)", ""),
+    startHere,
+  };
+}
+
+export function employeeQuickTopics(includeExpenses: boolean): readonly string[] {
+  if (includeExpenses) return EMPLOYEE_QUICK_TOPICS;
+  return EMPLOYEE_QUICK_TOPICS.filter((topic) => topic !== "Expense claims");
 }
 
 export type ManualStartStep = {

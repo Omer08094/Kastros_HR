@@ -5,9 +5,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Search, ChevronDown, Users, Briefcase } from "lucide-react";
 import { BRAND_LOGO } from "@/lib/brand-assets";
 import {
-  EMPLOYEE_QUICK_TOPICS,
-  MANUAL_AUDIENCE_INTRO,
+  employeeQuickTopics,
   MANUAL_PATH,
+  manualAudienceIntro,
   moduleQuickSteps,
   moduleShortTitle,
   modulesForRole,
@@ -18,7 +18,7 @@ import {
 
 const ROLE_STORAGE_KEY = "kastros-manual-role";
 
-function RolePicker({ onSelect }: { onSelect: (role: ManualRole) => void }) {
+function RolePicker({ onSelect, showExpenses }: { onSelect: (role: ManualRole) => void; showExpenses: boolean }) {
   return (
     <div className="mx-auto max-w-lg px-4 py-16 sm:py-24">
       <div className="text-center">
@@ -38,7 +38,7 @@ function RolePicker({ onSelect }: { onSelect: (role: ManualRole) => void }) {
           </div>
           <p className="mt-4 font-display text-lg font-semibold text-kastros-forest">I&apos;m an employee</p>
           <p className="mt-2 text-sm text-kastros-sage">
-            Login, leave, expenses, policies, training — everyday tasks.
+            Login, leave{showExpenses ? ", expenses" : ""}, policies, training — everyday tasks.
           </p>
         </button>
 
@@ -128,7 +128,13 @@ function ModuleAccordion({
   );
 }
 
-export function TrainingManual({ loginHref = "/login" }: { loginHref?: string }) {
+export function TrainingManual({
+  loginHref = "/login",
+  expensesEnabled: showExpenses = true,
+}: {
+  loginHref?: string;
+  expensesEnabled?: boolean;
+}) {
   const [role, setRole] = useState<ManualRole | null>(null);
   const [query, setQuery] = useState("");
   const [hydrated, setHydrated] = useState(false);
@@ -159,7 +165,10 @@ export function TrainingManual({ loginHref = "/login" }: { loginHref?: string })
     }
   }
 
-  const roleModules = useMemo(() => (role ? modulesForRole(role) : []), [role]);
+  const roleModules = useMemo(
+    () => (role ? modulesForRole(role, { expensesEnabled: showExpenses }) : []),
+    [role, showExpenses],
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -167,7 +176,7 @@ export function TrainingManual({ loginHref = "/login" }: { loginHref?: string })
     return roleModules.filter((m) => manualSearchBlob(m).includes(q));
   }, [roleModules, query]);
 
-  const intro = role ? MANUAL_AUDIENCE_INTRO[role] : null;
+  const intro = role ? manualAudienceIntro(role, showExpenses) : null;
 
   if (!hydrated) {
     return <div className="min-h-dvh bg-kastros-cream" />;
@@ -184,7 +193,7 @@ export function TrainingManual({ loginHref = "/login" }: { loginHref?: string })
             </Link>
           </div>
         </header>
-        <RolePicker onSelect={selectRole} />
+        <RolePicker onSelect={selectRole} showExpenses={showExpenses} />
       </div>
     );
   }
@@ -243,7 +252,7 @@ export function TrainingManual({ loginHref = "/login" }: { loginHref?: string })
             </ol>
             {role === "employee" ? (
               <p className="mt-4 text-xs text-kastros-sage">
-                Quick topics: {EMPLOYEE_QUICK_TOPICS.join(" · ")}
+                Quick topics: {employeeQuickTopics(showExpenses).join(" · ")}
               </p>
             ) : null}
           </div>
@@ -255,7 +264,7 @@ export function TrainingManual({ loginHref = "/login" }: { loginHref?: string })
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={role === "hr" ? "Search HR topics…" : "Search e.g. leave, expense, login…"}
+            placeholder={role === "hr" ? "Search HR topics…" : showExpenses ? "Search e.g. leave, expense, login…" : "Search e.g. leave, login…"}
             className="w-full rounded-xl border border-kastros-sand bg-white py-2.5 pl-10 pr-4 text-sm shadow-sm focus:border-kastros-brandBlue focus:outline-none focus:ring-2 focus:ring-kastros-brandGreen/20"
             aria-label="Search guide"
           />

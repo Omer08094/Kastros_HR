@@ -1,3 +1,4 @@
+import { expensesEnabled } from "@/lib/feature-flags";
 import { mainNav } from "@/lib/nav";
 import type { RoleId } from "@/lib/roles";
 
@@ -48,5 +49,10 @@ export function roleMayAccessRoute(role: RoleId, pathname: string): boolean {
 }
 
 export function navHrefsForRole(role: RoleId): string[] {
-  return mainNav.map((n) => n.href).filter((href) => (ROUTE_ACCESS[href] ?? []).includes(role));
+  return mainNav
+    .map((n) => n.href)
+    .filter((href) => {
+      if (href === "/expenses" && !expensesEnabled()) return false;
+      return (ROUTE_ACCESS[href] ?? []).includes(role);
+    });
 }
