@@ -9,7 +9,7 @@ import { createEmployeeAuth, sendFirebasePasswordResetEmail, syncEmployeeAuthIde
 import { EXECUTIVE_DEPARTMENT } from "@/lib/executive-org";
 import { firstEducationEntry, parseEducationFormRows, parseLegacyEducationFields } from "@/lib/education-form";
 import { normalizeStoredJobDescription } from "@/lib/job-description-html";
-import { hasExecAccess } from "@/lib/roles";
+import { hasExecAccess, parseAppRole } from "@/lib/roles";
 import { syncPmdfFormsLineManager } from "@/lib/pmdf-access";
 import {
   approvedLeaveDaysUsedInYear,
@@ -298,11 +298,12 @@ export async function addEmployee(formData: FormData): Promise<ActionResult> {
 
   const eduAttachmentName = eduSaved?.originalName ?? eduFallbackName;
   const certAttachmentName = certSaved?.originalName ?? certFallbackName;
+  const appRole = parseAppRole(String(formData.get("appRole") ?? "employee"));
 
   // Create Firebase Auth user for the new employee
   let authResult;
   try {
-    authResult = await createEmployeeAuth(email, name, "employee");
+    authResult = await createEmployeeAuth(email, name, appRole);
   } catch (e: any) {
     return { error: `Failed to create Firebase Auth user: ${e?.message || e}` };
   }

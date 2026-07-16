@@ -7,10 +7,6 @@ export type EmployeeAuthRoleInfo = {
   role: RoleId | null;
 };
 
-function authErrorCode(err: unknown): string {
-  return typeof err === "object" && err !== null && "code" in err ? String((err as { code: string }).code) : "";
-}
-
 export async function loadEmployeeAuthRoles(emails: string[]): Promise<EmployeeAuthRoleInfo[]> {
   let auth;
   try {
@@ -39,4 +35,27 @@ export async function loadEmployeeAuthRoles(emails: string[]): Promise<EmployeeA
       }
     }),
   );
+}
+
+function authErrorCode(err: unknown): string {
+  return typeof err === "object" && err !== null && "code" in err ? String((err as { code: string }).code) : "";
+}
+
+/** Authoritative app role from Firebase Auth custom claims (null if no account or invalid claim). */
+export async function getFirebaseRoleForEmail(email: string): Promise<RoleId | null> {
+  let auth;
+  try {
+    auth = getAdminAuth();
+  } catch {
+    return null;
+  }
+
+  try {
+    const user = await auth.getUserByEmail(email.trim().toLowerCase());
+    const claim = user.customClaims?.role;
+    return typeof claim === "string" && isRoleId(claim) ? claim : null;
+  } catch (e: unknown) {
+    if (authErrorCode(e) === "auth/user-not-found") return null;
+    return null;
+  }
 }

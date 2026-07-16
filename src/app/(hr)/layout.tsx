@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppSidebar } from "@/components/AppSidebar";
 import { FloatingHelpButton } from "@/components/help/FloatingHelpButton";
+import { SessionRoleSync } from "@/components/SessionRoleSync";
 import { getSession } from "@/lib/auth";
 import { navHrefsForRole } from "@/lib/route-access";
 import { ROLE_LABELS } from "@/lib/roles";
@@ -13,6 +14,7 @@ export default async function HrLayout({ children }: { children: React.ReactNode
 
   return (
     <div className="flex min-h-dvh bg-kastros-cream">
+      <SessionRoleSync />
       <AppSidebar
         allowedHrefs={allowedHrefs}
         userEmail={session.email}

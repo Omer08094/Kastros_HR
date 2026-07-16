@@ -74,7 +74,7 @@ export function RoleManagerClient({
           const emp = employees.find((em) => em.email.toLowerCase() === selectedEmail.toLowerCase());
           const roleLabel = ROLE_OPTIONS.find((r) => r.value === selectedRole)?.label ?? selectedRole;
           toast.success(
-            `Role updated to "${roleLabel}" for ${emp?.name ?? selectedEmail}. They must sign out and sign back in for the change to take effect.`,
+            `Role updated to "${roleLabel}" for ${emp?.name ?? selectedEmail}. Their access updates automatically on next page load.`,
           );
           router.refresh();
         }

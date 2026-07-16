@@ -6,6 +6,7 @@ import type { EmployeeIntakeDefaults } from "@/components/hr/employee-intake-fie
 import { EmployeeIntakeFields } from "@/components/hr/employee-intake-fields";
 import { useToast } from "@/components/ui/ToastProvider";
 import { addEmployee } from "@/lib/store/hr-actions";
+import { SelectField } from "@/components/Field";
 import type { PersistenceInfo } from "@/lib/store/persistence-info";
 
 type ActionResult = { ok: true } | { error: string };
@@ -68,6 +69,17 @@ export function AddTeamMemberForm({
       <p className="mt-1 text-sm text-kastros-sage">Includes family compliance, onboarding, contact, and probation details.</p>
       <form key={formKey} className="mt-4 grid gap-3 sm:grid-cols-2" action={(fd) => handle(addEmployee(fd))}>
         <EmployeeIntakeFields defaults={defaults} showSubtitle={false} departments={departments} subDepartments={subDepartments} employees={employees} />
+        <SelectField
+          name="appRole"
+          label="App access role"
+          span2
+          defaultValue="employee"
+          options={[
+            { value: "employee", label: "Employee — self-service only" },
+            { value: "hr_admin", label: "HR Admin — full HR operations (same as admin@kastros.co)" },
+            { value: "ceo", label: "CEO — HR Admin plus executive dashboard" },
+          ]}
+        />
         <div className="sm:col-span-2">
           <button
             type="submit"

@@ -18,7 +18,7 @@ export default async function UserRolesPage() {
   return (
     <PageShell
       title="User roles"
-      subtitle="Assign Employee, HR Admin, or CEO access — changes apply after the user signs out and back in."
+      subtitle="Assign Employee, HR Admin, or CEO access. HR Admin has the same module access as the bootstrap admin account. Changes apply on the user’s next page load."
     >
       <Card eyebrow="HR Admin · Access control" title="Manage app roles">
         <p className="mb-4 text-sm text-kastros-sage">
