@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useToast } from "@/components/ui/ToastProvider";
 import type { Employee, HrStore, LeaveCategory, LeaveRequest } from "@/lib/store/types";
 import type { LeaveBalanceRow } from "@/lib/leave-policy";
@@ -9,6 +9,7 @@ import { createLeaveRequest, decideLeaveRequest } from "@/lib/store/hr-actions";
 import { SelectField } from "@/components/Field";
 import type { Session } from "@/lib/auth";
 import { canDecideLeaveStep } from "@/lib/store/policy";
+import { hasExecAccess } from "@/lib/roles";
 import { EmployeeLeaveEntitlements } from "./EmployeeLeaveEntitlements";
 
 function NotesModal({ note, onClose }: { note: string; onClose: () => void }) {
@@ -100,11 +101,41 @@ export function LeaveClient({
   storeSlice: Pick<HrStore, "leaveCategories" | "employeeLeaveAllocations" | "leaveRequests">;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const toast = useToast();
   const [pending, start] = useTransition();
   const [viewingNote, setViewingNote] = useState<string | null>(null);
+  const requestFromUrl = searchParams.get("request");
+  const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
 
   const activeCategories = categories.filter((c) => c.isActive).sort((a, b) => a.sortOrder - b.sortOrder);
+
+  const linkedRequest = useMemo(
+    () => (requestFromUrl ? requests.find((r) => r.id === requestFromUrl) ?? null : null),
+    [requestFromUrl, requests],
+  );
+
+  const linkedRequestMissing = !!requestFromUrl && !linkedRequest;
+
+  useEffect(() => {
+    if (!requestFromUrl || !linkedRequest) return;
+    const row = rowRefs.current.get(requestFromUrl);
+    row?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [requestFromUrl, linkedRequest, requests]);
+
+  const showHrAwaitingManagerBanner =
+    !!linkedRequest &&
+    linkedRequest.status === "PendingManager" &&
+    hasExecAccess(session.role) &&
+    !canDecideLeaveStep(employees, session, linkedRequest);
+
+  const actionableRequests = useMemo(() => {
+    const pending = requests.filter((r) => canDecideLeaveStep(employees, session, r));
+    if (!requestFromUrl) return pending;
+    const linkedIdx = pending.findIndex((r) => r.id === requestFromUrl);
+    if (linkedIdx <= 0) return pending;
+    return [pending[linkedIdx], ...pending.slice(0, linkedIdx), ...pending.slice(linkedIdx + 1)];
+  }, [requests, employees, session, requestFromUrl]);
 
   function handle(p: Promise<ActionResult>, successMessage = "Saved successfully.") {
     start(async () => {
@@ -121,6 +152,72 @@ export function LeaveClient({
   return (
     <div className="space-y-6">
       {viewingNote !== null ? <NotesModal note={viewingNote} onClose={() => setViewingNote(null)} /> : null}
+
+      {actionableRequests.length > 0 ? (
+        <section className="rounded-2xl border-2 border-amber-300 bg-amber-50/80 p-5 shadow-sm">
+          <h2 className="font-display text-lg font-semibold text-kastros-forest">Pending your approval</h2>
+          <p className="mt-1 text-sm text-kastros-sage">
+            {actionableRequests.length === 1
+              ? "One leave request needs your decision."
+              : `${actionableRequests.length} leave requests need your decision.`}
+          </p>
+          <div className="mt-4 space-y-4">
+            {actionableRequests.map((r) => {
+              const fromEmail = requestFromUrl === r.id && canDecideLeaveStep(employees, session, r);
+              return (
+                <div
+                  key={r.id}
+                  className={`rounded-xl border bg-white p-4 shadow-sm ${fromEmail ? "border-amber-400 ring-2 ring-amber-200" : "border-kastros-sand"}`}
+                >
+                  {fromEmail ? (
+                    <p className="mb-3 text-xs font-medium uppercase tracking-wide text-amber-800">
+                      You opened this from email
+                    </p>
+                  ) : null}
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-kastros-ink">{r.requesterEmail}</p>
+                      <p className="mt-1 text-sm text-kastros-sage">
+                        <span className="font-medium text-kastros-ink">{r.kind}</span> · {r.start} → {r.end}
+                      </p>
+                      {r.note ? (
+                        <p className="mt-2 line-clamp-2 text-sm text-kastros-sage">{r.note}</p>
+                      ) : null}
+                      <span className="mt-2 inline-flex rounded-full bg-kastros-cream px-2 py-0.5 text-xs ring-1 ring-kastros-sand">
+                        {r.status}
+                      </span>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-3">
+                      <form action={(fd) => handle(decideLeaveRequest(fd), "Leave request approved.")}>
+                        <input type="hidden" name="id" value={r.id} />
+                        <input type="hidden" name="decision" value="Approved" />
+                        <button
+                          type="submit"
+                          disabled={pending}
+                          className="rounded-xl bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 disabled:opacity-50"
+                        >
+                          Approve
+                        </button>
+                      </form>
+                      <form action={(fd) => handle(decideLeaveRequest(fd), "Leave request denied.")}>
+                        <input type="hidden" name="id" value={r.id} />
+                        <input type="hidden" name="decision" value="Denied" />
+                        <button
+                          type="submit"
+                          disabled={pending}
+                          className="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-red-700 ring-2 ring-red-200 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          Deny
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       <section className="rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm">
         <h2 className="font-display text-lg font-semibold text-kastros-forest">My leave balances</h2>
@@ -180,6 +277,19 @@ export function LeaveClient({
           <strong className="text-kastros-ink">Line manager</strong> approves first, then <strong className="text-kastros-ink">HR</strong>{" "}
           gives final sign-off.
         </p>
+
+        {linkedRequestMissing ? (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Leave request not found or you don&apos;t have access to view it.
+          </div>
+        ) : null}
+
+        {showHrAwaitingManagerBanner ? (
+          <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            This request is awaiting line manager approval. HR final approval comes after the manager approves.
+          </div>
+        ) : null}
+
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead>
@@ -193,8 +303,17 @@ export function LeaveClient({
               </tr>
             </thead>
             <tbody className="divide-y divide-kastros-sand">
-              {requests.map((r) => (
-                <tr key={r.id} className="text-kastros-ink">
+              {requests.map((r) => {
+                const highlighted = requestFromUrl === r.id;
+                return (
+                <tr
+                  key={r.id}
+                  ref={(el) => {
+                    if (el) rowRefs.current.set(r.id, el);
+                    else rowRefs.current.delete(r.id);
+                  }}
+                  className={`text-kastros-ink ${highlighted ? "bg-amber-50 ring-2 ring-inset ring-amber-300" : ""}`}
+                >
                   <td className="py-3 pr-3 text-kastros-sage">{r.requesterEmail}</td>
                   <td className="py-3 pr-3 font-medium">{r.kind}</td>
                   <td className="py-3 pr-3 text-kastros-sage">
@@ -241,7 +360,8 @@ export function LeaveClient({
                     )}
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>

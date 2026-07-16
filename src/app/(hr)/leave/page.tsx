@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { PageShell } from "@/components/PageShell";
 import { LeaveClient } from "@/components/hr/LeaveClient";
@@ -23,21 +24,30 @@ export default async function LeavePage() {
       title="Time off"
       subtitle="View balances, request leave, and (HR) manage per-employee entitlements. Configure leave types under Settings."
     >
-      <LeaveClient
-        requests={requests}
-        session={session}
-        canCreate={canCreate}
-        canManageEntitlements={canManageEntitlements}
-        categories={store.leaveCategories}
-        balanceRows={balanceRows}
-        year={year}
-        employees={store.employees}
-        storeSlice={{
-          leaveCategories: store.leaveCategories,
-          employeeLeaveAllocations: store.employeeLeaveAllocations,
-          leaveRequests: store.leaveRequests,
-        }}
-      />
+      <Suspense
+        fallback={
+          <div className="animate-pulse space-y-6">
+            <div className="h-28 rounded-2xl bg-white ring-1 ring-kastros-sand/80" />
+            <div className="h-52 rounded-2xl bg-white ring-1 ring-kastros-sand/80" />
+          </div>
+        }
+      >
+        <LeaveClient
+          requests={requests}
+          session={session}
+          canCreate={canCreate}
+          canManageEntitlements={canManageEntitlements}
+          categories={store.leaveCategories}
+          balanceRows={balanceRows}
+          year={year}
+          employees={store.employees}
+          storeSlice={{
+            leaveCategories: store.leaveCategories,
+            employeeLeaveAllocations: store.employeeLeaveAllocations,
+            leaveRequests: store.leaveRequests,
+          }}
+        />
+      </Suspense>
     </PageShell>
   );
 }

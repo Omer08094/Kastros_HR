@@ -8,10 +8,11 @@ import { isRoleId } from "@/lib/roles";
 import { sessionCookieName } from "@/lib/session";
 import { getAdminAuth } from "@/lib/firebase-admin";
 import { signSession } from "@/lib/session-server";
+import { safeRedirectPath } from "@/lib/auth-redirect";
 
 export type SignInState = { error?: string };
 
-export async function verifyFirebaseToken(idToken: string): Promise<SignInState | void> {
+export async function verifyFirebaseToken(idToken: string, next?: string | null): Promise<SignInState | void> {
   try {
     const auth = getAdminAuth();
     const decoded = await auth.verifyIdToken(idToken);
@@ -42,7 +43,7 @@ export async function verifyFirebaseToken(idToken: string): Promise<SignInState 
   } catch (e: any) {
     return { error: `Authentication failed: ${e.message}` };
   }
-  redirect("/dashboard");
+  redirect(safeRedirectPath(next));
 }
 
 export async function signInDemo(formData: FormData): Promise<SignInState> {
@@ -70,5 +71,6 @@ export async function signInDemo(formData: FormData): Promise<SignInState> {
     maxAge: 60 * 60 * 8,
   });
 
-  redirect("/dashboard");
+  const next = String(formData.get("next") ?? "").trim() || null;
+  redirect(safeRedirectPath(next));
 }

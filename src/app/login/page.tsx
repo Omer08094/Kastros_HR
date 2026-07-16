@@ -13,9 +13,15 @@ function showDemoCredentialTable(): boolean {
   );
 }
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string; callbackUrl?: string }>;
+}) {
   const showDemo = showDemoCredentialTable();
   const demoRows = listDemoAccountsForDisplay();
+  const sp = await searchParams;
+  const next = sp.next ?? sp.callbackUrl ?? "";
 
   return (
     <div className="relative flex min-h-dvh flex-col overflow-hidden bg-gradient-to-br from-kastros-brandBlue via-kastros-brandBlueDeep to-[#1a2552]">
@@ -87,7 +93,7 @@ export default function LoginPage() {
                 <h2 className="text-center font-display text-2xl font-semibold text-kastros-brandBlue">Welcome back</h2>
                 <p className="mt-2 text-center text-sm text-kastros-brandGreen">Sign in with your work account.</p>
               </div>
-              <LoginForm />
+              <LoginForm next={next} />
               <p className="mt-8 text-center text-xs leading-relaxed text-kastros-sage/90">
                 Protected by HTTP-only session cookies. Accounts are managed in Firebase Authentication — not in environment
                 variables. First-time setup: run <code className="rounded bg-kastros-cream px-1 py-0.5 text-[0.7rem] text-kastros-ink">npm run bootstrap:fresh</code>{" "}

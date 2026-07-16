@@ -1,4 +1,5 @@
 import { roleMayAccessRoute } from "@/lib/route-access";
+import { leaveRequestPath } from "@/lib/leave-links";
 import type { RoleId } from "@/lib/roles";
 import type { Employee, HrStore, JobApplication } from "@/lib/store/types";
 
@@ -74,7 +75,7 @@ export function deriveHrNotifications(
           id: `leave-mgr:${r.id}`,
           title: "Leave pending your manager approval",
           detail: `${r.kind} (${r.start}→${r.end}) · requested by ${findName(store, r.requesterEmail)}`,
-          href: "/leave",
+          href: leaveRequestPath(r.id),
           at: iso(now),
           kind: "approval",
         });
@@ -85,7 +86,7 @@ export function deriveHrNotifications(
         id: `leave-hr:${r.id}`,
         title: "Leave pending HR approval",
         detail: `${r.kind} (${r.start}→${r.end}) · requested by ${findName(store, r.requesterEmail)}`,
-        href: "/leave",
+        href: leaveRequestPath(r.id),
         at: iso(now),
         kind: "approval",
       }, ["hr_admin"]);
@@ -95,7 +96,7 @@ export function deriveHrNotifications(
         id: `leave-self:${r.id}`,
         title: "Your leave is awaiting approval",
         detail: `${r.kind} (${r.start}→${r.end})`,
-        href: "/leave",
+        href: leaveRequestPath(r.id),
         at: iso(now),
         kind: "approval",
       });

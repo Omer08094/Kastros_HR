@@ -1,14 +1,11 @@
 import { deriveHrNotifications } from "@/lib/hr-notifications";
+import { appPublicUrl } from "@/lib/app-url";
 import { loadEmployeeAuthRoles } from "@/lib/firebase-auth-roles";
 import { sendHrNotificationEmail } from "@/lib/hr-emails";
 import type { RoleId } from "@/lib/roles";
 import { isRoleId } from "@/lib/roles";
 import { mutateStore, readStore } from "@/lib/store/persist";
 import type { HrStore } from "@/lib/store/types";
-
-function appBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL?.trim() || "http://localhost:3000";
-}
 
 function sentKey(recipientEmail: string, notificationId: string): string {
   return `${recipientEmail.trim().toLowerCase()}:${notificationId}`;
@@ -33,7 +30,7 @@ export async function syncPortalNotificationEmails(
   });
   if (pending.length === 0) return 0;
 
-  const baseUrl = appBaseUrl();
+  const baseUrl = appPublicUrl();
   const newlySent: Record<string, string> = {};
   let sentCount = 0;
 

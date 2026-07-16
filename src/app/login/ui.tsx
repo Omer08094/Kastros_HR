@@ -7,7 +7,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { getFirebaseAuth, isFirebaseWebConfigured } from "@/lib/firebase-client";
 import { verifyFirebaseToken, signInDemo } from "./actions";
 
-export function LoginForm() {
+export function LoginForm({ next = "" }: { next?: string }) {
   const toast = useToast();
   const [pending, setPending] = useState(false);
 
@@ -18,6 +18,7 @@ export function LoginForm() {
     const formData = new FormData(e.currentTarget);
     const email = String(formData.get("email") ?? "").trim();
     const password = String(formData.get("password") ?? "");
+    const redirectNext = String(formData.get("next") ?? "").trim() || null;
 
     try {
       let idToken: string | null = null;
@@ -51,7 +52,7 @@ export function LoginForm() {
       }
       
       if (idToken) {
-        const result = await verifyFirebaseToken(idToken);
+        const result = await verifyFirebaseToken(idToken, redirectNext);
         if (result && result.error) {
           toast.error(result.error);
         }
@@ -66,6 +67,7 @@ export function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+      {next ? <input type="hidden" name="next" value={next} /> : null}
       <div>
         <label htmlFor="email" className="block text-sm font-medium text-kastros-ink">
           Email

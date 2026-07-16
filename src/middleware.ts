@@ -2,8 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { sessionCookieName } from "@/lib/session";
 import { verifySession } from "@/lib/session-server";
 import { roleMayAccessRoute } from "@/lib/route-access";
+import { loginUrlWithNext, readLoginRedirectParam, safeRedirectPath } from "@/lib/auth-redirect";
 
 const PUBLIC_PATHS = new Set(["/login"]);
+
+function redirectToLogin(request: NextRequest): NextResponse {
+  const { pathname } = request.nextUrl;
+  return NextResponse.redirect(loginUrlWithNext(request.url, pathname, request.nextUrl.search));
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -36,7 +42,8 @@ export async function middleware(request: NextRequest) {
     if (token) {
       const session = await verifySession(token);
       if (session) {
-        return NextResponse.redirect(new URL("/dashboard", request.url));
+        const next = readLoginRedirectParam(request.nextUrl.searchParams);
+        return NextResponse.redirect(new URL(safeRedirectPath(next), request.url));
       }
     }
     return NextResponse.next();
@@ -46,22 +53,22 @@ export async function middleware(request: NextRequest) {
 
   if (pathname === "/") {
     if (!token) {
-      return NextResponse.redirect(new URL("/login", request.url));
+      return redirectToLogin(request);
     }
     const session = await verifySession(token);
     if (!session) {
-      return NextResponse.redirect(new URL("/login", request.url));
+      return redirectToLogin(request);
     }
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   if (!token) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return redirectToLogin(request);
   }
 
   const session = await verifySession(token);
   if (!session) {
-    const res = NextResponse.redirect(new URL("/login", request.url));
+    const res = redirectToLogin(request);
     res.cookies.delete(sessionCookieName);
     return res;
   }

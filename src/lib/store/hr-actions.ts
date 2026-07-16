@@ -19,6 +19,7 @@ import {
   requestMatchesCategory,
 } from "@/lib/leave-policy";
 import { sendLeaveApprovalEmail } from "@/lib/hr-emails";
+import { leaveRequestUrl } from "@/lib/leave-links";
 import { loadEmployeeAuthRoles } from "@/lib/firebase-auth-roles";
 import { canApproveLeaveHrStep, canApproveLeaveManagerStep } from "@/lib/store/policy";
 import {
@@ -118,10 +119,6 @@ function probationDate(joiningDate: string, months: number): string {
   const dt = new Date(joiningDate);
   dt.setMonth(dt.getMonth() + months);
   return dt.toISOString().slice(0, 10);
-}
-
-function appBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL?.trim() || "http://localhost:3000";
 }
 
 function dedupeEmails(emails: Array<string | null | undefined>): string[] {
@@ -1055,27 +1052,58 @@ export async function createLeaveRequest(formData: FormData): Promise<ActionResu
   const requester = snapshot.employees.find((e) => e.email.toLowerCase() === session.email.toLowerCase());
   const managerEmail = requester?.reportsToEmail?.trim().toLowerCase() ?? null;
   const hrEmails = await hrApproverEmails(snapshot);
-  const approveUrl = `${appBaseUrl()}/leave`;
+  const approveUrl = leaveRequestUrl(created.request.id);
   const requesterEmail = session.email.toLowerCase();
 
   if (managerEmail) {
     await sendLeaveApprovalEmail({
-      to: [managerEmail, ...hrEmails, requesterEmail],
+      to: [managerEmail],
       subject: `Leave approval needed: ${created.request.kind} (${requesterEmail})`,
       headline: "Leave request submitted",
-      intro: `${requesterEmail} submitted a leave request. Line manager review is required first, and HR has been copied for visibility.`,
+      intro: `${requesterEmail} submitted a leave request. You are the line manager—please approve or deny.`,
       request: created.request,
-      actionLabel: "Review leave request",
+      actionLabel: "Approve or deny leave",
+      actionUrl: approveUrl,
+    });
+    if (hrEmails.length > 0) {
+      await sendLeaveApprovalEmail({
+        to: hrEmails,
+        subject: `Leave submitted: ${created.request.kind} (${requesterEmail})`,
+        headline: "Leave request submitted",
+        intro: `${requesterEmail} submitted a leave request. The line manager must approve first; this is for your visibility.`,
+        request: created.request,
+        actionLabel: "View leave request",
+        actionUrl: approveUrl,
+      });
+    }
+    await sendLeaveApprovalEmail({
+      to: [requesterEmail],
+      subject: `Leave request submitted: ${created.request.kind}`,
+      headline: "Leave request submitted",
+      intro: "Your leave request was submitted and is awaiting line manager approval.",
+      request: created.request,
+      actionLabel: "View my request",
       actionUrl: approveUrl,
     });
   } else {
+    if (hrEmails.length > 0) {
+      await sendLeaveApprovalEmail({
+        to: hrEmails,
+        subject: `Leave approval needed: ${created.request.kind} (${requesterEmail})`,
+        headline: "Leave request submitted",
+        intro: `${requesterEmail} submitted a leave request. No line manager is set, so HR final approval is required.`,
+        request: created.request,
+        actionLabel: "Approve or deny leave",
+        actionUrl: approveUrl,
+      });
+    }
     await sendLeaveApprovalEmail({
-      to: [...hrEmails, requesterEmail],
-      subject: `Leave approval needed: ${created.request.kind} (${requesterEmail})`,
+      to: [requesterEmail],
+      subject: `Leave request submitted: ${created.request.kind}`,
       headline: "Leave request submitted",
-      intro: `${requesterEmail} submitted a leave request. No line manager is set, so this is routed directly to HR.`,
+      intro: "Your leave request was submitted and is awaiting HR approval.",
       request: created.request,
-      actionLabel: "Review leave request",
+      actionLabel: "View my request",
       actionUrl: approveUrl,
     });
   }
@@ -1144,37 +1172,38 @@ export async function decideLeaveRequest(formData: FormData): Promise<ActionResu
   });
   if ("error" in outcome) return outcome;
 
-  const approveUrl = `${appBaseUrl()}/leave`;
+  const approveUrl = leaveRequestUrl(req.id);
   const changed = outcome.changed;
-  const recipientsForRequester = dedupeEmails([req.requesterEmail, managerEmail, ...hrEmails]);
 
   if (req.status === "PendingManager" && changed.status === "PendingHR") {
+    if (hrEmails.length > 0) {
+      await sendLeaveApprovalEmail({
+        to: hrEmails,
+        subject: `HR approval needed: ${req.kind} (${req.requesterEmail})`,
+        headline: "Manager approved leave request",
+        intro: "The line manager approved this leave request. HR final sign-off is now required.",
+        request: changed,
+        actionLabel: "Approve or deny leave",
+        actionUrl: approveUrl,
+      });
+    }
     await sendLeaveApprovalEmail({
-      to: hrEmails,
-      subject: `HR review needed: ${req.kind} (${req.requesterEmail})`,
-      headline: "Manager approved leave request",
-      intro: `Line manager approved this leave request. HR final review is now required.`,
-      request: req,
-      actionLabel: "Open HR review",
-      actionUrl: approveUrl,
-    });
-    await sendLeaveApprovalEmail({
-      to: recipientsForRequester,
+      to: [req.requesterEmail],
       subject: `Leave update: manager approved (${req.kind})`,
       headline: "Leave request moved to HR review",
-      intro: `The line manager approved this request. HR has been notified for final approval.`,
-      request: req,
-      actionLabel: "View leave status",
+      intro: "Your line manager approved this request. HR has been notified for final approval.",
+      request: changed,
+      actionLabel: "View my request",
       actionUrl: approveUrl,
     });
   } else if (changed.status === "Approved" || changed.status === "Denied") {
     await sendLeaveApprovalEmail({
-      to: recipientsForRequester,
-      subject: `Leave ${changed.status.toLowerCase()}: ${req.kind} (${req.requesterEmail})`,
+      to: [req.requesterEmail],
+      subject: `Leave ${changed.status.toLowerCase()}: ${req.kind}`,
       headline: `Leave request ${changed.status.toLowerCase()}`,
-      intro: `Final decision has been recorded on this leave request.`,
-      request: req,
-      actionLabel: "View leave status",
+      intro: `A final decision has been recorded on your leave request.`,
+      request: changed,
+      actionLabel: "View my request",
       actionUrl: approveUrl,
     });
   }
