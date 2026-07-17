@@ -15,6 +15,11 @@ import {
   phaseLabel,
 } from "@/lib/pmdf-reference";
 import { calcPmdfScores } from "@/lib/pmdf-scoring";
+import {
+  MIN_DEVELOPMENT_TRAITS,
+  objectiveSubmitWeightsValid,
+  validateObjectiveSubmitWeights,
+} from "@/lib/pmdf-validation";
 import { isPmdfLineManagerFromEmployees } from "@/lib/pmdf-access";
 import { hasExecAccess } from "@/lib/roles";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -114,8 +119,6 @@ const BUILT_IN_PILLARS = new Set<string>(PMDF_PILLARS);
 function isBuiltInPillar(name: string): boolean {
   return BUILT_IN_PILLARS.has(name);
 }
-
-const MIN_DEVELOPMENT_TRAITS = 3;
 
 function canEditForm(
   form: PmdfForm,
@@ -455,6 +458,7 @@ function PmdfFormEditor({
   onAction: (p: Promise<ActionResult>, successMessage?: string) => void;
   pending: boolean;
 }) {
+  const toast = useToast();
   const editable = canEditForm(form, cycle, session, employees);
   const isEmployee = form.employeeEmail.toLowerCase() === session.email.toLowerCase();
   const isManager = isPmdfLineManagerFromEmployees(employees, session.email, form);
@@ -485,6 +489,15 @@ function PmdfFormEditor({
 
   const scores = useMemo(
     () => calcPmdfScores(businessObjectives, developmentObjectives),
+    [businessObjectives, developmentObjectives],
+  );
+
+  const weightsReady = useMemo(
+    () =>
+      objectiveSubmitWeightsValid({
+        businessObjectives,
+        developmentObjectives,
+      }),
     [businessObjectives, developmentObjectives],
   );
 
@@ -604,6 +617,14 @@ function PmdfFormEditor({
 
   function handleSave() {
     if (submittingObjectives) {
+      const weightError = validateObjectiveSubmitWeights({
+        businessObjectives,
+        developmentObjectives,
+      });
+      if (weightError) {
+        toast.error(weightError);
+        return;
+      }
       const ok = window.confirm(
         "You can only submit your performance and development goals once.\n\nAfter saving, you will not be able to edit these goals again.\n\nPlease review all objectives, weights, and development traits carefully before continuing.",
       );
@@ -691,10 +712,19 @@ function PmdfFormEditor({
           {fmtDate(form.employeeObjectivesSubmittedAt)} and can no longer be changed.
         </div>
       ) : submittingObjectives ? (
-        <div className="mx-5 mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-          You can only submit your performance and development goals once. Review every objective, weight, and
-          development trait carefully before saving.
-        </div>
+        <>
+          <div className="mx-5 mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            You can only submit your performance and development goals once. Review every objective, weight, and
+            development trait carefully before saving.
+          </div>
+          {!weightsReady ? (
+            <div className="mx-5 mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              Performance goals must total <strong>100%</strong> (currently {scores.businessTotalPercentage}%) and
+              development goals must total <strong>100%</strong> (currently {scores.developmentTotalPercentage}%) before
+              you can submit. Use at least {MIN_DEVELOPMENT_TRAITS} development traits with action plans.
+            </div>
+          ) : null}
+        </>
       ) : null}
 
       <form
@@ -884,7 +914,10 @@ function PmdfFormEditor({
               </h3>
               <div className="flex flex-wrap items-center gap-3">
                 <span className={`text-xs font-semibold ${filledDo >= MIN_DEVELOPMENT_TRAITS ? "text-emerald-700" : "text-amber-700"}`}>
-                  {filledDo} of {developmentObjectives.length} traits in use · weight total {scores.developmentTotalPercentage}%
+                  {filledDo} of {developmentObjectives.length} traits in use · weight total{" "}
+                  <strong className={scores.developmentTotalPercentage === 100 ? "text-emerald-700" : "text-amber-700"}>
+                    {scores.developmentTotalPercentage}%
+                  </strong>
                 </span>
                 {editable && (canEmployeeEditGoals || hasExecAccess(session.role)) ? (
                   <button
@@ -1065,7 +1098,7 @@ function PmdfFormEditor({
         {editable && !employeeGoalsComplete ? (
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || (submittingObjectives && !weightsReady)}
             className="rounded-xl bg-kastros-forest px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
           >
             {submittingObjectives ? "Submit goals" : "Save form"}

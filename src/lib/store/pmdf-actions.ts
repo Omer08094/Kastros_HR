@@ -12,7 +12,12 @@ import {
 } from "@/lib/hr-emails";
 import { isPmdfLineManager, resolvePmdfLineManager } from "@/lib/pmdf-access";
 import { mergePmdfFormFields, applyEmployeeObjectiveLock, type PmdfFormFields, type PmdfSaveRole } from "@/lib/pmdf-merge";
-import { calcPmdfScores, sumPercentages } from "@/lib/pmdf-scoring";
+import { calcPmdfScores } from "@/lib/pmdf-scoring";
+import {
+  validateDevelopmentTraits,
+  validateObjectiveSubmitWeights,
+  validatePmdfWeightTotals,
+} from "@/lib/pmdf-validation";
 import { defaultDevelopmentRows, phaseLabel, type PmdfPhaseId } from "@/lib/pmdf-reference";
 import { hasExecAccess } from "@/lib/roles";
 import { mutateStore, readStore } from "@/lib/store/persist";
@@ -123,18 +128,8 @@ function resolveAssignmentEmails(store: HrStore, scope: string, department: stri
   return em ? [em] : [];
 }
 
-const MIN_DEVELOPMENT_TRAITS = 3;
-
 function validateDevelopmentObjectives(rows: PmdfDevelopmentObjective[]): string | null {
-  const active = rows.filter((r) => r.actionPlan.trim() || r.percentage > 0);
-  if (active.length === 0) return null;
-  if (active.length < MIN_DEVELOPMENT_TRAITS) {
-    return `At least ${MIN_DEVELOPMENT_TRAITS} development traits are required (currently ${active.length}).`;
-  }
-  for (const row of active) {
-    if (!row.pillar.trim()) return "Each development trait needs a name.";
-  }
-  return null;
+  return validateDevelopmentTraits(rows);
 }
 
 function clampPercentage(v: unknown): number {
@@ -570,25 +565,16 @@ function existingPmdfFormFields(form: PmdfForm): PmdfFormFields {
 
 function validatePmdfFields(
   fields: PmdfFormFields,
-  options: { skipWeightValidation: boolean; skipDevTraitValidation: boolean },
+  options: { skipWeightValidation: boolean; skipDevTraitValidation: boolean; strictWeightTotals?: boolean },
 ): string | null {
-  const { businessObjectives, developmentObjectives } = fields;
-  const boTotal = sumPercentages(businessObjectives.map((r) => r.percentage));
-  const doTotal = sumPercentages(developmentObjectives.map((r) => r.percentage));
-  const boHasPct = businessObjectives.some((r) => r.percentage > 0);
-  const doHasPct = developmentObjectives.some((r) => r.percentage > 0);
-
-  if (!options.skipWeightValidation) {
-    if (boHasPct && Math.abs(boTotal - 100) > 0.01) {
-      return `Business objectives must total 100% (currently ${boTotal}%).`;
-    }
-    if (doHasPct && Math.abs(doTotal - 100) > 0.01) {
-      return `Development objectives must total 100% (currently ${doTotal}%).`;
-    }
-  }
+  const weightError = validatePmdfWeightTotals(fields, {
+    skipWeightValidation: options.skipWeightValidation,
+    strictTotals: options.strictWeightTotals ?? false,
+  });
+  if (weightError) return weightError;
 
   if (!options.skipDevTraitValidation) {
-    const doValidation = validateDevelopmentObjectives(developmentObjectives);
+    const doValidation = validateDevelopmentObjectives(fields.developmentObjectives);
     if (doValidation) return doValidation;
   }
 
@@ -644,10 +630,7 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
           "Please confirm that you have reviewed your performance and development goals. This submission can only be done once.",
       };
     }
-    const submitValidation = validatePmdfFields(merged, {
-      skipWeightValidation: false,
-      skipDevTraitValidation: false,
-    });
+    const submitValidation = validateObjectiveSubmitWeights(merged);
     if (submitValidation) return { error: submitValidation };
   } else {
     const draftingPhase = effectivePhase === "objective_setting_employee";
