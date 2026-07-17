@@ -366,10 +366,16 @@ export type PerformanceCycle = {
   currentPhase: PmdfPhase;
   objectiveSettingEmployeeDeadline: string | null;
   objectiveSettingManagerDeadline: string | null;
+  objectiveSettingEmployeeOpen: string | null;
+  objectiveSettingManagerOpen: string | null;
   midYearEmployeeDeadline: string | null;
   midYearManagerDeadline: string | null;
+  midYearEmployeeOpen: string | null;
+  midYearManagerOpen: string | null;
   yearEndEmployeeDeadline: string | null;
   yearEndManagerDeadline: string | null;
+  yearEndEmployeeOpen: string | null;
+  yearEndManagerOpen: string | null;
   locked: boolean;
   lockedAt: string | null;
   createdByEmail: string;

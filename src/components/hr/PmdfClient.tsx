@@ -17,9 +17,13 @@ import {
 import { calcPmdfScores } from "@/lib/pmdf-scoring";
 import {
   MIN_DEVELOPMENT_TRAITS,
+  distributeDevelopmentWeights,
   objectiveSubmitWeightsValid,
+  PMDF_DEVELOPMENT_OVERALL_SHARE,
+  PMDF_PERFORMANCE_OVERALL_SHARE,
   validateObjectiveSubmitWeights,
 } from "@/lib/pmdf-validation";
+import { canEditPmdfForm, getPmdfFieldAccess } from "@/lib/pmdf-permissions";
 import { isPmdfLineManagerFromEmployees } from "@/lib/pmdf-access";
 import { hasExecAccess } from "@/lib/roles";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -120,18 +124,63 @@ function isBuiltInPillar(name: string): boolean {
   return BUILT_IN_PILLARS.has(name);
 }
 
-function canEditForm(
-  form: PmdfForm,
-  cycle: PerformanceCycle | undefined,
-  session: Session,
-  employees: Employee[],
-): boolean {
-  if (hasExecAccess(session.role)) return true;
-  if (form.locked || cycle?.locked) return false;
-  const email = session.email.toLowerCase();
+function CycleDateFields({
+  cycle,
+  showManager = true,
+}: {
+  cycle?: PerformanceCycle;
+  showManager?: boolean;
+}) {
+  const pairs: Array<{ open: keyof PerformanceCycle; close: keyof PerformanceCycle; label: string }> = [
+    {
+      open: "objectiveSettingEmployeeOpen",
+      close: "objectiveSettingEmployeeDeadline",
+      label: "Objective setting (employee)",
+    },
+    ...(showManager
+      ? [
+          {
+            open: "objectiveSettingManagerOpen" as keyof PerformanceCycle,
+            close: "objectiveSettingManagerDeadline" as keyof PerformanceCycle,
+            label: "Objective setting (manager)",
+          },
+        ]
+      : []),
+    { open: "midYearEmployeeOpen", close: "midYearEmployeeDeadline", label: "Mid year (employee)" },
+    ...(showManager
+      ? [{ open: "midYearManagerOpen" as keyof PerformanceCycle, close: "midYearManagerDeadline" as keyof PerformanceCycle, label: "Mid year (manager)" }]
+      : []),
+    { open: "yearEndEmployeeOpen", close: "yearEndEmployeeDeadline", label: "Year end (employee)" },
+    ...(showManager
+      ? [{ open: "yearEndManagerOpen" as keyof PerformanceCycle, close: "yearEndManagerDeadline" as keyof PerformanceCycle, label: "Year end (manager)" }]
+      : []),
+  ];
+
   return (
-    form.employeeEmail.toLowerCase() === email ||
-    isPmdfLineManagerFromEmployees(employees, email, form)
+    <>
+      {pairs.map(({ open, close, label }) => (
+        <div key={String(open)} className="sm:col-span-2 lg:col-span-3 grid gap-3 sm:grid-cols-2">
+          <label className="text-sm">
+            <span className="text-kastros-sage">{label} — opens</span>
+            <input
+              name={String(open)}
+              type="date"
+              defaultValue={cycle ? (cycle[open] as string | null) ?? "" : undefined}
+              className={INPUT}
+            />
+          </label>
+          <label className="text-sm">
+            <span className="text-kastros-sage">{label} — closes</span>
+            <input
+              name={String(close)}
+              type="date"
+              defaultValue={cycle ? (cycle[close] as string | null) ?? "" : undefined}
+              className={INPUT}
+            />
+          </label>
+        </div>
+      ))}
+    </>
   );
 }
 
@@ -176,9 +225,9 @@ function PmdfHrPanel({
       <div>
         <h2 className="font-display text-lg font-semibold text-kastros-forest">HR — Performance cycles</h2>
         <p className="mt-1 text-sm text-kastros-sage">
-          Create cycles, distribute PMDF forms, set deadlines, send reminders, and lock forms when the period ends.
-          Choose <strong className="text-kastros-ink">Specific employee</strong> above to email one person, or use{" "}
-          <strong className="text-kastros-ink">Email all assigned</strong> for everyone in the cycle.
+          Create cycles, distribute PMDF forms, and control when each stage opens and closes. Set open dates so
+          managers can complete mid-year fields during the mid-year window and final evaluation fields during the
+          year-end window. Lock the cycle when the period ends.
         </p>
       </div>
 
@@ -196,30 +245,7 @@ function PmdfHrPanel({
           <span className="text-kastros-sage">End date</span>
           <input name="endDate" type="date" required className={INPUT} />
         </label>
-        <label className="text-sm">
-          <span className="text-kastros-sage">Objective setting (employee) deadline</span>
-          <input name="objectiveSettingEmployeeDeadline" type="date" className={INPUT} />
-        </label>
-        <label className="text-sm">
-          <span className="text-kastros-sage">Objective setting (manager) deadline</span>
-          <input name="objectiveSettingManagerDeadline" type="date" className={INPUT} />
-        </label>
-        <label className="text-sm">
-          <span className="text-kastros-sage">Mid year (employee) deadline</span>
-          <input name="midYearEmployeeDeadline" type="date" className={INPUT} />
-        </label>
-        <label className="text-sm">
-          <span className="text-kastros-sage">Mid year (manager) deadline</span>
-          <input name="midYearManagerDeadline" type="date" className={INPUT} />
-        </label>
-        <label className="text-sm">
-          <span className="text-kastros-sage">Year end (employee) deadline</span>
-          <input name="yearEndEmployeeDeadline" type="date" className={INPUT} />
-        </label>
-        <label className="text-sm">
-          <span className="text-kastros-sage">Year end (manager) deadline</span>
-          <input name="yearEndManagerDeadline" type="date" className={INPUT} />
-        </label>
+        <CycleDateFields />
         <button
           type="submit"
           disabled={pending}
@@ -293,20 +319,7 @@ function PmdfHrPanel({
                   <input type="checkbox" name="locked" value="1" defaultChecked={cycle.locked} className="rounded" />
                   <span className="text-kastros-sage">Lock all forms in this cycle</span>
                 </label>
-                <div className="sm:col-span-2 lg:col-span-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <label className="text-sm">
-                    <span className="text-kastros-sage">Obj. setting employee deadline</span>
-                    <input name="objectiveSettingEmployeeDeadline" type="date" defaultValue={cycle.objectiveSettingEmployeeDeadline ?? ""} className={INPUT} />
-                  </label>
-                  <label className="text-sm">
-                    <span className="text-kastros-sage">Mid year employee deadline</span>
-                    <input name="midYearEmployeeDeadline" type="date" defaultValue={cycle.midYearEmployeeDeadline ?? ""} className={INPUT} />
-                  </label>
-                  <label className="text-sm">
-                    <span className="text-kastros-sage">Year end employee deadline</span>
-                    <input name="yearEndEmployeeDeadline" type="date" defaultValue={cycle.yearEndEmployeeDeadline ?? ""} className={INPUT} />
-                  </label>
-                </div>
+                <CycleDateFields cycle={cycle} />
                 <button type="submit" disabled={pending} className="w-fit rounded-xl bg-kastros-forest px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
                   Update cycle
                 </button>
@@ -459,19 +472,41 @@ function PmdfFormEditor({
   pending: boolean;
 }) {
   const toast = useToast();
-  const editable = canEditForm(form, cycle, session, employees);
+  const isHr = hasExecAccess(session.role);
   const isEmployee = form.employeeEmail.toLowerCase() === session.email.toLowerCase();
   const isManager = isPmdfLineManagerFromEmployees(employees, session.email, form);
   const locked = form.locked || cycle?.locked;
   const effectivePhase = cycle?.currentPhase ?? form.phase;
-  const employeeObjectivesLocked = isEmployee && !!form.employeeObjectivesSubmittedAt;
+  const employeeObjectivesLocked = !!form.employeeObjectivesSubmittedAt;
+  const fieldAccess = useMemo(
+    () =>
+      getPmdfFieldAccess({
+        cycle,
+        form,
+        role: session.role,
+        isEmployee,
+        isManager,
+        employeeObjectivesLocked,
+        effectivePhase,
+      }),
+    [cycle, form, session.role, isEmployee, isManager, employeeObjectivesLocked, effectivePhase],
+  );
+  const editable = canEditPmdfForm({
+    cycle,
+    form,
+    role: session.role,
+    isEmployee,
+    isManager,
+    employeeObjectivesLocked,
+    effectivePhase,
+  });
   const submittingObjectives =
     isEmployee &&
     effectivePhase === "objective_setting_employee" &&
     !form.employeeObjectivesSubmittedAt;
   const employeeGoalsComplete =
     isEmployee && employeeObjectivesLocked && effectivePhase === "objective_setting_employee";
-  const canEmployeeEditGoals = isEmployee && !employeeObjectivesLocked;
+  const canEmployeeEditGoals = fieldAccess.canEditEmployeeGoals;
 
   const [tab, setTab] = useState<"bo" | "do" | "feedback">("bo");
   const [businessObjectives, setBusinessObjectives] = useState(form.businessObjectives);
@@ -539,27 +574,30 @@ function PmdfFormEditor({
       if (patch.pillar?.trim() && targetId) {
         setLastAddedTraitId((cur) => (cur === targetId ? null : cur));
       }
-      return rows.map((r, i) => (i === idx ? { ...r, ...patch } : r));
+      const next = rows.map((r, i) => (i === idx ? { ...r, ...patch } : r));
+      return distributeDevelopmentWeights(next);
     });
   }
 
   function addDevelopmentRow() {
     const id = `do-new-${Date.now()}`;
-    setDevelopmentObjectives((rows) => [
-      {
-        id,
-        sortOrder: 1,
-        pillar: "",
-        developmentArea: "",
-        actionPlan: "",
-        percentage: 0,
-        selfScoreFy: null,
-        finalScoreFy: null,
-        managerCommentsHalfYear: "",
-        managerCommentsFullYear: "",
-      },
-      ...rows.map((r, i) => ({ ...r, sortOrder: i + 2 })),
-    ]);
+    setDevelopmentObjectives((rows) =>
+      distributeDevelopmentWeights([
+        {
+          id,
+          sortOrder: 1,
+          pillar: "",
+          developmentArea: "",
+          actionPlan: "",
+          percentage: 0,
+          selfScoreFy: null,
+          finalScoreFy: null,
+          managerCommentsHalfYear: "",
+          managerCommentsFullYear: "",
+        },
+        ...rows.map((r, i) => ({ ...r, sortOrder: i + 2 })),
+      ]),
+    );
     setLastAddedTraitId(id);
   }
 
@@ -568,7 +606,9 @@ function PmdfFormEditor({
       const row = rows[idx];
       if (!row || isBuiltInPillar(row.pillar)) return rows;
       if (row.id === lastAddedTraitId) setLastAddedTraitId(null);
-      return rows.filter((_, i) => i !== idx).map((r, i) => ({ ...r, sortOrder: i + 1 }));
+      return distributeDevelopmentWeights(
+        rows.filter((_, i) => i !== idx).map((r, i) => ({ ...r, sortOrder: i + 1 })),
+      );
     });
   }
 
@@ -700,9 +740,22 @@ function PmdfFormEditor({
         ) : null}
       </div>
 
-      {isManager && !isEmployee && !hasExecAccess(session.role) ? (
+      {isManager && !isEmployee && !isHr ? (
         <div className="mx-5 mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-          Employee sections are read-only. Your changes only update manager scores, comments, and feedback.
+          {fieldAccess.canEditManagerMidYear && !fieldAccess.canEditManagerFinal
+            ? "Mid-year review is open. You can enter half-year manager comments and feedback only."
+            : fieldAccess.canEditManagerFinal && !fieldAccess.canEditManagerMidYear
+              ? "Final evaluation is open. You can enter full-year scores, comments, and feedback only."
+              : fieldAccess.canEditManagerMidYear && fieldAccess.canEditManagerFinal
+                ? "Both mid-year and final evaluation windows are open."
+                : "This form is not open for manager editing right now. Contact HR if you need access."}
+        </div>
+      ) : null}
+
+      {!editable && !isHr && (isEmployee || isManager) ? (
+        <div className="mx-5 mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          This form is not open for editing right now{locked ? " (locked)" : ""}. HR will open the relevant stage
+          when it is time to complete your section.
         </div>
       ) : null}
 
@@ -719,9 +772,9 @@ function PmdfFormEditor({
           </div>
           {!weightsReady ? (
             <div className="mx-5 mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              Performance goals must total <strong>100%</strong> (currently {scores.businessTotalPercentage}%) and
-              development goals must total <strong>100%</strong> (currently {scores.developmentTotalPercentage}%) before
-              you can submit. Use at least {MIN_DEVELOPMENT_TRAITS} development traits with action plans.
+              Performance goals must total <strong>100%</strong> (currently {scores.businessTotalPercentage}%) before
+              you can submit. Use at least {MIN_DEVELOPMENT_TRAITS} development traits with action plans (development
+              contributes {Math.round(PMDF_DEVELOPMENT_OVERALL_SHARE * 100)}% to your overall score automatically).
             </div>
           ) : null}
         </>
@@ -745,7 +798,7 @@ function PmdfFormEditor({
             <input
               value={subDepartment}
               onChange={(e) => setSubDepartment(e.target.value)}
-              disabled={!editable || (isEmployee && employeeObjectivesLocked)}
+              disabled={!editable || (!canEmployeeEditGoals && !isHr)}
               className={INPUT}
             />
           </label>
@@ -755,7 +808,7 @@ function PmdfFormEditor({
             <select
               value={functionalArea}
               onChange={(e) => setFunctionalArea(e.target.value)}
-              disabled={!editable || (isEmployee && employeeObjectivesLocked)}
+              disabled={!editable || (!canEmployeeEditGoals && !isHr)}
               className={INPUT}
             >
               <option value="">— Select —</option>
@@ -769,7 +822,7 @@ function PmdfFormEditor({
             <select
               value={locationCategory}
               onChange={(e) => setLocationCategory(e.target.value)}
-              disabled={!editable || (isEmployee && employeeObjectivesLocked)}
+              disabled={!editable || (!canEmployeeEditGoals && !isHr)}
               className={INPUT}
             >
               <option value="">— Select —</option>
@@ -784,7 +837,7 @@ function PmdfFormEditor({
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-kastros-forest">Business Objectives (must total 100%)</h3>
-              {editable && (canEmployeeEditGoals || hasExecAccess(session.role)) ? (
+              {editable && (canEmployeeEditGoals || isHr) ? (
                 <button type="button" onClick={addBusinessRow} className="text-xs font-semibold text-kastros-brandGreen">
                   + Add objective
                 </button>
@@ -801,7 +854,7 @@ function PmdfFormEditor({
                   <textarea
                     value={row.objectiveSmart}
                     onChange={(e) => updateBo(idx, { objectiveSmart: e.target.value })}
-                    disabled={!editable || (!canEmployeeEditGoals && !hasExecAccess(session.role))}
+                    disabled={!editable || (!fieldAccess.canEditEmployeeGoals && !isHr)}
                     className={TEXTAREA}
                   />
                 </label>
@@ -810,7 +863,7 @@ function PmdfFormEditor({
                   <textarea
                     value={row.action}
                     onChange={(e) => updateBo(idx, { action: e.target.value })}
-                    disabled={!editable || (!canEmployeeEditGoals && !hasExecAccess(session.role))}
+                    disabled={!editable || (!fieldAccess.canEditEmployeeGoals && !isHr)}
                     className={TEXTAREA}
                   />
                 </label>
@@ -819,7 +872,7 @@ function PmdfFormEditor({
                   <textarea
                     value={row.employeeComments}
                     onChange={(e) => updateBo(idx, { employeeComments: e.target.value })}
-                    disabled={!editable || (!canEmployeeEditGoals && !hasExecAccess(session.role))}
+                    disabled={!editable || (!fieldAccess.canEditEmployeeGoals && !isHr)}
                     className={TEXTAREA}
                   />
                 </label>
@@ -829,7 +882,7 @@ function PmdfFormEditor({
                     <PercentageInput
                       value={row.percentage}
                       onChange={(pct) => updateBo(idx, { percentage: pct })}
-                      disabled={!editable || (isEmployee && employeeObjectivesLocked)}
+                      disabled={!editable || (!fieldAccess.canEditPerformanceWeights && !isHr)}
                       className={INPUT}
                     />
                   </label>
@@ -842,7 +895,7 @@ function PmdfFormEditor({
                       step={1}
                       value={row.selfScoreFy ?? ""}
                       onChange={(e) => updateBo(idx, { selfScoreFy: toIntOrNull(e.target.value) })}
-                      disabled={!editable || (!isEmployee && !hasExecAccess(session.role))}
+                      disabled={!editable || ((!fieldAccess.canEditSelfScores || !isEmployee) && !isHr)}
                       className={INPUT}
                     />
                   </label>
@@ -855,7 +908,7 @@ function PmdfFormEditor({
                       step={1}
                       value={row.finalScoreFy ?? ""}
                       onChange={(e) => updateBo(idx, { finalScoreFy: toIntOrNull(e.target.value) })}
-                      disabled={!editable || (!isManager && !hasExecAccess(session.role))}
+                      disabled={!editable || ((!fieldAccess.canEditManagerFinal || !isManager) && !isHr)}
                       className={INPUT}
                     />
                   </label>
@@ -874,7 +927,7 @@ function PmdfFormEditor({
                   <textarea
                     value={row.managerCommentsHalfYear}
                     onChange={(e) => updateBo(idx, { managerCommentsHalfYear: e.target.value })}
-                    disabled={!editable || (!isManager && !hasExecAccess(session.role))}
+                    disabled={!editable || ((!fieldAccess.canEditManagerMidYear || !isManager) && !isHr)}
                     className={TEXTAREA}
                   />
                 </label>
@@ -883,7 +936,7 @@ function PmdfFormEditor({
                   <textarea
                     value={row.managerCommentsFullYear}
                     onChange={(e) => updateBo(idx, { managerCommentsFullYear: e.target.value })}
-                    disabled={!editable || (!isManager && !hasExecAccess(session.role))}
+                    disabled={!editable || ((!fieldAccess.canEditManagerFinal || !isManager) && !isHr)}
                     className={TEXTAREA}
                   />
                 </label>
@@ -898,8 +951,10 @@ function PmdfFormEditor({
               <p className="font-semibold text-kastros-forest">What are these pillars?</p>
               <p className="mt-1 text-kastros-sage">
                 Empathy, Accountability, Initiative, Collaboration, Integrity and other similar traits are behaviour
-                areas. Choose at least three where you want to grow, assign a weight %, and write a concrete action plan
-                for the year.
+                areas. Choose at least three where you want to grow and write a concrete action plan for the year.
+                Development contributes{" "}
+                <strong className="text-kastros-ink">{Math.round(PMDF_DEVELOPMENT_OVERALL_SHARE * 100)}%</strong> to
+                your overall score; trait weights are split automatically.
               </p>
               <p className="mt-2 text-xs text-kastros-sage">
                 <strong className="text-kastros-ink">Example:</strong> Under <em>Accountability</em>, your action plan
@@ -910,16 +965,22 @@ function PmdfFormEditor({
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="font-semibold text-kastros-forest">
-                Development Objectives (min. {MIN_DEVELOPMENT_TRAITS} required · must total 100%)
+                Development Objectives (min. {MIN_DEVELOPMENT_TRAITS} required · {Math.round(PMDF_DEVELOPMENT_OVERALL_SHARE * 100)}% of overall score)
               </h3>
               <div className="flex flex-wrap items-center gap-3">
                 <span className={`text-xs font-semibold ${filledDo >= MIN_DEVELOPMENT_TRAITS ? "text-emerald-700" : "text-amber-700"}`}>
-                  {filledDo} of {developmentObjectives.length} traits in use · weight total{" "}
-                  <strong className={scores.developmentTotalPercentage === 100 ? "text-emerald-700" : "text-amber-700"}>
-                    {scores.developmentTotalPercentage}%
-                  </strong>
+                  {filledDo} of {developmentObjectives.length} traits in use
+                  {fieldAccess.canEditDevelopmentWeights ? (
+                    <>
+                      {" "}
+                      · internal split{" "}
+                      <strong className={scores.developmentTotalPercentage === 100 ? "text-emerald-700" : "text-amber-700"}>
+                        {scores.developmentTotalPercentage}%
+                      </strong>
+                    </>
+                  ) : null}
                 </span>
-                {editable && (canEmployeeEditGoals || hasExecAccess(session.role)) ? (
+                {editable && (canEmployeeEditGoals || isHr) ? (
                   <button
                     type="button"
                     onClick={addDevelopmentRow}
@@ -962,12 +1023,12 @@ function PmdfFormEditor({
                           <input
                             value={row.pillar}
                             onChange={(e) => updateDo(idx, { pillar: e.target.value })}
-                            disabled={!editable || (!canEmployeeEditGoals && !hasExecAccess(session.role))}
+                            disabled={!editable || (!fieldAccess.canEditEmployeeGoals && !isHr)}
                             placeholder="e.g. Adaptability, Communication"
                             className={INPUT}
                           />
                         </label>
-                        {editable && (canEmployeeEditGoals || hasExecAccess(session.role)) ? (
+                        {editable && (canEmployeeEditGoals || isHr) ? (
                           <button
                             type="button"
                             onClick={() => removeDevelopmentRow(idx)}
@@ -983,20 +1044,26 @@ function PmdfFormEditor({
                       <textarea
                         value={row.actionPlan}
                         onChange={(e) => updateDo(idx, { actionPlan: e.target.value })}
-                        disabled={!editable || (!canEmployeeEditGoals && !hasExecAccess(session.role))}
+                        disabled={!editable || (!fieldAccess.canEditEmployeeGoals && !isHr)}
                         className={TEXTAREA}
                       />
                     </label>
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                      <label className="text-sm">
-                        <span className="text-kastros-sage">%age</span>
-                        <PercentageInput
-                          value={row.percentage}
-                          onChange={(pct) => updateDo(idx, { percentage: pct })}
-                          disabled={!editable || (isEmployee && employeeObjectivesLocked)}
-                          className={INPUT}
-                        />
-                      </label>
+                      <div className="text-sm">
+                        <span className="text-kastros-sage">Internal weight split</span>
+                        {fieldAccess.canEditDevelopmentWeights ? (
+                          <PercentageInput
+                            value={row.percentage}
+                            onChange={(pct) => updateDo(idx, { percentage: pct })}
+                            disabled={!editable}
+                            className={INPUT}
+                          />
+                        ) : (
+                          <p className="mt-1 rounded-xl border border-kastros-sand bg-kastros-cream/40 px-3 py-2 font-medium">
+                            {row.percentage > 0 ? `${row.percentage}%` : "—"}
+                          </p>
+                        )}
+                      </div>
                       <label className="text-sm">
                         <span className="text-kastros-sage">Self Score FY</span>
                         <input
@@ -1006,7 +1073,7 @@ function PmdfFormEditor({
                           step={1}
                           value={row.selfScoreFy ?? ""}
                           onChange={(e) => updateDo(idx, { selfScoreFy: toIntOrNull(e.target.value) })}
-                          disabled={!editable || (!isEmployee && !hasExecAccess(session.role))}
+                          disabled={!editable || ((!fieldAccess.canEditSelfScores || !isEmployee) && !isHr)}
                           className={INPUT}
                         />
                       </label>
@@ -1019,7 +1086,7 @@ function PmdfFormEditor({
                           step={1}
                           value={row.finalScoreFy ?? ""}
                           onChange={(e) => updateDo(idx, { finalScoreFy: toIntOrNull(e.target.value) })}
-                          disabled={!editable || (!isManager && !hasExecAccess(session.role))}
+                          disabled={!editable || ((!fieldAccess.canEditManagerFinal || !isManager) && !isHr)}
                           className={INPUT}
                         />
                       </label>
@@ -1029,7 +1096,7 @@ function PmdfFormEditor({
                       <textarea
                         value={row.managerCommentsHalfYear}
                         onChange={(e) => updateDo(idx, { managerCommentsHalfYear: e.target.value })}
-                        disabled={!editable || (!isManager && !hasExecAccess(session.role))}
+                        disabled={!editable || ((!fieldAccess.canEditManagerMidYear || !isManager) && !isHr)}
                         className={TEXTAREA}
                       />
                     </label>
@@ -1038,7 +1105,7 @@ function PmdfFormEditor({
                       <textarea
                         value={row.managerCommentsFullYear}
                         onChange={(e) => updateDo(idx, { managerCommentsFullYear: e.target.value })}
-                        disabled={!editable || (!isManager && !hasExecAccess(session.role))}
+                        disabled={!editable || ((!fieldAccess.canEditManagerFinal || !isManager) && !isHr)}
                         className={TEXTAREA}
                       />
                     </label>
@@ -1053,8 +1120,8 @@ function PmdfFormEditor({
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 rounded-xl bg-kastros-cream/40 p-4 text-sm">
               <div><span className="text-kastros-sage">Overall PMDP Score</span><p className="text-lg font-bold text-kastros-forest">{scores.overallPmdpScore.toFixed(2)}</p></div>
-              <div><span className="text-kastros-sage">BO Final Rating (70%)</span><p className="font-semibold">{scores.businessRating70.toFixed(2)}</p></div>
-              <div><span className="text-kastros-sage">DO Final Rating (30%)</span><p className="font-semibold">{scores.developmentRating30.toFixed(2)}</p></div>
+              <div><span className="text-kastros-sage">BO Final Rating ({Math.round(PMDF_PERFORMANCE_OVERALL_SHARE * 100)}%)</span><p className="font-semibold">{scores.businessRating70.toFixed(2)}</p></div>
+              <div><span className="text-kastros-sage">DO Final Rating ({Math.round(PMDF_DEVELOPMENT_OVERALL_SHARE * 100)}%)</span><p className="font-semibold">{scores.developmentRating30.toFixed(2)}</p></div>
               <div><span className="text-kastros-sage">BO Self / Final weightage</span><p>{scores.businessSelf.toFixed(2)} / {scores.businessFinal.toFixed(2)}</p></div>
               <div><span className="text-kastros-sage">DO Self / Final weightage</span><p>{scores.developmentSelf.toFixed(2)} / {scores.developmentFinal.toFixed(2)}</p></div>
             </div>
@@ -1062,31 +1129,31 @@ function PmdfFormEditor({
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="text-sm">
                 <span className="text-kastros-sage">Employee feedback — Mid Year</span>
-                <textarea value={employeeFeedbackMidYear} onChange={(e) => setEmployeeFeedbackMidYear(e.target.value)} disabled={!editable || (!isEmployee && !hasExecAccess(session.role))} className={TEXTAREA} />
+                <textarea value={employeeFeedbackMidYear} onChange={(e) => setEmployeeFeedbackMidYear(e.target.value)} disabled={!editable || ((!fieldAccess.canEditEmployeeMidYearFeedback || !isEmployee) && !isHr)} className={TEXTAREA} />
               </label>
               <label className="text-sm">
                 <span className="text-kastros-sage">Manager feedback — Mid Year</span>
-                <textarea value={managerFeedbackMidYear} onChange={(e) => setManagerFeedbackMidYear(e.target.value)} disabled={!editable || (!isManager && !hasExecAccess(session.role))} className={TEXTAREA} />
+                <textarea value={managerFeedbackMidYear} onChange={(e) => setManagerFeedbackMidYear(e.target.value)} disabled={!editable || ((!fieldAccess.canEditManagerMidYear || !isManager) && !isHr)} className={TEXTAREA} />
               </label>
               <label className="text-sm">
                 <span className="text-kastros-sage">Employee feedback — Full Year</span>
-                <textarea value={employeeFeedbackFy} onChange={(e) => setEmployeeFeedbackFy(e.target.value)} disabled={!editable || (!isEmployee && !hasExecAccess(session.role))} className={TEXTAREA} />
+                <textarea value={employeeFeedbackFy} onChange={(e) => setEmployeeFeedbackFy(e.target.value)} disabled={!editable || ((!fieldAccess.canEditEmployeeFinalFeedback || !isEmployee) && !isHr)} className={TEXTAREA} />
               </label>
               <label className="text-sm">
                 <span className="text-kastros-sage">Manager feedback — Full Year</span>
-                <textarea value={managerFeedbackFy} onChange={(e) => setManagerFeedbackFy(e.target.value)} disabled={!editable || (!isManager && !hasExecAccess(session.role))} className={TEXTAREA} />
+                <textarea value={managerFeedbackFy} onChange={(e) => setManagerFeedbackFy(e.target.value)} disabled={!editable || ((!fieldAccess.canEditManagerFinal || !isManager) && !isHr)} className={TEXTAREA} />
               </label>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="text-sm">
                 <span className="text-kastros-sage">Employee signature (type full name)</span>
-                <input value={employeeSignature} onChange={(e) => setEmployeeSignature(e.target.value)} disabled={!editable || (!isEmployee && !hasExecAccess(session.role))} className={INPUT} />
+                <input value={employeeSignature} onChange={(e) => setEmployeeSignature(e.target.value)} disabled={!editable || ((!fieldAccess.canEditEmployeeSignature || !isEmployee) && !isHr)} className={INPUT} />
                 {form.employeeSignedAt ? <p className="mt-1 text-xs text-kastros-sage">Signed {fmtDate(form.employeeSignedAt)}</p> : null}
               </label>
               <label className="text-sm">
                 <span className="text-kastros-sage">Manager signature (type full name)</span>
-                <input value={managerSignature} onChange={(e) => setManagerSignature(e.target.value)} disabled={!editable || (!isManager && !hasExecAccess(session.role))} className={INPUT} />
+                <input value={managerSignature} onChange={(e) => setManagerSignature(e.target.value)} disabled={!editable || ((!fieldAccess.canEditManagerFinal || !isManager) && !isHr)} className={INPUT} />
                 {form.managerSignedAt ? <p className="mt-1 text-xs text-kastros-sage">Signed {fmtDate(form.managerSignedAt)}</p> : null}
               </label>
             </div>

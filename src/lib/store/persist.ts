@@ -161,10 +161,18 @@ function normalizePerformanceCycles(raw: unknown): PerformanceCycle[] {
         typeof r.objectiveSettingEmployeeDeadline === "string" ? r.objectiveSettingEmployeeDeadline : null,
       objectiveSettingManagerDeadline:
         typeof r.objectiveSettingManagerDeadline === "string" ? r.objectiveSettingManagerDeadline : null,
+      objectiveSettingEmployeeOpen:
+        typeof r.objectiveSettingEmployeeOpen === "string" ? r.objectiveSettingEmployeeOpen : null,
+      objectiveSettingManagerOpen:
+        typeof r.objectiveSettingManagerOpen === "string" ? r.objectiveSettingManagerOpen : null,
       midYearEmployeeDeadline: typeof r.midYearEmployeeDeadline === "string" ? r.midYearEmployeeDeadline : null,
       midYearManagerDeadline: typeof r.midYearManagerDeadline === "string" ? r.midYearManagerDeadline : null,
+      midYearEmployeeOpen: typeof r.midYearEmployeeOpen === "string" ? r.midYearEmployeeOpen : null,
+      midYearManagerOpen: typeof r.midYearManagerOpen === "string" ? r.midYearManagerOpen : null,
       yearEndEmployeeDeadline: typeof r.yearEndEmployeeDeadline === "string" ? r.yearEndEmployeeDeadline : null,
       yearEndManagerDeadline: typeof r.yearEndManagerDeadline === "string" ? r.yearEndManagerDeadline : null,
+      yearEndEmployeeOpen: typeof r.yearEndEmployeeOpen === "string" ? r.yearEndEmployeeOpen : null,
+      yearEndManagerOpen: typeof r.yearEndManagerOpen === "string" ? r.yearEndManagerOpen : null,
       locked: r.locked === true,
       lockedAt: typeof r.lockedAt === "string" ? r.lockedAt : null,
       createdByEmail: typeof r.createdByEmail === "string" ? r.createdByEmail : "",

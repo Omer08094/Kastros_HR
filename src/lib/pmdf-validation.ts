@@ -1,7 +1,9 @@
 import type { PmdfBusinessObjective, PmdfDevelopmentObjective } from "@/lib/store/types";
 import { sumPercentages } from "@/lib/pmdf-scoring";
 
-export const PMDF_WEIGHT_TOTAL = 100;
+export const PMDF_PERFORMANCE_WEIGHT_TOTAL = 100;
+export const PMDF_DEVELOPMENT_OVERALL_SHARE = 0.2;
+export const PMDF_PERFORMANCE_OVERALL_SHARE = 0.8;
 export const PMDF_WEIGHT_TOLERANCE = 0.01;
 export const MIN_DEVELOPMENT_TRAITS = 3;
 
@@ -20,8 +22,27 @@ export function calcWeightTotals(fields: PmdfWeightFields): {
   };
 }
 
-export function isWeightTotalExact(total: number): boolean {
-  return Math.abs(total - PMDF_WEIGHT_TOTAL) <= PMDF_WEIGHT_TOLERANCE;
+export function isWeightTotalExact(total: number, target = PMDF_PERFORMANCE_WEIGHT_TOTAL): boolean {
+  return Math.abs(total - target) <= PMDF_WEIGHT_TOLERANCE;
+}
+
+/** Split 100% evenly across active development traits (weights are not employee-editable). */
+export function distributeDevelopmentWeights(rows: PmdfDevelopmentObjective[]): PmdfDevelopmentObjective[] {
+  const activeIndices = rows
+    .map((r, i) => ({ r, i }))
+    .filter(({ r }) => r.actionPlan.trim() || r.percentage > 0);
+  if (activeIndices.length === 0) {
+    return rows.map((r) => ({ ...r, percentage: 0 }));
+  }
+  const base = Math.floor(PMDF_PERFORMANCE_WEIGHT_TOTAL / activeIndices.length);
+  let remainder = PMDF_PERFORMANCE_WEIGHT_TOTAL - base * activeIndices.length;
+  const activeSet = new Set(activeIndices.map(({ i }) => i));
+  return rows.map((r, i) => {
+    if (!activeSet.has(i)) return { ...r, percentage: 0 };
+    const extra = remainder > 0 ? 1 : 0;
+    if (extra) remainder -= 1;
+    return { ...r, percentage: base + extra };
+  });
 }
 
 export function validateDevelopmentTraits(developmentObjectives: PmdfDevelopmentObjective[]): string | null {
@@ -36,18 +57,19 @@ export function validateDevelopmentTraits(developmentObjectives: PmdfDevelopment
   return null;
 }
 
-/** Strict validation for one-time employee objective submit — both sections must total 100%. */
+/** Strict validation for one-time employee objective submit. */
 export function validateObjectiveSubmitWeights(fields: PmdfWeightFields): string | null {
-  const { businessTotal, developmentTotal } = calcWeightTotals(fields);
+  const distributed = {
+    ...fields,
+    developmentObjectives: distributeDevelopmentWeights(fields.developmentObjectives),
+  };
+  const { businessTotal } = calcWeightTotals(distributed);
 
   if (!isWeightTotalExact(businessTotal)) {
     return `Performance goals must total 100% (currently ${businessTotal}%).`;
   }
-  if (!isWeightTotalExact(developmentTotal)) {
-    return `Development goals must total 100% (currently ${developmentTotal}%).`;
-  }
 
-  const traitsError = validateDevelopmentTraits(fields.developmentObjectives);
+  const traitsError = validateDevelopmentTraits(distributed.developmentObjectives);
   if (traitsError) return traitsError;
 
   return null;
@@ -63,26 +85,21 @@ export function validatePmdfWeightTotals(
 ): string | null {
   if (options.skipWeightValidation) return null;
 
-  const { businessTotal, developmentTotal } = calcWeightTotals(fields);
+  const { businessTotal } = calcWeightTotals(fields);
   const boHasPct = fields.businessObjectives.some((r) => r.percentage > 0);
-  const doHasPct = fields.developmentObjectives.some((r) => r.percentage > 0);
 
-  if (options.strictTotals) {
+  if (options.strictTotals || boHasPct) {
     if (!isWeightTotalExact(businessTotal)) {
       return `Performance goals must total 100% (currently ${businessTotal}%).`;
     }
-    if (!isWeightTotalExact(developmentTotal)) {
-      return `Development goals must total 100% (currently ${developmentTotal}%).`;
-    }
-    return null;
-  }
-
-  if (boHasPct && !isWeightTotalExact(businessTotal)) {
-    return `Business objectives must total 100% (currently ${businessTotal}%).`;
-  }
-  if (doHasPct && !isWeightTotalExact(developmentTotal)) {
-    return `Development objectives must total 100% (currently ${developmentTotal}%).`;
   }
 
   return null;
+}
+
+export function applyDevelopmentWeightPolicy(fields: PmdfWeightFields): PmdfWeightFields {
+  return {
+    ...fields,
+    developmentObjectives: distributeDevelopmentWeights(fields.developmentObjectives),
+  };
 }

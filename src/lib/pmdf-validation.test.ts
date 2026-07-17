@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  distributeDevelopmentWeights,
   objectiveSubmitWeightsValid,
   validateObjectiveSubmitWeights,
   validatePmdfWeightTotals,
@@ -40,7 +41,7 @@ function sampleDevRow(overrides: Partial<PmdfDevelopmentObjective> = {}): PmdfDe
 }
 
 describe("validateObjectiveSubmitWeights", () => {
-  it("accepts valid 100/100 split with at least three development traits", () => {
+  it("accepts valid performance 100% split with at least three development traits", () => {
     const fields = {
       businessObjectives: [sampleBusinessRow({ percentage: 100 })],
       developmentObjectives: [
@@ -52,6 +53,24 @@ describe("validateObjectiveSubmitWeights", () => {
 
     assert.equal(validateObjectiveSubmitWeights(fields), null);
     assert.equal(objectiveSubmitWeightsValid(fields), true);
+  });
+
+  it("auto-distributes development weights and does not require employee-entered dev totals", () => {
+    const fields = {
+      businessObjectives: [sampleBusinessRow({ percentage: 100 })],
+      developmentObjectives: [
+        sampleDevRow({ id: "do-1", percentage: 30 }),
+        sampleDevRow({ id: "do-2", pillar: "Initiative", percentage: 30 }),
+        sampleDevRow({ id: "do-3", pillar: "Collaboration", percentage: 30 }),
+      ],
+    };
+
+    assert.equal(validateObjectiveSubmitWeights(fields), null);
+    const distributed = distributeDevelopmentWeights(fields.developmentObjectives);
+    assert.equal(
+      distributed.reduce((sum, row) => sum + row.percentage, 0),
+      100,
+    );
   });
 
   it("rejects performance goals that do not total 100%", () => {
@@ -67,20 +86,6 @@ describe("validateObjectiveSubmitWeights", () => {
     const err = validateObjectiveSubmitWeights(fields);
     assert.match(err ?? "", /Performance goals must total 100%/);
     assert.equal(objectiveSubmitWeightsValid(fields), false);
-  });
-
-  it("rejects development goals that do not total 100%", () => {
-    const fields = {
-      businessObjectives: [sampleBusinessRow({ percentage: 100 })],
-      developmentObjectives: [
-        sampleDevRow({ id: "do-1", percentage: 30 }),
-        sampleDevRow({ id: "do-2", pillar: "Initiative", percentage: 30 }),
-        sampleDevRow({ id: "do-3", pillar: "Collaboration", percentage: 30 }),
-      ],
-    };
-
-    const err = validateObjectiveSubmitWeights(fields);
-    assert.match(err ?? "", /Development goals must total 100%/);
   });
 
   it("rejects when all weights are 0%", () => {

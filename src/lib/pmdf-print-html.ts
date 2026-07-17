@@ -109,9 +109,9 @@ export function buildPmdfPrintHtml(cycle: PerformanceCycle, form: PmdfForm): str
       <tr>
         <td style="padding:6px;border:1px solid #ccc;">Overall PMDP Score</td>
         <td style="padding:6px;border:1px solid #ccc;font-weight:700;">${scores.overallPmdpScore.toFixed(2)}</td>
-        <td style="padding:6px;border:1px solid #ccc;">BO Final Rating (70%)</td>
+        <td style="padding:6px;border:1px solid #ccc;">BO Final Rating (80%)</td>
         <td style="padding:6px;border:1px solid #ccc;">${scores.businessRating70.toFixed(2)}</td>
-        <td style="padding:6px;border:1px solid #ccc;">DO Final Rating (30%)</td>
+        <td style="padding:6px;border:1px solid #ccc;">DO Final Rating (20%)</td>
         <td style="padding:6px;border:1px solid #ccc;">${scores.developmentRating30.toFixed(2)}</td>
       </tr>
       <tr>

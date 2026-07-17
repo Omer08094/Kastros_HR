@@ -14,10 +14,12 @@ import { isPmdfLineManager, resolvePmdfLineManager } from "@/lib/pmdf-access";
 import { mergePmdfFormFields, applyEmployeeObjectiveLock, type PmdfFormFields, type PmdfSaveRole } from "@/lib/pmdf-merge";
 import { calcPmdfScores } from "@/lib/pmdf-scoring";
 import {
+  applyDevelopmentWeightPolicy,
   validateDevelopmentTraits,
   validateObjectiveSubmitWeights,
   validatePmdfWeightTotals,
 } from "@/lib/pmdf-validation";
+import { canEditPmdfForm, getPmdfFieldAccess } from "@/lib/pmdf-permissions";
 import { defaultDevelopmentRows, phaseLabel, type PmdfPhaseId } from "@/lib/pmdf-reference";
 import { hasExecAccess } from "@/lib/roles";
 import { mutateStore, readStore } from "@/lib/store/persist";
@@ -213,10 +215,16 @@ export async function createPerformanceCycle(formData: FormData): Promise<Action
             currentPhase: "objective_setting_employee",
             objectiveSettingEmployeeDeadline: String(formData.get("objectiveSettingEmployeeDeadline") ?? "").trim() || null,
             objectiveSettingManagerDeadline: String(formData.get("objectiveSettingManagerDeadline") ?? "").trim() || null,
+            objectiveSettingEmployeeOpen: String(formData.get("objectiveSettingEmployeeOpen") ?? "").trim() || null,
+            objectiveSettingManagerOpen: String(formData.get("objectiveSettingManagerOpen") ?? "").trim() || null,
             midYearEmployeeDeadline: String(formData.get("midYearEmployeeDeadline") ?? "").trim() || null,
             midYearManagerDeadline: String(formData.get("midYearManagerDeadline") ?? "").trim() || null,
+            midYearEmployeeOpen: String(formData.get("midYearEmployeeOpen") ?? "").trim() || null,
+            midYearManagerOpen: String(formData.get("midYearManagerOpen") ?? "").trim() || null,
             yearEndEmployeeDeadline: String(formData.get("yearEndEmployeeDeadline") ?? "").trim() || null,
             yearEndManagerDeadline: String(formData.get("yearEndManagerDeadline") ?? "").trim() || null,
+            yearEndEmployeeOpen: String(formData.get("yearEndEmployeeOpen") ?? "").trim() || null,
+            yearEndManagerOpen: String(formData.get("yearEndManagerOpen") ?? "").trim() || null,
             locked: false,
             lockedAt: null,
             createdByEmail: session.email,
@@ -323,13 +331,21 @@ export async function updatePerformanceCycle(formData: FormData): Promise<Action
                 ...c,
                 currentPhase: currentPhase || c.currentPhase,
                 objectiveSettingEmployeeDeadline:
-                  String(formData.get("objectiveSettingEmployeeDeadline") ?? "").trim() || c.objectiveSettingEmployeeDeadline,
+                  String(formData.get("objectiveSettingEmployeeDeadline") ?? "").trim() || null,
                 objectiveSettingManagerDeadline:
-                  String(formData.get("objectiveSettingManagerDeadline") ?? "").trim() || c.objectiveSettingManagerDeadline,
-                midYearEmployeeDeadline: String(formData.get("midYearEmployeeDeadline") ?? "").trim() || c.midYearEmployeeDeadline,
-                midYearManagerDeadline: String(formData.get("midYearManagerDeadline") ?? "").trim() || c.midYearManagerDeadline,
-                yearEndEmployeeDeadline: String(formData.get("yearEndEmployeeDeadline") ?? "").trim() || c.yearEndEmployeeDeadline,
-                yearEndManagerDeadline: String(formData.get("yearEndManagerDeadline") ?? "").trim() || c.yearEndManagerDeadline,
+                  String(formData.get("objectiveSettingManagerDeadline") ?? "").trim() || null,
+                objectiveSettingEmployeeOpen:
+                  String(formData.get("objectiveSettingEmployeeOpen") ?? "").trim() || null,
+                objectiveSettingManagerOpen:
+                  String(formData.get("objectiveSettingManagerOpen") ?? "").trim() || null,
+                midYearEmployeeDeadline: String(formData.get("midYearEmployeeDeadline") ?? "").trim() || null,
+                midYearManagerDeadline: String(formData.get("midYearManagerDeadline") ?? "").trim() || null,
+                midYearEmployeeOpen: String(formData.get("midYearEmployeeOpen") ?? "").trim() || null,
+                midYearManagerOpen: String(formData.get("midYearManagerOpen") ?? "").trim() || null,
+                yearEndEmployeeDeadline: String(formData.get("yearEndEmployeeDeadline") ?? "").trim() || null,
+                yearEndManagerDeadline: String(formData.get("yearEndManagerDeadline") ?? "").trim() || null,
+                yearEndEmployeeOpen: String(formData.get("yearEndEmployeeOpen") ?? "").trim() || null,
+                yearEndManagerOpen: String(formData.get("yearEndManagerOpen") ?? "").trim() || null,
                 locked,
                 lockedAt: locked ? new Date().toISOString() : null,
               }
@@ -600,10 +616,31 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
   if ((existing.locked || cycle?.locked) && !isHr) return { error: "This form is locked." };
 
   const saveRole: PmdfSaveRole = isHr ? "hr" : isOwner ? "employee" : "manager";
+  const effectivePhase = cycle?.currentPhase ?? existing.phase;
+  const employeeObjectivesLocked = !!existing.employeeObjectivesSubmittedAt;
+
+  if (
+    !isHr &&
+    !canEditPmdfForm({
+      cycle,
+      form: existing,
+      role: session.role,
+      isEmployee: isOwner,
+      isManager,
+      employeeObjectivesLocked,
+      effectivePhase,
+    })
+  ) {
+    return { error: "This form is not open for editing right now. Contact HR if you need access." };
+  }
+
   const incoming = parsePmdfFormFields(formData);
   let merged = mergePmdfFormFields(existingPmdfFormFields(existing), incoming, saveRole);
+  merged = {
+    ...merged,
+    ...applyDevelopmentWeightPolicy(merged),
+  };
 
-  const effectivePhase = cycle?.currentPhase ?? existing.phase;
   const submittingObjectives =
     saveRole === "employee" &&
     effectivePhase === "objective_setting_employee" &&

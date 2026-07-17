@@ -1,4 +1,8 @@
 import type { PmdfBusinessObjective, PmdfDevelopmentObjective } from "@/lib/store/types";
+import {
+  PMDF_DEVELOPMENT_OVERALL_SHARE,
+  PMDF_PERFORMANCE_OVERALL_SHARE,
+} from "@/lib/pmdf-validation";
 
 function weightedScore(rows: Array<{ percentage: number; score: number | null }>): number {
   return rows.reduce((sum, row) => {
@@ -35,9 +39,9 @@ export function calcPmdfScores(
   const businessFinal = calcBusinessFinalWeightage(business);
   const developmentSelf = calcDevelopmentSelfWeightage(development);
   const developmentFinal = calcDevelopmentFinalWeightage(development);
-  const businessRating70 = businessFinal * 0.7;
-  const developmentRating30 = developmentFinal * 0.3;
-  const overallPmdpScore = businessRating70 + developmentRating30;
+  const businessRating80 = businessFinal * PMDF_PERFORMANCE_OVERALL_SHARE;
+  const developmentRating20 = developmentFinal * PMDF_DEVELOPMENT_OVERALL_SHARE;
+  const overallPmdpScore = businessRating80 + developmentRating20;
   return {
     businessTotalPercentage: sumPercentages(business.map((r) => r.percentage)),
     developmentTotalPercentage: sumPercentages(development.map((r) => r.percentage)),
@@ -45,8 +49,8 @@ export function calcPmdfScores(
     businessFinal,
     developmentSelf,
     developmentFinal,
-    businessRating70,
-    developmentRating30,
+    businessRating70: businessRating80,
+    developmentRating30: developmentRating20,
     overallPmdpScore,
   };
 }

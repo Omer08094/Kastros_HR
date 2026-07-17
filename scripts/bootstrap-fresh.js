@@ -29,9 +29,9 @@ function parseArgs(argv) {
 }
 
 const DEFAULT_LEAVE_CATEGORIES = [
-  { id: "lv-cat-annual", name: "Annual leave", defaultDaysPerYear: 25, isActive: true, sortOrder: 1 },
+  { id: "lv-cat-annual", name: "Annual leave", defaultDaysPerYear: 14, isActive: true, sortOrder: 1 },
   { id: "lv-cat-sick", name: "Sick leave", defaultDaysPerYear: 10, isActive: true, sortOrder: 2 },
-  { id: "lv-cat-casual", name: "Casual leave", defaultDaysPerYear: 5, isActive: true, sortOrder: 3 },
+  { id: "lv-cat-casual", name: "Casual leave", defaultDaysPerYear: 8, isActive: true, sortOrder: 3 },
   { id: "lv-cat-unpaid", name: "Unpaid leave", defaultDaysPerYear: 0, isActive: true, sortOrder: 4 },
 ];
 
