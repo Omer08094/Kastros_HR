@@ -101,7 +101,16 @@ export function LeavePolicySettings({ categories }: { categories: LeaveCategory[
       </div>
 
       <form
-        action={(fd) => {
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (
+            !window.confirm(
+              `Apply standard leave days to all active employees for ${year}?\n\nThis will overwrite every custom entitlement for ${year}. Individual overrides set on the Leave page will be replaced.`,
+            )
+          ) {
+            return;
+          }
+          const fd = new FormData(e.currentTarget);
           fd.set("year", String(year));
           run(applyLeaveDefaultsToAllEmployees(fd), `Standard leave days applied to all active employees for ${year}.`);
         }}

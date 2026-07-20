@@ -9,6 +9,68 @@ import { SelectField } from "@/components/Field";
 import { Card } from "@/components/Card";
 import { GhostButton, PrimaryButton, useAction } from "./ModuleHelpers";
 
+function LeaveAllocationEditRow({
+  row,
+  employeeEmail,
+  year,
+  pending,
+  onSave,
+}: {
+  row: LeaveBalanceRow;
+  employeeEmail: string;
+  year: number;
+  pending: boolean;
+  onSave: (fd: FormData, label: string) => void;
+}) {
+  const [allocatedDays, setAllocatedDays] = useState(String(row.allocated));
+
+  return (
+    <tr>
+      <td className="py-3 pr-3 font-medium text-kastros-ink">
+        {row.category.name}
+        {row.isOverride ? (
+          <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-800 ring-1 ring-amber-200">
+            custom
+          </span>
+        ) : (
+          <span className="ml-2 text-xs text-kastros-sage">(standard)</span>
+        )}
+      </td>
+      <td className="py-3 pr-3">{row.allocated}</td>
+      <td className="py-3 pr-3 text-kastros-sage">{row.used}</td>
+      <td className="py-3 pr-3 font-medium text-kastros-forest">{row.remaining}</td>
+      <td className="py-3">
+        <form
+          key={`${employeeEmail}-${row.category.id}-${row.allocated}`}
+          className="flex items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const fd = new FormData(e.currentTarget);
+            fd.set("employeeEmail", employeeEmail);
+            fd.set("categoryId", row.category.id);
+            fd.set("year", String(year));
+            fd.set("allocatedDays", allocatedDays);
+            onSave(fd, `${row.category.name} updated.`);
+          }}
+        >
+          <input type="hidden" name="employeeEmail" value={employeeEmail} />
+          <input type="hidden" name="categoryId" value={row.category.id} />
+          <input type="hidden" name="year" value={year} />
+          <input
+            name="allocatedDays"
+            type="number"
+            min={0}
+            value={allocatedDays}
+            onChange={(e) => setAllocatedDays(e.target.value)}
+            className="w-20 rounded-lg border border-kastros-sand px-2 py-1 text-sm"
+          />
+          <PrimaryButton pending={pending}>Save</PrimaryButton>
+        </form>
+      </td>
+    </tr>
+  );
+}
+
 export function EmployeeLeaveEntitlements({
   employees,
   storeSlice,
@@ -73,46 +135,16 @@ export function EmployeeLeaveEntitlements({
                   <th className="pb-3 font-medium">Edit days</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-kastros-sand">
+              <tbody key={selectedEmail} className="divide-y divide-kastros-sand">
                 {rows.map((row) => (
-                  <tr key={row.category.id}>
-                    <td className="py-3 pr-3 font-medium text-kastros-ink">
-                      {row.category.name}
-                      {row.isOverride ? (
-                        <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-800 ring-1 ring-amber-200">
-                          custom
-                        </span>
-                      ) : (
-                        <span className="ml-2 text-xs text-kastros-sage">(standard)</span>
-                      )}
-                    </td>
-                    <td className="py-3 pr-3">{row.allocated}</td>
-                    <td className="py-3 pr-3 text-kastros-sage">{row.used}</td>
-                    <td className="py-3 pr-3 font-medium text-kastros-forest">{row.remaining}</td>
-                    <td className="py-3">
-                      <form
-                        className="flex items-center gap-2"
-                        action={(fd) => {
-                          fd.set("employeeEmail", selectedEmail);
-                          fd.set("categoryId", row.category.id);
-                          fd.set("year", String(year));
-                          run(upsertEmployeeLeaveAllocation(fd), `${row.category.name} updated.`);
-                        }}
-                      >
-                        <input type="hidden" name="employeeEmail" value={selectedEmail} />
-                        <input type="hidden" name="categoryId" value={row.category.id} />
-                        <input type="hidden" name="year" value={year} />
-                        <input
-                          name="allocatedDays"
-                          type="number"
-                          min={0}
-                          defaultValue={row.allocated}
-                          className="w-20 rounded-lg border border-kastros-sand px-2 py-1 text-sm"
-                        />
-                        <PrimaryButton pending={pending}>Save</PrimaryButton>
-                      </form>
-                    </td>
-                  </tr>
+                  <LeaveAllocationEditRow
+                    key={`${selectedEmail}-${row.category.id}-${row.allocated}`}
+                    row={row}
+                    employeeEmail={selectedEmail}
+                    year={year}
+                    pending={pending}
+                    onSave={(fd, label) => run(upsertEmployeeLeaveAllocation(fd), label)}
+                  />
                 ))}
               </tbody>
             </table>
