@@ -3,14 +3,17 @@ import type { RoleId } from "@/lib/roles";
 import { hasExecAccess } from "@/lib/roles";
 
 export type PmdfFieldAccess = {
-  canEditEmployeeGoals: boolean;
+  canEditEmployeeObjectiveFields: boolean;
   canEditPerformanceWeights: boolean;
   canEditDevelopmentWeights: boolean;
   canEditEmployeeMidYearFeedback: boolean;
   canEditEmployeeFinalFeedback: boolean;
   canEditEmployeeSignature: boolean;
-  canEditManagerMidYear: boolean;
-  canEditManagerFinal: boolean;
+  canEditRowManagerHalfYearComments: boolean;
+  canEditRowManagerFinalFields: boolean;
+  canEditManagerFeedbackMidYear: boolean;
+  canEditManagerFeedbackFinal: boolean;
+  canEditManagerSignature: boolean;
   canEditSelfScores: boolean;
 };
 
@@ -33,6 +36,40 @@ function windowOpen(cycle: PerformanceCycle | undefined, openKey: keyof Performa
   return isWithinDateWindow(open, close);
 }
 
+function allLocked(): PmdfFieldAccess {
+  return {
+    canEditEmployeeObjectiveFields: false,
+    canEditPerformanceWeights: false,
+    canEditDevelopmentWeights: false,
+    canEditEmployeeMidYearFeedback: false,
+    canEditEmployeeFinalFeedback: false,
+    canEditEmployeeSignature: false,
+    canEditRowManagerHalfYearComments: false,
+    canEditRowManagerFinalFields: false,
+    canEditManagerFeedbackMidYear: false,
+    canEditManagerFeedbackFinal: false,
+    canEditManagerSignature: false,
+    canEditSelfScores: false,
+  };
+}
+
+function allOpen(): PmdfFieldAccess {
+  return {
+    canEditEmployeeObjectiveFields: true,
+    canEditPerformanceWeights: true,
+    canEditDevelopmentWeights: true,
+    canEditEmployeeMidYearFeedback: true,
+    canEditEmployeeFinalFeedback: true,
+    canEditEmployeeSignature: true,
+    canEditRowManagerHalfYearComments: true,
+    canEditRowManagerFinalFields: true,
+    canEditManagerFeedbackMidYear: true,
+    canEditManagerFeedbackFinal: true,
+    canEditManagerSignature: true,
+    canEditSelfScores: true,
+  };
+}
+
 export function getPmdfFieldAccess(args: {
   cycle: PerformanceCycle | undefined;
   form: PmdfForm;
@@ -44,42 +81,16 @@ export function getPmdfFieldAccess(args: {
   onDate?: string;
 }): PmdfFieldAccess {
   const { cycle, form, role, isEmployee, isManager, employeeObjectivesLocked, effectivePhase } = args;
-  const onDate = args.onDate ?? todayIso();
   const hr = hasExecAccess(role);
   const globallyLocked = !!(form.locked || cycle?.locked);
+  const managerOnForm = isManager && !isEmployee;
 
-  if (hr) {
-    return {
-      canEditEmployeeGoals: true,
-      canEditPerformanceWeights: true,
-      canEditDevelopmentWeights: true,
-      canEditEmployeeMidYearFeedback: true,
-      canEditEmployeeFinalFeedback: true,
-      canEditEmployeeSignature: true,
-      canEditManagerMidYear: true,
-      canEditManagerFinal: true,
-      canEditSelfScores: true,
-    };
-  }
-
-  if (globallyLocked) {
-    return {
-      canEditEmployeeGoals: false,
-      canEditPerformanceWeights: false,
-      canEditDevelopmentWeights: false,
-      canEditEmployeeMidYearFeedback: false,
-      canEditEmployeeFinalFeedback: false,
-      canEditEmployeeSignature: false,
-      canEditManagerMidYear: false,
-      canEditManagerFinal: false,
-      canEditSelfScores: false,
-    };
-  }
+  if (hr) return allOpen();
+  if (globallyLocked) return allLocked();
 
   const objectiveWindow =
     windowOpen(cycle, "objectiveSettingEmployeeOpen", "objectiveSettingEmployeeDeadline") ||
-    effectivePhase === "objective_setting_employee" ||
-    effectivePhase === "objective_setting_manager";
+    effectivePhase === "objective_setting_employee";
 
   const midYearManagerWindow =
     windowOpen(cycle, "midYearManagerOpen", "midYearManagerDeadline") ||
@@ -101,15 +112,18 @@ export function getPmdfFieldAccess(args: {
   const canEditGoals = isEmployee && !employeeObjectivesLocked && objectiveWindow;
 
   return {
-    canEditEmployeeGoals: canEditGoals,
+    canEditEmployeeObjectiveFields: canEditGoals,
     canEditPerformanceWeights: canEditGoals,
     canEditDevelopmentWeights: false,
     canEditEmployeeMidYearFeedback: isEmployee && midYearEmployeeWindow,
     canEditEmployeeFinalFeedback: isEmployee && finalEmployeeWindow,
     canEditEmployeeSignature: isEmployee && finalEmployeeWindow,
-    canEditManagerMidYear: isManager && midYearManagerWindow,
-    canEditManagerFinal: isManager && finalManagerWindow,
-    canEditSelfScores: isEmployee && (midYearEmployeeWindow || finalEmployeeWindow),
+    canEditRowManagerHalfYearComments: managerOnForm && midYearManagerWindow && !finalManagerWindow,
+    canEditRowManagerFinalFields: managerOnForm && finalManagerWindow,
+    canEditManagerFeedbackMidYear: managerOnForm && midYearManagerWindow && !finalManagerWindow,
+    canEditManagerFeedbackFinal: managerOnForm && finalManagerWindow,
+    canEditManagerSignature: managerOnForm && finalManagerWindow,
+    canEditSelfScores: isEmployee && finalEmployeeWindow,
   };
 }
 
@@ -128,13 +142,16 @@ export function canEditPmdfForm(args: {
 
   const access = getPmdfFieldAccess(args);
   return (
-    access.canEditEmployeeGoals ||
+    access.canEditEmployeeObjectiveFields ||
     access.canEditPerformanceWeights ||
     access.canEditEmployeeMidYearFeedback ||
     access.canEditEmployeeFinalFeedback ||
     access.canEditEmployeeSignature ||
-    access.canEditManagerMidYear ||
-    access.canEditManagerFinal ||
+    access.canEditRowManagerHalfYearComments ||
+    access.canEditRowManagerFinalFields ||
+    access.canEditManagerFeedbackMidYear ||
+    access.canEditManagerFeedbackFinal ||
+    access.canEditManagerSignature ||
     access.canEditSelfScores
   );
 }

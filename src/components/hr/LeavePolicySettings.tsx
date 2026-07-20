@@ -105,7 +105,7 @@ export function LeavePolicySettings({ categories }: { categories: LeaveCategory[
           e.preventDefault();
           if (
             !window.confirm(
-              `Apply standard leave days to all active employees for ${year}?\n\nThis will overwrite every custom entitlement for ${year}. Individual overrides set on the Leave page will be replaced.`,
+              `Apply standard leave days for ${year} to employees who do not have an entitlement yet?\n\nExisting custom overrides on the Leave page will not be changed.`,
             )
           ) {
             return;
@@ -118,8 +118,8 @@ export function LeavePolicySettings({ categories }: { categories: LeaveCategory[
         <input type="hidden" name="year" value={year} />
         <PrimaryButton pending={pending}>Apply standard days to all active employees ({year})</PrimaryButton>
         <p className="mt-2 text-xs text-kastros-sage">
-          Overwrites each employee&apos;s entitlement for {year} with the standard days shown above. Individual overrides
-          can be set again on the Leave page.
+          Fills in missing entitlements for {year} only — existing per-employee overrides are kept. To reset one person
+          to standard days, use Reset on the Leave page.
         </p>
       </form>
     </div>

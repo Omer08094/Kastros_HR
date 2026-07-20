@@ -579,14 +579,19 @@ export async function applyLeaveDefaultsToAllEmployees(formData: FormData): Prom
     const newRows = buildAllocationsFromDefaults(store, activeEmails, year);
     const key = (a: EmployeeLeaveAllocation) => `${a.employeeEmail.toLowerCase()}:${a.categoryId}:${a.year}`;
     const map = new Map(store.employeeLeaveAllocations.map((a) => [key(a), a]));
+    let added = 0;
     for (const row of newRows) {
-      map.set(key(row), row);
+      const k = key(row);
+      if (!map.has(k)) {
+        map.set(k, row);
+        added += 1;
+      }
     }
     return {
       next: audit(
         { ...store, employeeLeaveAllocations: [...map.values()] },
         session.email,
-        `Applied leave defaults to ${activeEmails.length} employees for ${year}`,
+        `Applied leave defaults (${added} new entitlements) for ${year}`,
       ),
       result: ok(),
     };

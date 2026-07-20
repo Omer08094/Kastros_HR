@@ -506,7 +506,7 @@ function PmdfFormEditor({
     !form.employeeObjectivesSubmittedAt;
   const employeeGoalsComplete =
     isEmployee && employeeObjectivesLocked && effectivePhase === "objective_setting_employee";
-  const canEmployeeEditGoals = fieldAccess.canEditEmployeeGoals;
+  const canEmployeeEditGoals = fieldAccess.canEditEmployeeObjectiveFields;
 
   const [tab, setTab] = useState<"bo" | "do" | "feedback">("bo");
   const [businessObjectives, setBusinessObjectives] = useState(form.businessObjectives);
@@ -742,11 +742,11 @@ function PmdfFormEditor({
 
       {isManager && !isEmployee && !isHr ? (
         <div className="mx-5 mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-          {fieldAccess.canEditManagerMidYear && !fieldAccess.canEditManagerFinal
+          {fieldAccess.canEditRowManagerHalfYearComments && !fieldAccess.canEditRowManagerFinalFields
             ? "Mid-year review is open. You can enter half-year manager comments and feedback only."
-            : fieldAccess.canEditManagerFinal && !fieldAccess.canEditManagerMidYear
+            : fieldAccess.canEditRowManagerFinalFields && !fieldAccess.canEditRowManagerHalfYearComments
               ? "Final evaluation is open. You can enter full-year scores, comments, and feedback only."
-              : fieldAccess.canEditManagerMidYear && fieldAccess.canEditManagerFinal
+              : fieldAccess.canEditRowManagerHalfYearComments && fieldAccess.canEditRowManagerFinalFields
                 ? "Both mid-year and final evaluation windows are open."
                 : "This form is not open for manager editing right now. Contact HR if you need access."}
         </div>
@@ -854,7 +854,7 @@ function PmdfFormEditor({
                   <textarea
                     value={row.objectiveSmart}
                     onChange={(e) => updateBo(idx, { objectiveSmart: e.target.value })}
-                    disabled={!editable || (!fieldAccess.canEditEmployeeGoals && !isHr)}
+                    disabled={!editable || (!fieldAccess.canEditEmployeeObjectiveFields && !isHr)}
                     className={TEXTAREA}
                   />
                 </label>
@@ -863,7 +863,7 @@ function PmdfFormEditor({
                   <textarea
                     value={row.action}
                     onChange={(e) => updateBo(idx, { action: e.target.value })}
-                    disabled={!editable || (!fieldAccess.canEditEmployeeGoals && !isHr)}
+                    disabled={!editable || (!fieldAccess.canEditEmployeeObjectiveFields && !isHr)}
                     className={TEXTAREA}
                   />
                 </label>
@@ -872,7 +872,7 @@ function PmdfFormEditor({
                   <textarea
                     value={row.employeeComments}
                     onChange={(e) => updateBo(idx, { employeeComments: e.target.value })}
-                    disabled={!editable || (!fieldAccess.canEditEmployeeGoals && !isHr)}
+                    disabled={!editable || (!fieldAccess.canEditEmployeeObjectiveFields && !isHr)}
                     className={TEXTAREA}
                   />
                 </label>
@@ -895,7 +895,7 @@ function PmdfFormEditor({
                       step={1}
                       value={row.selfScoreFy ?? ""}
                       onChange={(e) => updateBo(idx, { selfScoreFy: toIntOrNull(e.target.value) })}
-                      disabled={!editable || ((!fieldAccess.canEditSelfScores || !isEmployee) && !isHr)}
+                      disabled={!editable || (!fieldAccess.canEditSelfScores && !isHr)}
                       className={INPUT}
                     />
                   </label>
@@ -908,7 +908,7 @@ function PmdfFormEditor({
                       step={1}
                       value={row.finalScoreFy ?? ""}
                       onChange={(e) => updateBo(idx, { finalScoreFy: toIntOrNull(e.target.value) })}
-                      disabled={!editable || ((!fieldAccess.canEditManagerFinal || !isManager) && !isHr)}
+                      disabled={!editable || (!fieldAccess.canEditRowManagerFinalFields && !isHr)}
                       className={INPUT}
                     />
                   </label>
@@ -927,7 +927,7 @@ function PmdfFormEditor({
                   <textarea
                     value={row.managerCommentsHalfYear}
                     onChange={(e) => updateBo(idx, { managerCommentsHalfYear: e.target.value })}
-                    disabled={!editable || ((!fieldAccess.canEditManagerMidYear || !isManager) && !isHr)}
+                    disabled={!editable || (!fieldAccess.canEditRowManagerHalfYearComments && !isHr)}
                     className={TEXTAREA}
                   />
                 </label>
@@ -936,7 +936,7 @@ function PmdfFormEditor({
                   <textarea
                     value={row.managerCommentsFullYear}
                     onChange={(e) => updateBo(idx, { managerCommentsFullYear: e.target.value })}
-                    disabled={!editable || ((!fieldAccess.canEditManagerFinal || !isManager) && !isHr)}
+                    disabled={!editable || (!fieldAccess.canEditRowManagerFinalFields && !isHr)}
                     className={TEXTAREA}
                   />
                 </label>
@@ -1023,7 +1023,7 @@ function PmdfFormEditor({
                           <input
                             value={row.pillar}
                             onChange={(e) => updateDo(idx, { pillar: e.target.value })}
-                            disabled={!editable || (!fieldAccess.canEditEmployeeGoals && !isHr)}
+                            disabled={!editable || (!fieldAccess.canEditEmployeeObjectiveFields && !isHr)}
                             placeholder="e.g. Adaptability, Communication"
                             className={INPUT}
                           />
@@ -1044,7 +1044,7 @@ function PmdfFormEditor({
                       <textarea
                         value={row.actionPlan}
                         onChange={(e) => updateDo(idx, { actionPlan: e.target.value })}
-                        disabled={!editable || (!fieldAccess.canEditEmployeeGoals && !isHr)}
+                        disabled={!editable || (!fieldAccess.canEditEmployeeObjectiveFields && !isHr)}
                         className={TEXTAREA}
                       />
                     </label>
@@ -1073,7 +1073,7 @@ function PmdfFormEditor({
                           step={1}
                           value={row.selfScoreFy ?? ""}
                           onChange={(e) => updateDo(idx, { selfScoreFy: toIntOrNull(e.target.value) })}
-                          disabled={!editable || ((!fieldAccess.canEditSelfScores || !isEmployee) && !isHr)}
+                          disabled={!editable || (!fieldAccess.canEditSelfScores && !isHr)}
                           className={INPUT}
                         />
                       </label>
@@ -1086,7 +1086,7 @@ function PmdfFormEditor({
                           step={1}
                           value={row.finalScoreFy ?? ""}
                           onChange={(e) => updateDo(idx, { finalScoreFy: toIntOrNull(e.target.value) })}
-                          disabled={!editable || ((!fieldAccess.canEditManagerFinal || !isManager) && !isHr)}
+                          disabled={!editable || (!fieldAccess.canEditRowManagerFinalFields && !isHr)}
                           className={INPUT}
                         />
                       </label>
@@ -1096,7 +1096,7 @@ function PmdfFormEditor({
                       <textarea
                         value={row.managerCommentsHalfYear}
                         onChange={(e) => updateDo(idx, { managerCommentsHalfYear: e.target.value })}
-                        disabled={!editable || ((!fieldAccess.canEditManagerMidYear || !isManager) && !isHr)}
+                        disabled={!editable || (!fieldAccess.canEditRowManagerHalfYearComments && !isHr)}
                         className={TEXTAREA}
                       />
                     </label>
@@ -1105,7 +1105,7 @@ function PmdfFormEditor({
                       <textarea
                         value={row.managerCommentsFullYear}
                         onChange={(e) => updateDo(idx, { managerCommentsFullYear: e.target.value })}
-                        disabled={!editable || ((!fieldAccess.canEditManagerFinal || !isManager) && !isHr)}
+                        disabled={!editable || (!fieldAccess.canEditRowManagerFinalFields && !isHr)}
                         className={TEXTAREA}
                       />
                     </label>
@@ -1129,31 +1129,31 @@ function PmdfFormEditor({
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="text-sm">
                 <span className="text-kastros-sage">Employee feedback — Mid Year</span>
-                <textarea value={employeeFeedbackMidYear} onChange={(e) => setEmployeeFeedbackMidYear(e.target.value)} disabled={!editable || ((!fieldAccess.canEditEmployeeMidYearFeedback || !isEmployee) && !isHr)} className={TEXTAREA} />
+                <textarea value={employeeFeedbackMidYear} onChange={(e) => setEmployeeFeedbackMidYear(e.target.value)} disabled={!editable || (!fieldAccess.canEditEmployeeMidYearFeedback && !isHr)} className={TEXTAREA} />
               </label>
               <label className="text-sm">
                 <span className="text-kastros-sage">Manager feedback — Mid Year</span>
-                <textarea value={managerFeedbackMidYear} onChange={(e) => setManagerFeedbackMidYear(e.target.value)} disabled={!editable || ((!fieldAccess.canEditManagerMidYear || !isManager) && !isHr)} className={TEXTAREA} />
+                <textarea value={managerFeedbackMidYear} onChange={(e) => setManagerFeedbackMidYear(e.target.value)} disabled={!editable || (!fieldAccess.canEditManagerFeedbackMidYear && !isHr)} className={TEXTAREA} />
               </label>
               <label className="text-sm">
                 <span className="text-kastros-sage">Employee feedback — Full Year</span>
-                <textarea value={employeeFeedbackFy} onChange={(e) => setEmployeeFeedbackFy(e.target.value)} disabled={!editable || ((!fieldAccess.canEditEmployeeFinalFeedback || !isEmployee) && !isHr)} className={TEXTAREA} />
+                <textarea value={employeeFeedbackFy} onChange={(e) => setEmployeeFeedbackFy(e.target.value)} disabled={!editable || (!fieldAccess.canEditEmployeeFinalFeedback && !isHr)} className={TEXTAREA} />
               </label>
               <label className="text-sm">
                 <span className="text-kastros-sage">Manager feedback — Full Year</span>
-                <textarea value={managerFeedbackFy} onChange={(e) => setManagerFeedbackFy(e.target.value)} disabled={!editable || ((!fieldAccess.canEditManagerFinal || !isManager) && !isHr)} className={TEXTAREA} />
+                <textarea value={managerFeedbackFy} onChange={(e) => setManagerFeedbackFy(e.target.value)} disabled={!editable || (!fieldAccess.canEditManagerFeedbackFinal && !isHr)} className={TEXTAREA} />
               </label>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="text-sm">
                 <span className="text-kastros-sage">Employee signature (type full name)</span>
-                <input value={employeeSignature} onChange={(e) => setEmployeeSignature(e.target.value)} disabled={!editable || ((!fieldAccess.canEditEmployeeSignature || !isEmployee) && !isHr)} className={INPUT} />
+                <input value={employeeSignature} onChange={(e) => setEmployeeSignature(e.target.value)} disabled={!editable || (!fieldAccess.canEditEmployeeSignature && !isHr)} className={INPUT} />
                 {form.employeeSignedAt ? <p className="mt-1 text-xs text-kastros-sage">Signed {fmtDate(form.employeeSignedAt)}</p> : null}
               </label>
               <label className="text-sm">
                 <span className="text-kastros-sage">Manager signature (type full name)</span>
-                <input value={managerSignature} onChange={(e) => setManagerSignature(e.target.value)} disabled={!editable || ((!fieldAccess.canEditManagerFinal || !isManager) && !isHr)} className={INPUT} />
+                <input value={managerSignature} onChange={(e) => setManagerSignature(e.target.value)} disabled={!editable || (!fieldAccess.canEditManagerSignature && !isHr)} className={INPUT} />
                 {form.managerSignedAt ? <p className="mt-1 text-xs text-kastros-sage">Signed {fmtDate(form.managerSignedAt)}</p> : null}
               </label>
             </div>

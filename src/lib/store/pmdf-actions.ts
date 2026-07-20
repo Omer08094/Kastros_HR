@@ -19,6 +19,7 @@ import {
   validateObjectiveSubmitWeights,
   validatePmdfWeightTotals,
 } from "@/lib/pmdf-validation";
+import { applyPmdfFieldAccess } from "@/lib/pmdf-field-enforcement";
 import { canEditPmdfForm, getPmdfFieldAccess } from "@/lib/pmdf-permissions";
 import { defaultDevelopmentRows, phaseLabel, type PmdfPhaseId } from "@/lib/pmdf-reference";
 import { hasExecAccess } from "@/lib/roles";
@@ -640,6 +641,20 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
     ...merged,
     ...applyDevelopmentWeightPolicy(merged),
   };
+  merged = applyPmdfFieldAccess(
+    existingPmdfFormFields(existing),
+    merged,
+    getPmdfFieldAccess({
+      cycle,
+      form: existing,
+      role: session.role,
+      isEmployee: isOwner,
+      isManager,
+      employeeObjectivesLocked,
+      effectivePhase,
+    }),
+    saveRole,
+  );
 
   const submittingObjectives =
     saveRole === "employee" &&

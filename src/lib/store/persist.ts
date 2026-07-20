@@ -786,7 +786,12 @@ export async function writeStore(store: HrStore): Promise<void> {
       volatileMemoryStore = null;
       return;
     } catch (e) {
-      console.error("[kastros-hr] Firestore write failed, falling back to local file.", e);
+      console.error("[kastros-hr] Firestore write failed.", e);
+      if (process.env.VERCEL) {
+        throw new Error(
+          "Could not save to Firestore. Check Vercel environment variables (FIREBASE_*), Firebase rules, and deployment logs. Your change was not saved.",
+        );
+      }
     }
   }
 
@@ -801,13 +806,8 @@ export async function writeStore(store: HrStore): Promise<void> {
   }
 
   volatileMemoryStore = structuredClone(store);
-  if (!firestore) {
-    throw new Error(
-      "Could not save HR data. On Vercel, set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY in Environment Variables, then redeploy.",
-    );
-  }
   throw new Error(
-    "Could not save to Firestore or local disk. Check Vercel logs, Firebase credentials, and Firestore rules. Your change was not saved.",
+    "Could not save HR data to disk or Firestore. Your change was not saved.",
   );
 }
 
