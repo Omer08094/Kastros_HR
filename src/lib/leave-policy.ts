@@ -89,6 +89,10 @@ export type LeaveBalanceRow = {
   isOverride: boolean;
 };
 
+export function formatLeaveTypeOptionLabel(row: LeaveBalanceRow): string {
+  return `${row.category.name} (${row.remaining} remaining of ${row.allocated})`;
+}
+
 export function buildLeaveBalanceRows(
   store: HrStore,
   employeeEmail: string,

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { getAllocatedDays } from "./leave-policy";
+import { formatLeaveTypeOptionLabel, getAllocatedDays } from "./leave-policy";
+import type { LeaveBalanceRow } from "./leave-policy";
 import type { HrStore } from "./store/types";
 
 function miniStore(overrides: Partial<HrStore> = {}): HrStore {
@@ -21,6 +22,19 @@ function miniStore(overrides: Partial<HrStore> = {}): HrStore {
     leaveRequests: [],
   } as HrStore;
 }
+
+describe("formatLeaveTypeOptionLabel", () => {
+  it("shows remaining and allocated from balance row", () => {
+    const row: LeaveBalanceRow = {
+      category: { id: "lv-cat-annual", name: "Annual leave", defaultDaysPerYear: 14, isActive: true, sortOrder: 1 },
+      allocated: 20,
+      used: 5,
+      remaining: 15,
+      isOverride: true,
+    };
+    assert.equal(formatLeaveTypeOptionLabel(row), "Annual leave (15 remaining of 20)");
+  });
+});
 
 describe("getAllocatedDays", () => {
   it("returns employee override when present", () => {

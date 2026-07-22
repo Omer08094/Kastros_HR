@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useToast } from "@/components/ui/ToastProvider";
 import type { Employee, HrStore, LeaveCategory, LeaveRequest } from "@/lib/store/types";
-import type { LeaveBalanceRow } from "@/lib/leave-policy";
+import { formatLeaveTypeOptionLabel, type LeaveBalanceRow } from "@/lib/leave-policy";
 import { createLeaveRequest, decideLeaveRequest } from "@/lib/store/hr-actions";
 import { SelectField } from "@/components/Field";
 import type { Session } from "@/lib/auth";
@@ -107,8 +107,6 @@ export function LeaveClient({
   const [viewingNote, setViewingNote] = useState<string | null>(null);
   const requestFromUrl = searchParams.get("request");
   const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
-
-  const activeCategories = categories.filter((c) => c.isActive).sort((a, b) => a.sortOrder - b.sortOrder);
 
   const linkedRequest = useMemo(
     () => (requestFromUrl ? requests.find((r) => r.id === requestFromUrl) ?? null : null),
@@ -232,15 +230,15 @@ export function LeaveClient({
         <section className="rounded-2xl border border-kastros-sand bg-white p-5 shadow-sm">
           <h2 className="font-display text-lg font-semibold text-kastros-forest">Request time off</h2>
           <form className="mt-4 grid gap-3 sm:grid-cols-2" action={(fd) => handle(createLeaveRequest(fd), "Leave request submitted.")}>
-            {activeCategories.length > 0 ? (
+            {balanceRows.length > 0 ? (
               <SelectField
                 name="categoryId"
                 label="Leave type"
                 required
                 span2
-                options={activeCategories.map((c) => ({
-                  value: c.id,
-                  label: `${c.name} (${c.defaultDaysPerYear} days standard)`,
+                options={balanceRows.map((row) => ({
+                  value: row.category.id,
+                  label: formatLeaveTypeOptionLabel(row),
                 }))}
               />
             ) : (
