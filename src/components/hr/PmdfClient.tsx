@@ -17,20 +17,23 @@ import {
 import { calcPmdfScores } from "@/lib/pmdf-scoring";
 import {
   MIN_DEVELOPMENT_TRAITS,
+  developmentGoalsSubmitValid,
   distributeDevelopmentWeights,
-  objectiveSubmitWeightsValid,
+  performanceGoalsSubmitValid,
   PMDF_DEVELOPMENT_OVERALL_SHARE,
   PMDF_PERFORMANCE_OVERALL_SHARE,
-  validateObjectiveSubmitWeights,
+  validateDevelopmentGoalsSubmit,
+  validatePerformanceGoalsSubmit,
 } from "@/lib/pmdf-validation";
 import { canEditPmdfForm, getPmdfFieldAccess } from "@/lib/pmdf-permissions";
 import {
   canHrReopenStage,
   hrReopenStageLabel,
-  isEmployeeGoalsLocked,
+  isDevelopmentGoalsLocked,
   isEmployeeObjectivesHrReopened,
   isHrReopenActive,
   isHrReopenActiveForUser,
+  isPerformanceGoalsLocked,
   PMDF_HR_REOPEN_STAGES,
   type PmdfHrReopenStage,
 } from "@/lib/pmdf-hr-reopen";
@@ -489,13 +492,26 @@ function PmdfFormEditor({
   const isManager = isPmdfLineManagerFromEmployees(employees, session.email, form);
   const locked = form.locked || cycle?.locked;
   const effectivePhase = cycle?.currentPhase ?? form.phase;
-  const employeeObjectivesLocked = isEmployeeGoalsLocked(form, cycle);
+  const performanceGoalsLocked = isPerformanceGoalsLocked(form, cycle);
+  const developmentGoalsLocked = isDevelopmentGoalsLocked(form, cycle);
   const objectivesHrReopened = isEmployeeObjectivesHrReopened(form);
   const hrReopenActive = isHrReopenActive(form);
   const hrReopenForUser = isHrReopenActiveForUser(form, isEmployee, isManager);
   const [reopenStage, setReopenStage] = useState<PmdfHrReopenStage>("objective_setting_employee");
   const selectedStageReopenable =
     isHr && !hrReopenActive && canHrReopenStage(form, cycle, reopenStage);
+  const inObjectivePhase =
+    effectivePhase === "objective_setting_employee" || form.hrReopenedStage === "objective_setting_employee";
+  const canSubmitPerformance =
+    isEmployee && !form.employeePerformanceGoalsSubmittedAt && inObjectivePhase;
+  const canSubmitDevelopment =
+    isEmployee && !form.employeeDevelopmentGoalsSubmittedAt && inObjectivePhase;
+  const employeeGoalsComplete =
+    isEmployee &&
+    inObjectivePhase &&
+    performanceGoalsLocked &&
+    developmentGoalsLocked &&
+    !objectivesHrReopened;
   const fieldAccess = useMemo(
     () =>
       getPmdfFieldAccess({
@@ -504,10 +520,11 @@ function PmdfFormEditor({
         role: session.role,
         isEmployee,
         isManager,
-        employeeObjectivesLocked,
+        performanceGoalsLocked,
+        developmentGoalsLocked,
         effectivePhase,
       }),
-    [cycle, form, session.role, isEmployee, isManager, employeeObjectivesLocked, effectivePhase],
+    [cycle, form, session.role, isEmployee, isManager, performanceGoalsLocked, developmentGoalsLocked, effectivePhase],
   );
   const editable = canEditPmdfForm({
     cycle,
@@ -515,16 +532,12 @@ function PmdfFormEditor({
     role: session.role,
     isEmployee,
     isManager,
-    employeeObjectivesLocked,
+    performanceGoalsLocked,
+    developmentGoalsLocked,
     effectivePhase,
   });
-  const submittingObjectives =
-    isEmployee &&
-    !form.employeeObjectivesSubmittedAt &&
-    (effectivePhase === "objective_setting_employee" || form.hrReopenedStage === "objective_setting_employee");
-  const employeeGoalsComplete =
-    isEmployee && employeeObjectivesLocked && !objectivesHrReopened && effectivePhase === "objective_setting_employee";
-  const canEmployeeEditGoals = fieldAccess.canEditEmployeeObjectiveFields;
+  const canEmployeeEditPerformance = fieldAccess.canEditEmployeeObjectiveFields;
+  const canEmployeeEditDevelopment = fieldAccess.canEditEmployeeDevelopmentFields;
 
   const [tab, setTab] = useState<"bo" | "do" | "feedback">("bo");
   const [businessObjectives, setBusinessObjectives] = useState(form.businessObjectives);
@@ -545,12 +558,13 @@ function PmdfFormEditor({
     [businessObjectives, developmentObjectives],
   );
 
-  const weightsReady = useMemo(
-    () =>
-      objectiveSubmitWeightsValid({
-        businessObjectives,
-        developmentObjectives,
-      }),
+  const performanceReady = useMemo(
+    () => performanceGoalsSubmitValid({ businessObjectives, developmentObjectives }),
+    [businessObjectives, developmentObjectives],
+  );
+
+  const developmentReady = useMemo(
+    () => developmentGoalsSubmitValid({ businessObjectives, developmentObjectives }),
     [businessObjectives, developmentObjectives],
   );
 
@@ -633,10 +647,11 @@ function PmdfFormEditor({
   const activeDo = developmentObjectives.filter((r) => r.actionPlan.trim() || r.percentage > 0);
   const filledDo = activeDo.length;
 
-  function buildFormData(confirmObjectivesSubmit: boolean): FormData {
+  function buildFormData(opts?: { performanceSubmit?: boolean; developmentSubmit?: boolean }): FormData {
     const fd = new FormData();
     fd.set("formId", form.id);
-    if (confirmObjectivesSubmit) fd.set("confirmEmployeeObjectivesSubmit", "1");
+    if (opts?.performanceSubmit) fd.set("confirmEmployeePerformanceSubmit", "1");
+    if (opts?.developmentSubmit) fd.set("confirmEmployeeDevelopmentSubmit", "1");
     fd.set("boCount", String(businessObjectives.length));
     businessObjectives.forEach((r, i) => {
       fd.set(`bo_id_${i}`, r.id);
@@ -673,24 +688,34 @@ function PmdfFormEditor({
     return fd;
   }
 
-  function handleSave() {
-    if (submittingObjectives) {
-      const weightError = validateObjectiveSubmitWeights({
-        businessObjectives,
-        developmentObjectives,
-      });
-      if (weightError) {
-        toast.error(weightError);
-        return;
-      }
-      const ok = window.confirm(
-        "You can only submit your performance and development goals once.\n\nAfter saving, you will not be able to edit these goals again.\n\nPlease review all objectives, weights, and development traits carefully before continuing.",
-      );
-      if (!ok) return;
-      onAction(savePmdfForm(buildFormData(true)), "Performance and development goals submitted.");
+  function handleSaveDraft() {
+    onAction(savePmdfForm(buildFormData()), "PMDF form saved successfully.");
+  }
+
+  function handleSubmitPerformance() {
+    const weightError = validatePerformanceGoalsSubmit({ businessObjectives, developmentObjectives });
+    if (weightError) {
+      toast.error(weightError);
       return;
     }
-    onAction(savePmdfForm(buildFormData(false)), "PMDF form saved successfully.");
+    const ok = window.confirm(
+      "You can only submit your performance goals once.\n\nAfter saving, you will not be able to edit performance goals again.\n\nPlease review every objective and weight carefully before continuing.",
+    );
+    if (!ok) return;
+    onAction(savePmdfForm(buildFormData({ performanceSubmit: true })), "Performance goals submitted.");
+  }
+
+  function handleSubmitDevelopment() {
+    const weightError = validateDevelopmentGoalsSubmit({ businessObjectives, developmentObjectives });
+    if (weightError) {
+      toast.error(weightError);
+      return;
+    }
+    const ok = window.confirm(
+      "You can only submit your development goals once.\n\nAfter saving, you will not be able to edit development traits again.\n\nPlease review every trait and action plan carefully before continuing.",
+    );
+    if (!ok) return;
+    onAction(savePmdfForm(buildFormData({ developmentSubmit: true })), "Development goals submitted.");
   }
 
   return (
@@ -857,28 +882,57 @@ function PmdfFormEditor({
         </div>
       ) : null}
 
-      {employeeObjectivesLocked && !objectivesHrReopened && isEmployee ? (
+      {isEmployee && performanceGoalsLocked && !objectivesHrReopened ? (
         <div className="mx-5 mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          {form.employeeObjectivesSubmittedAt ? (
+          {form.employeePerformanceGoalsSubmittedAt ? (
             <>
-              Your performance and development goals were submitted on{" "}
-              {fmtDate(form.employeeObjectivesSubmittedAt)} and can no longer be changed.
+              Your performance goals were submitted on {fmtDate(form.employeePerformanceGoalsSubmittedAt)} and can no
+              longer be changed.
             </>
           ) : (
-            <>Your performance and development goals are locked and can no longer be changed.</>
+            <>Your performance goals are locked and can no longer be changed.</>
           )}
         </div>
-      ) : submittingObjectives ? (
+      ) : null}
+
+      {isEmployee && developmentGoalsLocked && !objectivesHrReopened ? (
+        <div className="mx-5 mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {form.employeeDevelopmentGoalsSubmittedAt ? (
+            <>
+              Your development goals were submitted on {fmtDate(form.employeeDevelopmentGoalsSubmittedAt)} and can no
+              longer be changed.
+            </>
+          ) : (
+            <>Your development goals are locked and can no longer be changed.</>
+          )}
+        </div>
+      ) : null}
+
+      {canSubmitPerformance && tab === "bo" ? (
         <>
           <div className="mx-5 mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-            You can only submit your performance and development goals once. Review every objective, weight, and
-            development trait carefully before saving.
+            You can only submit your performance goals once. Review every objective and weight carefully before
+            submitting.
           </div>
-          {!weightsReady ? (
+          {!performanceReady ? (
             <div className="mx-5 mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               Performance goals must total <strong>100%</strong> (currently {scores.businessTotalPercentage}%) before
-              you can submit. Use at least {MIN_DEVELOPMENT_TRAITS} development traits with action plans (development
-              contributes {Math.round(PMDF_DEVELOPMENT_OVERALL_SHARE * 100)}% to your overall score automatically).
+              you can submit.
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      {canSubmitDevelopment && tab === "do" ? (
+        <>
+          <div className="mx-5 mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            You can only submit your development goals once. Use at least {MIN_DEVELOPMENT_TRAITS} traits with action
+            plans before submitting (development contributes {Math.round(PMDF_DEVELOPMENT_OVERALL_SHARE * 100)}% to your
+            overall score automatically).
+          </div>
+          {!developmentReady ? (
+            <div className="mx-5 mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              Add at least {MIN_DEVELOPMENT_TRAITS} development traits with action plans before you can submit.
             </div>
           ) : null}
         </>
@@ -888,7 +942,7 @@ function PmdfFormEditor({
         className="p-5 space-y-5"
         onSubmit={(e) => {
           e.preventDefault();
-          handleSave();
+          handleSaveDraft();
         }}
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
@@ -902,7 +956,7 @@ function PmdfFormEditor({
             <input
               value={subDepartment}
               onChange={(e) => setSubDepartment(e.target.value)}
-              disabled={!editable || (!canEmployeeEditGoals && !isHr)}
+              disabled={!editable || (!canEmployeeEditPerformance && !isHr)}
               className={INPUT}
             />
           </label>
@@ -912,7 +966,7 @@ function PmdfFormEditor({
             <select
               value={functionalArea}
               onChange={(e) => setFunctionalArea(e.target.value)}
-              disabled={!editable || (!canEmployeeEditGoals && !isHr)}
+              disabled={!editable || (!canEmployeeEditPerformance && !isHr)}
               className={INPUT}
             >
               <option value="">— Select —</option>
@@ -926,7 +980,7 @@ function PmdfFormEditor({
             <select
               value={locationCategory}
               onChange={(e) => setLocationCategory(e.target.value)}
-              disabled={!editable || (!canEmployeeEditGoals && !isHr)}
+              disabled={!editable || (!canEmployeeEditPerformance && !isHr)}
               className={INPUT}
             >
               <option value="">— Select —</option>
@@ -941,7 +995,7 @@ function PmdfFormEditor({
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-kastros-forest">Business Objectives (must total 100%)</h3>
-              {editable && (canEmployeeEditGoals || isHr) ? (
+              {editable && (canEmployeeEditPerformance || isHr) ? (
                 <button type="button" onClick={addBusinessRow} className="text-xs font-semibold text-kastros-brandGreen">
                   + Add objective
                 </button>
@@ -1046,6 +1100,16 @@ function PmdfFormEditor({
                 </label>
               </article>
             ))}
+            {canSubmitPerformance ? (
+              <button
+                type="button"
+                onClick={handleSubmitPerformance}
+                disabled={pending || !performanceReady}
+                className="rounded-xl bg-kastros-forest px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                Submit performance goals
+              </button>
+            ) : null}
           </div>
         ) : null}
 
@@ -1084,7 +1148,7 @@ function PmdfFormEditor({
                     </>
                   ) : null}
                 </span>
-                {editable && (canEmployeeEditGoals || isHr) ? (
+                {editable && (canEmployeeEditDevelopment || isHr) ? (
                   <button
                     type="button"
                     onClick={addDevelopmentRow}
@@ -1127,12 +1191,12 @@ function PmdfFormEditor({
                           <input
                             value={row.pillar}
                             onChange={(e) => updateDo(idx, { pillar: e.target.value })}
-                            disabled={!editable || (!fieldAccess.canEditEmployeeObjectiveFields && !isHr)}
+                            disabled={!editable || (!fieldAccess.canEditEmployeeDevelopmentFields && !isHr)}
                             placeholder="e.g. Adaptability, Communication"
                             className={INPUT}
                           />
                         </label>
-                        {editable && (canEmployeeEditGoals || isHr) ? (
+                        {editable && (canEmployeeEditDevelopment || isHr) ? (
                           <button
                             type="button"
                             onClick={() => removeDevelopmentRow(idx)}
@@ -1148,7 +1212,7 @@ function PmdfFormEditor({
                       <textarea
                         value={row.actionPlan}
                         onChange={(e) => updateDo(idx, { actionPlan: e.target.value })}
-                        disabled={!editable || (!fieldAccess.canEditEmployeeObjectiveFields && !isHr)}
+                        disabled={!editable || (!fieldAccess.canEditEmployeeDevelopmentFields && !isHr)}
                         className={TEXTAREA}
                       />
                     </label>
@@ -1217,6 +1281,16 @@ function PmdfFormEditor({
                 </details>
               );
             })}
+            {canSubmitDevelopment ? (
+              <button
+                type="button"
+                onClick={handleSubmitDevelopment}
+                disabled={pending || !developmentReady}
+                className="rounded-xl bg-kastros-forest px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                Submit development goals
+              </button>
+            ) : null}
           </div>
         ) : null}
 
@@ -1269,14 +1343,15 @@ function PmdfFormEditor({
         {editable && !employeeGoalsComplete ? (
           <button
             type="submit"
-            disabled={pending || (submittingObjectives && !weightsReady)}
-            className="rounded-xl bg-kastros-forest px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            disabled={pending}
+            className="rounded-xl bg-kastros-cream px-5 py-2.5 text-sm font-semibold text-kastros-forest ring-1 ring-kastros-sand disabled:opacity-60"
           >
-            {submittingObjectives ? "Submit goals" : "Save form"}
+            Save form
           </button>
         ) : employeeGoalsComplete ? (
           <p className="text-sm font-medium text-emerald-800">
-            Your performance and development goals have been submitted. No further changes are needed at this stage.
+            Your performance and development goals have both been submitted. No further changes are needed at this
+            stage.
           </p>
         ) : (
           <p className="text-sm text-kastros-sage">This form is read-only{locked ? " (locked)" : ""}.</p>

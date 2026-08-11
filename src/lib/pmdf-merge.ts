@@ -123,8 +123,8 @@ export function mergePmdfFormFields(
   };
 }
 
-/** After employee submits objectives once, preserve goal fields on subsequent employee saves. */
-export function applyEmployeeObjectiveLock(existing: PmdfFormFields, merged: PmdfFormFields): PmdfFormFields {
+/** After employee submits performance goals once, preserve performance goal fields on subsequent saves. */
+export function applyEmployeePerformanceLock(existing: PmdfFormFields, merged: PmdfFormFields): PmdfFormFields {
   return {
     ...merged,
     functionalArea: existing.functionalArea,
@@ -140,6 +140,13 @@ export function applyEmployeeObjectiveLock(existing: PmdfFormFields, merged: Pmd
         percentage: prev.percentage,
       };
     }),
+  };
+}
+
+/** After employee submits development goals once, preserve development goal fields on subsequent saves. */
+export function applyEmployeeDevelopmentLock(existing: PmdfFormFields, merged: PmdfFormFields): PmdfFormFields {
+  return {
+    ...merged,
     developmentObjectives: merged.developmentObjectives.map((row, i) => {
       const prev = findExistingRow(existing.developmentObjectives, row, i);
       return {
@@ -151,4 +158,9 @@ export function applyEmployeeObjectiveLock(existing: PmdfFormFields, merged: Pmd
       };
     }),
   };
+}
+
+/** @deprecated Use applyEmployeePerformanceLock and applyEmployeeDevelopmentLock separately. */
+export function applyEmployeeObjectiveLock(existing: PmdfFormFields, merged: PmdfFormFields): PmdfFormFields {
+  return applyEmployeeDevelopmentLock(existing, applyEmployeePerformanceLock(existing, merged));
 }

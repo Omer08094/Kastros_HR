@@ -450,8 +450,12 @@ export type PmdfForm = {
   managerSignature: string;
   employeeSignedAt: string | null;
   managerSignedAt: string | null;
-  /** Set when the employee submits performance + development goals (one-time, objective setting phase). */
+  /** @deprecated Use employeePerformanceGoalsSubmittedAt and employeeDevelopmentGoalsSubmittedAt. */
   employeeObjectivesSubmittedAt: string | null;
+  /** Set when the employee submits performance goals (one-time, objective setting phase). */
+  employeePerformanceGoalsSubmittedAt: string | null;
+  /** Set when the employee submits development goals (one-time, objective setting phase). */
+  employeeDevelopmentGoalsSubmittedAt: string | null;
   /** @deprecated Migrated to hrReopenedStage; kept for legacy store rows. */
   employeeObjectivesReopenedAt: string | null;
   /** HR-granted edit window for one workflow stage; bypasses cycle lock and date windows for that stage only. */

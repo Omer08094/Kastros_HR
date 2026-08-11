@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { mergePmdfFormFields, type PmdfFormFields } from "./pmdf-merge";
+import {
+  applyEmployeeDevelopmentLock,
+  applyEmployeePerformanceLock,
+  mergePmdfFormFields,
+  type PmdfFormFields,
+} from "./pmdf-merge";
 import type { PmdfBusinessObjective, PmdfDevelopmentObjective } from "./store/types";
 
 function emptyFields(): PmdfFormFields {
@@ -159,5 +164,41 @@ describe("mergePmdfFormFields", () => {
 
     assert.equal(merged.businessObjectives[0]?.objectiveSmart, "HR edited objective");
     assert.equal(merged.managerFeedbackFy, "HR replaced note");
+  });
+});
+
+describe("applyEmployeePerformanceLock", () => {
+  it("freezes only business objective fields", () => {
+    const existing: PmdfFormFields = {
+      ...emptyFields(),
+      businessObjectives: [sampleBusinessRow()],
+      developmentObjectives: [sampleDevRow()],
+    };
+    const incoming: PmdfFormFields = {
+      ...emptyFields(),
+      businessObjectives: [sampleBusinessRow({ objectiveSmart: "Changed", action: "Changed", percentage: 10 })],
+      developmentObjectives: [sampleDevRow({ actionPlan: "Updated plan" })],
+    };
+    const merged = applyEmployeePerformanceLock(existing, incoming);
+    assert.equal(merged.businessObjectives[0]?.objectiveSmart, "Increase sales by 10%");
+    assert.equal(merged.developmentObjectives[0]?.actionPlan, "Updated plan");
+  });
+});
+
+describe("applyEmployeeDevelopmentLock", () => {
+  it("freezes only development objective fields", () => {
+    const existing: PmdfFormFields = {
+      ...emptyFields(),
+      businessObjectives: [sampleBusinessRow()],
+      developmentObjectives: [sampleDevRow()],
+    };
+    const incoming: PmdfFormFields = {
+      ...emptyFields(),
+      businessObjectives: [sampleBusinessRow({ objectiveSmart: "Changed" })],
+      developmentObjectives: [sampleDevRow({ actionPlan: "Changed plan", pillar: "Changed" })],
+    };
+    const merged = applyEmployeeDevelopmentLock(existing, incoming);
+    assert.equal(merged.businessObjectives[0]?.objectiveSmart, "Changed");
+    assert.equal(merged.developmentObjectives[0]?.actionPlan, "Send weekly updates");
   });
 });

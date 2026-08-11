@@ -7,14 +7,16 @@ import {
   hrReopenGrantsMidYearEmployeeWindow,
   hrReopenGrantsMidYearManagerWindow,
   hrReopenGrantsObjectiveWindow,
-  isEmployeeGoalsLocked,
+  isDevelopmentGoalsLocked,
   isEmployeeObjectivesHrReopened,
   isHrReopenActiveForUser,
+  isPerformanceGoalsLocked,
 } from "@/lib/pmdf-hr-reopen";
 
 export type PmdfFieldAccess = {
   canEditEmployeeObjectiveFields: boolean;
   canEditPerformanceWeights: boolean;
+  canEditEmployeeDevelopmentFields: boolean;
   canEditDevelopmentWeights: boolean;
   canEditEmployeeMidYearFeedback: boolean;
   canEditEmployeeFinalFeedback: boolean;
@@ -50,6 +52,7 @@ function allLocked(): PmdfFieldAccess {
   return {
     canEditEmployeeObjectiveFields: false,
     canEditPerformanceWeights: false,
+    canEditEmployeeDevelopmentFields: false,
     canEditDevelopmentWeights: false,
     canEditEmployeeMidYearFeedback: false,
     canEditEmployeeFinalFeedback: false,
@@ -67,6 +70,7 @@ function allOpen(): PmdfFieldAccess {
   return {
     canEditEmployeeObjectiveFields: true,
     canEditPerformanceWeights: true,
+    canEditEmployeeDevelopmentFields: true,
     canEditDevelopmentWeights: true,
     canEditEmployeeMidYearFeedback: true,
     canEditEmployeeFinalFeedback: true,
@@ -86,13 +90,14 @@ export function getPmdfFieldAccess(args: {
   role: RoleId;
   isEmployee: boolean;
   isManager: boolean;
-  employeeObjectivesLocked: boolean;
+  performanceGoalsLocked?: boolean;
+  developmentGoalsLocked?: boolean;
   effectivePhase: PmdfForm["phase"];
   onDate?: string;
 }): PmdfFieldAccess {
   const { cycle, form, role, isEmployee, isManager, effectivePhase } = args;
-  const employeeObjectivesLocked =
-    args.employeeObjectivesLocked ?? isEmployeeGoalsLocked(form, cycle);
+  const performanceGoalsLocked = args.performanceGoalsLocked ?? isPerformanceGoalsLocked(form, cycle);
+  const developmentGoalsLocked = args.developmentGoalsLocked ?? isDevelopmentGoalsLocked(form, cycle);
   const hr = hasExecAccess(role);
   const globallyLocked = !!(form.locked || cycle?.locked);
   const managerOnForm = isManager && !isEmployee;
@@ -103,8 +108,10 @@ export function getPmdfFieldAccess(args: {
   if (hrReopenForUser && form.hrReopenedStage === "objective_setting_employee") {
     return {
       ...allLocked(),
-      canEditEmployeeObjectiveFields: true,
-      canEditPerformanceWeights: true,
+      canEditEmployeeObjectiveFields: !form.employeePerformanceGoalsSubmittedAt,
+      canEditPerformanceWeights: !form.employeePerformanceGoalsSubmittedAt,
+      canEditEmployeeDevelopmentFields: !form.employeeDevelopmentGoalsSubmittedAt,
+      canEditDevelopmentWeights: !form.employeeDevelopmentGoalsSubmittedAt,
     };
   }
 
@@ -169,12 +176,14 @@ export function getPmdfFieldAccess(args: {
     windowOpen(cycle, "yearEndEmployeeOpen", "yearEndEmployeeDeadline") ||
     effectivePhase === "year_end_evaluation_employee";
 
-  const canEditGoals = isEmployee && !employeeObjectivesLocked && objectiveWindow;
+  const canEditPerformance = isEmployee && !performanceGoalsLocked && objectiveWindow;
+  const canEditDevelopment = isEmployee && !developmentGoalsLocked && objectiveWindow;
 
   return {
-    canEditEmployeeObjectiveFields: canEditGoals,
-    canEditPerformanceWeights: canEditGoals,
-    canEditDevelopmentWeights: false,
+    canEditEmployeeObjectiveFields: canEditPerformance,
+    canEditPerformanceWeights: canEditPerformance,
+    canEditEmployeeDevelopmentFields: canEditDevelopment,
+    canEditDevelopmentWeights: canEditDevelopment,
     canEditEmployeeMidYearFeedback: isEmployee && midYearEmployeeWindow,
     canEditEmployeeFinalFeedback: isEmployee && finalEmployeeWindow,
     canEditEmployeeSignature: isEmployee && finalEmployeeWindow,
@@ -193,7 +202,8 @@ export function canEditPmdfForm(args: {
   role: RoleId;
   isEmployee: boolean;
   isManager: boolean;
-  employeeObjectivesLocked: boolean;
+  performanceGoalsLocked?: boolean;
+  developmentGoalsLocked?: boolean;
   effectivePhase: PmdfForm["phase"];
 }): boolean {
   if (hasExecAccess(args.role)) return true;
@@ -206,6 +216,8 @@ export function canEditPmdfForm(args: {
   return (
     access.canEditEmployeeObjectiveFields ||
     access.canEditPerformanceWeights ||
+    access.canEditEmployeeDevelopmentFields ||
+    access.canEditDevelopmentWeights ||
     access.canEditEmployeeMidYearFeedback ||
     access.canEditEmployeeFinalFeedback ||
     access.canEditEmployeeSignature ||

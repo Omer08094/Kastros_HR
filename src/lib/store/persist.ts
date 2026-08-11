@@ -140,10 +140,26 @@ function normalizePmdfForms(raw: unknown): PmdfForm[] {
       employeeObjectivesReopenedAt:
         typeof r.employeeObjectivesReopenedAt === "string" ? r.employeeObjectivesReopenedAt : null,
       ...(() => {
-        const submittedAt =
+        const legacySubmitted =
           typeof r.employeeObjectivesSubmittedAt === "string" ? r.employeeObjectivesSubmittedAt : null;
         const legacyReopened =
           typeof r.employeeObjectivesReopenedAt === "string" ? r.employeeObjectivesReopenedAt : null;
+        let employeePerformanceGoalsSubmittedAt =
+          typeof r.employeePerformanceGoalsSubmittedAt === "string"
+            ? r.employeePerformanceGoalsSubmittedAt
+            : null;
+        let employeeDevelopmentGoalsSubmittedAt =
+          typeof r.employeeDevelopmentGoalsSubmittedAt === "string"
+            ? r.employeeDevelopmentGoalsSubmittedAt
+            : null;
+        if (legacySubmitted) {
+          if (!employeePerformanceGoalsSubmittedAt) {
+            employeePerformanceGoalsSubmittedAt = legacySubmitted;
+          }
+          if (!employeeDevelopmentGoalsSubmittedAt) {
+            employeeDevelopmentGoalsSubmittedAt = legacySubmitted;
+          }
+        }
         const hrStages = [
           "objective_setting_employee",
           "mid_year_review_employee",
@@ -159,11 +175,17 @@ function normalizePmdfForms(raw: unknown): PmdfForm[] {
         let hrReopenedAt = typeof r.hrReopenedAt === "string" ? r.hrReopenedAt : null;
         const hrReopenedByEmail =
           typeof r.hrReopenedByEmail === "string" ? r.hrReopenedByEmail.toLowerCase() : null;
-        if (!hrReopenedStage && legacyReopened && !submittedAt) {
+        if (!hrReopenedStage && legacyReopened && !legacySubmitted) {
           hrReopenedStage = "objective_setting_employee";
           hrReopenedAt = legacyReopened;
         }
-        return { hrReopenedStage, hrReopenedAt, hrReopenedByEmail };
+        return {
+          employeePerformanceGoalsSubmittedAt,
+          employeeDevelopmentGoalsSubmittedAt,
+          hrReopenedStage,
+          hrReopenedAt,
+          hrReopenedByEmail,
+        };
       })(),
       phase: (typeof r.phase === "string" ? r.phase : "objective_setting_employee") as PmdfForm["phase"],
       locked: r.locked === true,

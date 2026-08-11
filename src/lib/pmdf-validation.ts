@@ -57,22 +57,37 @@ export function validateDevelopmentTraits(developmentObjectives: PmdfDevelopment
   return null;
 }
 
-/** Strict validation for one-time employee objective submit. */
-export function validateObjectiveSubmitWeights(fields: PmdfWeightFields): string | null {
+/** Strict validation for one-time employee performance goals submit. */
+export function validatePerformanceGoalsSubmit(fields: PmdfWeightFields): string | null {
+  const { businessTotal } = calcWeightTotals(fields);
+  if (!isWeightTotalExact(businessTotal)) {
+    return `Performance goals must total 100% (currently ${businessTotal}%).`;
+  }
+  return null;
+}
+
+/** Strict validation for one-time employee development goals submit. */
+export function validateDevelopmentGoalsSubmit(fields: PmdfWeightFields): string | null {
   const distributed = {
     ...fields,
     developmentObjectives: distributeDevelopmentWeights(fields.developmentObjectives),
   };
-  const { businessTotal } = calcWeightTotals(distributed);
+  return validateDevelopmentTraits(distributed.developmentObjectives);
+}
 
-  if (!isWeightTotalExact(businessTotal)) {
-    return `Performance goals must total 100% (currently ${businessTotal}%).`;
-  }
+export function performanceGoalsSubmitValid(fields: PmdfWeightFields): boolean {
+  return validatePerformanceGoalsSubmit(fields) === null;
+}
 
-  const traitsError = validateDevelopmentTraits(distributed.developmentObjectives);
-  if (traitsError) return traitsError;
+export function developmentGoalsSubmitValid(fields: PmdfWeightFields): boolean {
+  return validateDevelopmentGoalsSubmit(fields) === null;
+}
 
-  return null;
+/** Strict validation for combined submit (legacy). */
+export function validateObjectiveSubmitWeights(fields: PmdfWeightFields): string | null {
+  const performanceError = validatePerformanceGoalsSubmit(fields);
+  if (performanceError) return performanceError;
+  return validateDevelopmentGoalsSubmit(fields);
 }
 
 export function objectiveSubmitWeightsValid(fields: PmdfWeightFields): boolean {

@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  developmentGoalsSubmitValid,
   distributeDevelopmentWeights,
   objectiveSubmitWeightsValid,
+  performanceGoalsSubmitValid,
+  validateDevelopmentGoalsSubmit,
   validateObjectiveSubmitWeights,
+  validatePerformanceGoalsSubmit,
   validatePmdfWeightTotals,
 } from "./pmdf-validation";
 import type { PmdfBusinessObjective, PmdfDevelopmentObjective } from "./store/types";
@@ -39,6 +43,48 @@ function sampleDevRow(overrides: Partial<PmdfDevelopmentObjective> = {}): PmdfDe
     ...overrides,
   };
 }
+
+describe("validatePerformanceGoalsSubmit", () => {
+  it("accepts performance goals totalling 100%", () => {
+    const fields = {
+      businessObjectives: [sampleBusinessRow({ percentage: 100 })],
+      developmentObjectives: [],
+    };
+    assert.equal(validatePerformanceGoalsSubmit(fields), null);
+    assert.equal(performanceGoalsSubmitValid(fields), true);
+  });
+
+  it("rejects performance goals that do not total 100%", () => {
+    const fields = {
+      businessObjectives: [sampleBusinessRow({ percentage: 85 })],
+      developmentObjectives: [],
+    };
+    assert.match(validatePerformanceGoalsSubmit(fields) ?? "", /Performance goals must total 100%/);
+  });
+});
+
+describe("validateDevelopmentGoalsSubmit", () => {
+  it("accepts at least three development traits", () => {
+    const fields = {
+      businessObjectives: [],
+      developmentObjectives: [
+        sampleDevRow({ id: "do-1", percentage: 34 }),
+        sampleDevRow({ id: "do-2", pillar: "Initiative", percentage: 33 }),
+        sampleDevRow({ id: "do-3", pillar: "Collaboration", percentage: 33 }),
+      ],
+    };
+    assert.equal(validateDevelopmentGoalsSubmit(fields), null);
+    assert.equal(developmentGoalsSubmitValid(fields), true);
+  });
+
+  it("rejects fewer than three traits", () => {
+    const fields = {
+      businessObjectives: [],
+      developmentObjectives: [sampleDevRow({ id: "do-1", percentage: 100 })],
+    };
+    assert.match(validateDevelopmentGoalsSubmit(fields) ?? "", /At least 3 development traits/);
+  });
+});
 
 describe("validateObjectiveSubmitWeights", () => {
   it("accepts valid performance 100% split with at least three development traits", () => {

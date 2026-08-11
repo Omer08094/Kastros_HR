@@ -11,20 +11,21 @@ import {
   verifySmtpConnection,
 } from "@/lib/hr-emails";
 import { isPmdfLineManager, resolvePmdfLineManager } from "@/lib/pmdf-access";
-import { mergePmdfFormFields, applyEmployeeObjectiveLock, type PmdfFormFields, type PmdfSaveRole } from "@/lib/pmdf-merge";
+import { mergePmdfFormFields, applyEmployeeDevelopmentLock, applyEmployeePerformanceLock, type PmdfFormFields, type PmdfSaveRole } from "@/lib/pmdf-merge";
 import { calcPmdfScores } from "@/lib/pmdf-scoring";
 import {
   applyDevelopmentWeightPolicy,
   validateDevelopmentTraits,
-  validateObjectiveSubmitWeights,
+  validateDevelopmentGoalsSubmit,
+  validatePerformanceGoalsSubmit,
   validatePmdfWeightTotals,
 } from "@/lib/pmdf-validation";
 import { applyPmdfFieldAccess } from "@/lib/pmdf-field-enforcement";
 import {
   canHrReopenStage,
-  isEmployeeGoalsLocked,
-  isEmployeeObjectivesHrReopened,
+  isDevelopmentGoalsLocked,
   isHrReopenActiveForUser,
+  isPerformanceGoalsLocked,
   isPmdfHrReopenStage,
 } from "@/lib/pmdf-hr-reopen";
 import { canEditPmdfForm, getPmdfFieldAccess } from "@/lib/pmdf-permissions";
@@ -116,6 +117,8 @@ function buildFormFromEmployee(cycleId: string, employee: Employee, store: HrSto
     employeeSignedAt: null,
     managerSignedAt: null,
     employeeObjectivesSubmittedAt: null,
+    employeePerformanceGoalsSubmittedAt: null,
+    employeeDevelopmentGoalsSubmittedAt: null,
     employeeObjectivesReopenedAt: null,
     hrReopenedStage: null,
     hrReopenedAt: null,
@@ -641,6 +644,8 @@ export async function reopenPmdfFormStage(formData: FormData): Promise<ActionRes
             ? {
                 ...f,
                 employeeObjectivesSubmittedAt: clearObjectivesSubmit ? null : f.employeeObjectivesSubmittedAt,
+                employeePerformanceGoalsSubmittedAt: clearObjectivesSubmit ? null : f.employeePerformanceGoalsSubmittedAt,
+                employeeDevelopmentGoalsSubmittedAt: clearObjectivesSubmit ? null : f.employeeDevelopmentGoalsSubmittedAt,
                 employeeObjectivesReopenedAt: null,
                 hrReopenedStage: stageRaw,
                 hrReopenedAt: now,
@@ -729,7 +734,10 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
 
   const saveRole: PmdfSaveRole = isHr ? "hr" : isOwner ? "employee" : "manager";
   const effectivePhase = cycle?.currentPhase ?? existing.phase;
-  const employeeObjectivesLocked = isEmployeeGoalsLocked(existing, cycle);
+  const performanceGoalsLocked = isPerformanceGoalsLocked(existing, cycle);
+  const developmentGoalsLocked = isDevelopmentGoalsLocked(existing, cycle);
+  const inObjectivePhase =
+    effectivePhase === "objective_setting_employee" || existing.hrReopenedStage === "objective_setting_employee";
 
   if (
     !isHr &&
@@ -739,7 +747,8 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
       role: session.role,
       isEmployee: isOwner,
       isManager,
-      employeeObjectivesLocked,
+      performanceGoalsLocked,
+      developmentGoalsLocked,
       effectivePhase,
     })
   ) {
@@ -761,45 +770,63 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
       role: session.role,
       isEmployee: isOwner,
       isManager,
-      employeeObjectivesLocked,
+      performanceGoalsLocked,
+      developmentGoalsLocked,
       effectivePhase,
     }),
     saveRole,
   );
 
-  const submittingObjectives =
+  const submittingPerformance =
     saveRole === "employee" &&
-    !existing.employeeObjectivesSubmittedAt &&
-    (effectivePhase === "objective_setting_employee" || existing.hrReopenedStage === "objective_setting_employee");
+    !existing.employeePerformanceGoalsSubmittedAt &&
+    inObjectivePhase &&
+    formData.get("confirmEmployeePerformanceSubmit") === "1";
+  const submittingDevelopment =
+    saveRole === "employee" &&
+    !existing.employeeDevelopmentGoalsSubmittedAt &&
+    inObjectivePhase &&
+    formData.get("confirmEmployeeDevelopmentSubmit") === "1";
+
+  if (submittingPerformance && submittingDevelopment) {
+    return { error: "Submit performance and development goals separately." };
+  }
 
   if (
     saveRole === "employee" &&
-    existing.employeeObjectivesSubmittedAt &&
+    existing.employeePerformanceGoalsSubmittedAt &&
     existing.hrReopenedStage !== "objective_setting_employee" &&
-    effectivePhase === "objective_setting_employee"
+    inObjectivePhase &&
+    formData.get("confirmEmployeePerformanceSubmit") === "1"
   ) {
-    return {
-      error: "Your performance and development goals have already been submitted and cannot be changed.",
-    };
+    return { error: "Your performance goals have already been submitted and cannot be changed." };
   }
 
-  const objectivesHrReopened = isOwner && isEmployeeObjectivesHrReopened(existing);
-  if (saveRole === "employee" && employeeObjectivesLocked && !objectivesHrReopened) {
-    merged = applyEmployeeObjectiveLock(existingPmdfFormFields(existing), merged);
+  if (
+    saveRole === "employee" &&
+    existing.employeeDevelopmentGoalsSubmittedAt &&
+    existing.hrReopenedStage !== "objective_setting_employee" &&
+    inObjectivePhase &&
+    formData.get("confirmEmployeeDevelopmentSubmit") === "1"
+  ) {
+    return { error: "Your development goals have already been submitted and cannot be changed." };
   }
 
-  if (submittingObjectives) {
-    if (formData.get("confirmEmployeeObjectivesSubmit") !== "1") {
-      return {
-        error:
-          "Please confirm that you have reviewed your performance and development goals. This submission can only be done once.",
-      };
-    }
-    const submitValidation = validateObjectiveSubmitWeights(merged);
+  if (saveRole === "employee" && performanceGoalsLocked) {
+    merged = applyEmployeePerformanceLock(existingPmdfFormFields(existing), merged);
+  }
+  if (saveRole === "employee" && developmentGoalsLocked) {
+    merged = applyEmployeeDevelopmentLock(existingPmdfFormFields(existing), merged);
+  }
+
+  if (submittingPerformance) {
+    const submitValidation = validatePerformanceGoalsSubmit(merged);
+    if (submitValidation) return { error: submitValidation };
+  } else if (submittingDevelopment) {
+    const submitValidation = validateDevelopmentGoalsSubmit(merged);
     if (submitValidation) return { error: submitValidation };
   } else {
-    const draftingPhase =
-      effectivePhase === "objective_setting_employee" || existing.hrReopenedStage === "objective_setting_employee";
+    const draftingPhase = inObjectivePhase;
     const validationError = validatePmdfFields(merged, {
       skipWeightValidation: saveRole === "employee" && draftingPhase,
       skipDevTraitValidation: saveRole === "employee" && draftingPhase,
@@ -809,8 +836,21 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
 
   calcPmdfScores(merged.businessObjectives, merged.developmentObjectives);
   const lineManager = resolvePmdfLineManager(store, existing);
-  const objectivesSubmittedAt =
-    submittingObjectives ? new Date().toISOString() : existing.employeeObjectivesSubmittedAt;
+  const now = new Date().toISOString();
+  const performanceSubmittedAt = submittingPerformance
+    ? now
+    : existing.employeePerformanceGoalsSubmittedAt;
+  const developmentSubmittedAt = submittingDevelopment
+    ? now
+    : existing.employeeDevelopmentGoalsSubmittedAt;
+  const legacyObjectivesSubmittedAt =
+    performanceSubmittedAt && developmentSubmittedAt
+      ? performanceSubmittedAt
+      : existing.employeeObjectivesSubmittedAt;
+  const clearHrReopenAfterSubmit =
+    existing.hrReopenedStage === "objective_setting_employee" &&
+    !!performanceSubmittedAt &&
+    !!developmentSubmittedAt;
 
   await mutateStore((s) => ({
     next: audit(
@@ -835,26 +875,35 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
                 managerSignature: merged.managerSignature,
                 employeeSignedAt: merged.employeeSignature ? new Date().toISOString() : f.employeeSignedAt,
                 managerSignedAt: merged.managerSignature ? new Date().toISOString() : f.managerSignedAt,
-                employeeObjectivesSubmittedAt: objectivesSubmittedAt,
+                employeeObjectivesSubmittedAt: legacyObjectivesSubmittedAt,
+                employeePerformanceGoalsSubmittedAt: performanceSubmittedAt,
+                employeeDevelopmentGoalsSubmittedAt: developmentSubmittedAt,
                 employeeObjectivesReopenedAt: null,
-                hrReopenedStage: submittingObjectives ? null : f.hrReopenedStage,
-                hrReopenedAt: submittingObjectives ? null : f.hrReopenedAt,
-                hrReopenedByEmail: submittingObjectives ? null : f.hrReopenedByEmail,
-                updatedAt: new Date().toISOString(),
+                hrReopenedStage: clearHrReopenAfterSubmit ? null : f.hrReopenedStage,
+                hrReopenedAt: clearHrReopenAfterSubmit ? null : f.hrReopenedAt,
+                hrReopenedByEmail: clearHrReopenAfterSubmit ? null : f.hrReopenedByEmail,
+                updatedAt: now,
               }
             : f,
         ),
       },
       session.email,
-      submittingObjectives ? `Submitted PMDF objectives ${formId}` : `Saved PMDF ${formId}`,
+      submittingPerformance
+        ? `Submitted PMDF performance goals ${formId}`
+        : submittingDevelopment
+          ? `Submitted PMDF development goals ${formId}`
+          : `Saved PMDF ${formId}`,
     ),
     result: ok(),
   }));
 
   revalidatePath("/performance");
   revalidatePath(`/performance/print/${formId}`);
-  if (submittingObjectives) {
-    return { ok: true, message: "Performance and development goals submitted." };
+  if (submittingPerformance) {
+    return { ok: true, message: "Performance goals submitted." };
+  }
+  if (submittingDevelopment) {
+    return { ok: true, message: "Development goals submitted." };
   }
   return ok();
 }

@@ -31,6 +31,8 @@ function sampleForm(overrides: Partial<PmdfForm> = {}): PmdfForm {
     employeeSignedAt: null,
     managerSignedAt: null,
     employeeObjectivesSubmittedAt: null,
+    employeePerformanceGoalsSubmittedAt: null,
+    employeeDevelopmentGoalsSubmittedAt: null,
     employeeObjectivesReopenedAt: null,
     hrReopenedStage: null,
     hrReopenedAt: null,
@@ -70,155 +72,48 @@ function sampleCycle(overrides: Partial<PerformanceCycle> = {}): PerformanceCycl
 }
 
 describe("getPmdfFieldAccess", () => {
-  it("gives employees objective fields only during objective setting", () => {
+  it("gives employees both goal sections during objective setting", () => {
     const access = getPmdfFieldAccess({
       cycle: sampleCycle(),
       form: sampleForm(),
       role: "employee",
       isEmployee: true,
       isManager: false,
-      employeeObjectivesLocked: false,
+      performanceGoalsLocked: false,
+      developmentGoalsLocked: false,
       effectivePhase: "objective_setting_employee",
     });
     assert.equal(access.canEditEmployeeObjectiveFields, true);
-    assert.equal(access.canEditRowManagerHalfYearComments, false);
-    assert.equal(access.canEditRowManagerFinalFields, false);
-    assert.equal(access.canEditSelfScores, false);
+    assert.equal(access.canEditEmployeeDevelopmentFields, true);
   });
 
-  it("never gives manager row flags to the form owner even if they are their own line manager", () => {
+  it("keeps development editable when only performance is submitted", () => {
     const access = getPmdfFieldAccess({
-      cycle: sampleCycle({
-        midYearManagerOpen: "2026-01-01",
-        midYearManagerDeadline: "2026-12-31",
-        yearEndManagerOpen: "2026-01-01",
-        yearEndManagerDeadline: "2026-12-31",
-      }),
-      form: sampleForm(),
-      role: "employee",
-      isEmployee: true,
-      isManager: true,
-      employeeObjectivesLocked: true,
-      effectivePhase: "mid_year_review_manager",
-    });
-    assert.equal(access.canEditRowManagerHalfYearComments, false);
-    assert.equal(access.canEditRowManagerFinalFields, false);
-  });
-
-  it("allows manager half-year comments only when final window is closed", () => {
-    const access = getPmdfFieldAccess({
-      cycle: sampleCycle({
-        midYearManagerOpen: "2026-01-01",
-        midYearManagerDeadline: "2026-12-31",
-      }),
-      form: sampleForm(),
-      role: "employee",
-      isEmployee: false,
-      isManager: true,
-      employeeObjectivesLocked: true,
-      effectivePhase: "mid_year_review_manager",
-      onDate: "2026-06-01",
-    });
-    assert.equal(access.canEditRowManagerHalfYearComments, true);
-    assert.equal(access.canEditRowManagerFinalFields, false);
-  });
-
-  it("locks half-year manager comments when final evaluation window is open", () => {
-    const access = getPmdfFieldAccess({
-      cycle: sampleCycle({
-        yearEndManagerOpen: "2026-01-01",
-        yearEndManagerDeadline: "2026-12-31",
-      }),
-      form: sampleForm(),
-      role: "employee",
-      isEmployee: false,
-      isManager: true,
-      employeeObjectivesLocked: true,
-      effectivePhase: "year_end_evaluation_manager",
-      onDate: "2026-11-01",
-    });
-    assert.equal(access.canEditRowManagerHalfYearComments, false);
-    assert.equal(access.canEditRowManagerFinalFields, true);
-    assert.equal(access.canEditSelfScores, false);
-  });
-
-  it("allows self scores only in year-end employee window", () => {
-    const midYear = getPmdfFieldAccess({
-      cycle: sampleCycle({
-        midYearEmployeeOpen: "2026-01-01",
-        midYearEmployeeDeadline: "2026-12-31",
-      }),
-      form: sampleForm(),
+      cycle: sampleCycle(),
+      form: sampleForm({ employeePerformanceGoalsSubmittedAt: "2026-03-01T00:00:00.000Z" }),
       role: "employee",
       isEmployee: true,
       isManager: false,
-      employeeObjectivesLocked: true,
-      effectivePhase: "mid_year_review_employee",
-      onDate: "2026-06-01",
+      performanceGoalsLocked: true,
+      developmentGoalsLocked: false,
+      effectivePhase: "objective_setting_employee",
     });
-    assert.equal(midYear.canEditSelfScores, false);
-
-    const finalYear = getPmdfFieldAccess({
-      cycle: sampleCycle({
-        yearEndEmployeeOpen: "2026-01-01",
-        yearEndEmployeeDeadline: "2026-12-31",
-      }),
-      form: sampleForm(),
-      role: "employee",
-      isEmployee: true,
-      isManager: false,
-      employeeObjectivesLocked: true,
-      effectivePhase: "year_end_evaluation_employee",
-      onDate: "2026-11-01",
-    });
-    assert.equal(finalYear.canEditSelfScores, true);
+    assert.equal(access.canEditEmployeeObjectiveFields, false);
+    assert.equal(access.canEditEmployeeDevelopmentFields, true);
   });
 
-  it("allows employee goal edits when HR reopened objectives on locked cycle", () => {
+  it("keeps performance editable when only development is submitted", () => {
     const access = getPmdfFieldAccess({
-      cycle: sampleCycle({ currentPhase: "mid_year_review_employee", locked: true }),
-      form: sampleForm({
-        hrReopenedStage: "objective_setting_employee",
-        employeeObjectivesSubmittedAt: null,
-      }),
+      cycle: sampleCycle(),
+      form: sampleForm({ employeeDevelopmentGoalsSubmittedAt: "2026-03-01T00:00:00.000Z" }),
       role: "employee",
       isEmployee: true,
       isManager: false,
-      employeeObjectivesLocked: false,
-      effectivePhase: "mid_year_review_employee",
+      performanceGoalsLocked: false,
+      developmentGoalsLocked: true,
+      effectivePhase: "objective_setting_employee",
     });
     assert.equal(access.canEditEmployeeObjectiveFields, true);
-    assert.equal(access.canEditPerformanceWeights, true);
-    assert.equal(access.canEditSelfScores, false);
-  });
-
-  it("allows manager mid-year edits when HR reopened that stage on locked cycle", () => {
-    const access = getPmdfFieldAccess({
-      cycle: sampleCycle({ locked: true, currentPhase: "year_end_evaluation_manager" }),
-      form: sampleForm({ hrReopenedStage: "mid_year_review_manager" }),
-      role: "employee",
-      isEmployee: false,
-      isManager: true,
-      employeeObjectivesLocked: true,
-      effectivePhase: "year_end_evaluation_manager",
-    });
-    assert.equal(access.canEditRowManagerHalfYearComments, true);
-    assert.equal(access.canEditManagerFeedbackMidYear, true);
-    assert.equal(access.canEditRowManagerFinalFields, false);
-  });
-
-  it("allows employee year-end edits when HR reopened that stage", () => {
-    const access = getPmdfFieldAccess({
-      cycle: sampleCycle({ locked: true }),
-      form: sampleForm({ hrReopenedStage: "year_end_evaluation_employee" }),
-      role: "employee",
-      isEmployee: true,
-      isManager: false,
-      employeeObjectivesLocked: true,
-      effectivePhase: "closed",
-    });
-    assert.equal(access.canEditEmployeeFinalFeedback, true);
-    assert.equal(access.canEditSelfScores, true);
-    assert.equal(access.canEditEmployeeMidYearFeedback, false);
+    assert.equal(access.canEditEmployeeDevelopmentFields, false);
   });
 });

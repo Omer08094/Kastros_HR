@@ -36,6 +36,12 @@ export function applyPmdfFieldAccess(
           employeeComments: prev.employeeComments,
         };
       }),
+    };
+  }
+
+  if (!access.canEditEmployeeDevelopmentFields) {
+    result = {
+      ...result,
       developmentObjectives: merged.developmentObjectives.map((row, i) => {
         const prev = findDo(existing.developmentObjectives, row, i);
         return {

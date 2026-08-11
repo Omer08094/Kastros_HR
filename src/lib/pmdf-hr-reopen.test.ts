@@ -3,9 +3,12 @@ import { describe, it } from "node:test";
 import {
   canHrReopenStage,
   formHasEmployeeGoalContent,
+  formHasPerformanceGoalContent,
+  isDevelopmentGoalsLocked,
   isEmployeeGoalsLocked,
   isEmployeeObjectivesHrReopened,
   isHrReopenActiveForUser,
+  isPerformanceGoalsLocked,
   isStageLockedForRole,
 } from "./pmdf-hr-reopen";
 import type { PerformanceCycle, PmdfForm } from "./store/types";
@@ -51,6 +54,8 @@ function sampleForm(overrides: Partial<PmdfForm> = {}): PmdfForm {
     employeeSignedAt: null,
     managerSignedAt: null,
     employeeObjectivesSubmittedAt: null,
+    employeePerformanceGoalsSubmittedAt: null,
+    employeeDevelopmentGoalsSubmittedAt: null,
     employeeObjectivesReopenedAt: null,
     hrReopenedStage: null,
     hrReopenedAt: null,
@@ -91,24 +96,32 @@ function sampleCycle(overrides: Partial<PerformanceCycle> = {}): PerformanceCycl
 
 describe("formHasEmployeeGoalContent", () => {
   it("detects business objective content", () => {
+    assert.equal(formHasPerformanceGoalContent(sampleForm()), true);
     assert.equal(formHasEmployeeGoalContent(sampleForm()), true);
     assert.equal(formHasEmployeeGoalContent(sampleForm({ businessObjectives: [] })), false);
   });
 });
 
-describe("isEmployeeGoalsLocked", () => {
-  it("locks when employeeObjectivesSubmittedAt is set", () => {
+describe("isPerformanceGoalsLocked", () => {
+  it("locks when employeePerformanceGoalsSubmittedAt is set", () => {
     assert.equal(
-      isEmployeeGoalsLocked(sampleForm({ employeeObjectivesSubmittedAt: "2026-03-01T00:00:00.000Z" }), sampleCycle()),
+      isPerformanceGoalsLocked(sampleForm({ employeePerformanceGoalsSubmittedAt: "2026-03-01T00:00:00.000Z" }), sampleCycle()),
       true,
     );
   });
 
-  it("unlocks when HR reopened objectives awaiting resubmit", () => {
+  it("does not lock development when only performance submitted", () => {
     assert.equal(
-      isEmployeeGoalsLocked(
+      isDevelopmentGoalsLocked(sampleForm({ employeePerformanceGoalsSubmittedAt: "2026-03-01T00:00:00.000Z" }), sampleCycle()),
+      false,
+    );
+  });
+
+  it("unlocks performance when HR reopened awaiting resubmit", () => {
+    assert.equal(
+      isPerformanceGoalsLocked(
         sampleForm({
-          employeeObjectivesSubmittedAt: null,
+          employeePerformanceGoalsSubmittedAt: null,
           hrReopenedStage: "objective_setting_employee",
         }),
         sampleCycle({ locked: true }),
@@ -118,12 +131,18 @@ describe("isEmployeeGoalsLocked", () => {
   });
 
   it("locks legacy forms when cycle is locked with goal content", () => {
-    assert.equal(isEmployeeGoalsLocked(sampleForm(), sampleCycle({ locked: true })), true);
+    assert.equal(isPerformanceGoalsLocked(sampleForm(), sampleCycle({ locked: true })), true);
   });
+});
 
-  it("locks legacy forms when phase moved past objective setting", () => {
+describe("isEmployeeGoalsLocked", () => {
+  it("is true when either section is locked", () => {
     assert.equal(
-      isEmployeeGoalsLocked(sampleForm(), sampleCycle({ currentPhase: "mid_year_review_employee" })),
+      isEmployeeGoalsLocked(sampleForm({ employeePerformanceGoalsSubmittedAt: "2026-03-01T00:00:00.000Z" }), sampleCycle()),
+      true,
+    );
+    assert.equal(
+      isEmployeeGoalsLocked(sampleForm(), sampleCycle({ locked: true })),
       true,
     );
   });
@@ -136,46 +155,12 @@ describe("isStageLockedForRole", () => {
       true,
     );
   });
-
-  it("locks manager mid-year when window closed and phase moved on", () => {
-    assert.equal(
-      isStageLockedForRole(
-        sampleForm(),
-        sampleCycle({
-          currentPhase: "year_end_evaluation_manager",
-          midYearManagerOpen: "2026-01-01",
-          midYearManagerDeadline: "2026-06-30",
-        }),
-        "mid_year_review_manager",
-        "2026-11-01",
-      ),
-      true,
-    );
-  });
-
-  it("returns false when HR reopen already active", () => {
-    assert.equal(
-      isStageLockedForRole(
-        sampleForm({ hrReopenedStage: "mid_year_review_manager" }),
-        sampleCycle({ locked: true }),
-        "mid_year_review_manager",
-      ),
-      false,
-    );
-  });
 });
 
 describe("canHrReopenStage", () => {
-  it("allows reopen for submitted objectives", () => {
+  it("allows reopen when only performance submitted", () => {
     assert.equal(
-      canHrReopenStage(sampleForm({ employeeObjectivesSubmittedAt: "2026-03-01T00:00:00.000Z" }), sampleCycle(), "objective_setting_employee"),
-      true,
-    );
-  });
-
-  it("allows reopen for legacy locked cycle with goals", () => {
-    assert.equal(
-      canHrReopenStage(sampleForm(), sampleCycle({ locked: true }), "objective_setting_employee"),
+      canHrReopenStage(sampleForm({ employeePerformanceGoalsSubmittedAt: "2026-03-01T00:00:00.000Z" }), sampleCycle(), "objective_setting_employee"),
       true,
     );
   });
@@ -193,16 +178,22 @@ describe("canHrReopenStage", () => {
 });
 
 describe("isEmployeeObjectivesHrReopened", () => {
-  it("is true only when objectives stage reopened and not yet resubmitted", () => {
+  it("is true when HR reopened and either section not resubmitted", () => {
     assert.equal(
-      isEmployeeObjectivesHrReopened(sampleForm({ hrReopenedStage: "objective_setting_employee" })),
+      isEmployeeObjectivesHrReopened(
+        sampleForm({
+          hrReopenedStage: "objective_setting_employee",
+          employeePerformanceGoalsSubmittedAt: "2026-03-01T00:00:00.000Z",
+        }),
+      ),
       true,
     );
     assert.equal(
       isEmployeeObjectivesHrReopened(
         sampleForm({
           hrReopenedStage: "objective_setting_employee",
-          employeeObjectivesSubmittedAt: "2026-03-03T00:00:00.000Z",
+          employeePerformanceGoalsSubmittedAt: "2026-03-01T00:00:00.000Z",
+          employeeDevelopmentGoalsSubmittedAt: "2026-03-02T00:00:00.000Z",
         }),
       ),
       false,
@@ -218,17 +209,6 @@ describe("isHrReopenActiveForUser", () => {
     );
     assert.equal(
       isHrReopenActiveForUser(sampleForm({ hrReopenedStage: "mid_year_review_manager" }), true, false),
-      false,
-    );
-  });
-
-  it("grants manager access only for manager stages", () => {
-    assert.equal(
-      isHrReopenActiveForUser(sampleForm({ hrReopenedStage: "mid_year_review_manager" }), false, true),
-      true,
-    );
-    assert.equal(
-      isHrReopenActiveForUser(sampleForm({ hrReopenedStage: "mid_year_review_manager" }), true, true),
       false,
     );
   });

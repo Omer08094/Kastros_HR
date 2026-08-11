@@ -43,27 +43,48 @@ export function hrReopenStageLabel(stage: PmdfHrReopenStage): string {
   return phaseLabel(stage);
 }
 
-/** Form has meaningful employee-entered goal content. */
-export function formHasEmployeeGoalContent(form: PmdfForm): boolean {
-  const bo = form.businessObjectives.some((r) => r.objectiveSmart.trim() || r.action.trim());
-  const dev = form.developmentObjectives.some((r) => r.actionPlan.trim() || r.developmentArea.trim());
-  return bo || dev;
+export function formHasPerformanceGoalContent(form: PmdfForm): boolean {
+  return form.businessObjectives.some((r) => r.objectiveSmart.trim() || r.action.trim());
 }
 
-/** Employee goal section is locked — modern submit flag OR legacy locked/past-phase with content. */
-export function isEmployeeGoalsLocked(form: PmdfForm, cycle: PerformanceCycle | undefined): boolean {
-  if (form.hrReopenedStage === "objective_setting_employee" && !form.employeeObjectivesSubmittedAt) {
-    return false;
-  }
-  if (form.employeeObjectivesSubmittedAt) return true;
+export function formHasDevelopmentGoalContent(form: PmdfForm): boolean {
+  return form.developmentObjectives.some((r) => r.actionPlan.trim() || r.developmentArea.trim());
+}
 
-  if (!formHasEmployeeGoalContent(form)) return false;
+/** Form has meaningful employee-entered goal content in either section. */
+export function formHasEmployeeGoalContent(form: PmdfForm): boolean {
+  return formHasPerformanceGoalContent(form) || formHasDevelopmentGoalContent(form);
+}
 
+function legacySectionLocked(form: PmdfForm, cycle: PerformanceCycle | undefined, hasContent: boolean): boolean {
+  if (!hasContent) return false;
   const effectivePhase = cycle?.currentPhase ?? form.phase;
   const pastObjectivePhase = effectivePhase !== "objective_setting_employee";
   const globallyLocked = !!(form.locked || cycle?.locked);
-
   return globallyLocked || pastObjectivePhase;
+}
+
+/** Performance goals locked — submit flag OR legacy locked/past-phase with BO content. */
+export function isPerformanceGoalsLocked(form: PmdfForm, cycle: PerformanceCycle | undefined): boolean {
+  if (form.hrReopenedStage === "objective_setting_employee" && !form.employeePerformanceGoalsSubmittedAt) {
+    return false;
+  }
+  if (form.employeePerformanceGoalsSubmittedAt) return true;
+  return legacySectionLocked(form, cycle, formHasPerformanceGoalContent(form));
+}
+
+/** Development goals locked — submit flag OR legacy locked/past-phase with DO content. */
+export function isDevelopmentGoalsLocked(form: PmdfForm, cycle: PerformanceCycle | undefined): boolean {
+  if (form.hrReopenedStage === "objective_setting_employee" && !form.employeeDevelopmentGoalsSubmittedAt) {
+    return false;
+  }
+  if (form.employeeDevelopmentGoalsSubmittedAt) return true;
+  return legacySectionLocked(form, cycle, formHasDevelopmentGoalContent(form));
+}
+
+/** Either performance or development goal section is locked. */
+export function isEmployeeGoalsLocked(form: PmdfForm, cycle: PerformanceCycle | undefined): boolean {
+  return isPerformanceGoalsLocked(form, cycle) || isDevelopmentGoalsLocked(form, cycle);
 }
 
 export function isStageHrReopened(form: PmdfForm, stage: PmdfHrReopenStage): boolean {
@@ -74,9 +95,12 @@ export function isHrReopenActive(form: PmdfForm): boolean {
   return form.hrReopenedStage != null;
 }
 
-/** Employee is in HR-granted resubmission window for objectives. */
+/** Employee is in HR-granted resubmission window for objectives (either section still open). */
 export function isEmployeeObjectivesHrReopened(form: PmdfForm): boolean {
-  return form.hrReopenedStage === "objective_setting_employee" && !form.employeeObjectivesSubmittedAt;
+  return (
+    form.hrReopenedStage === "objective_setting_employee" &&
+    (!form.employeePerformanceGoalsSubmittedAt || !form.employeeDevelopmentGoalsSubmittedAt)
+  );
 }
 
 /** Whether the current viewer may edit under an active HR reopen exception. */
@@ -178,4 +202,8 @@ export function hrReopenGrantsFinalManagerWindow(
 
 export function isValidHrReopenStage(stage: string): stage is PmdfHrReopenStage {
   return isPmdfHrReopenStage(stage);
+}
+
+export function bothEmployeeGoalSectionsSubmitted(form: PmdfForm): boolean {
+  return !!(form.employeePerformanceGoalsSubmittedAt && form.employeeDevelopmentGoalsSubmittedAt);
 }
