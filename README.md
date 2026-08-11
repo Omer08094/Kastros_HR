@@ -1,6 +1,6 @@
-# Kastros HR
+﻿# Kastros HR
 
-**Kastros HR** is an internal people-operations platform built for [Kastros](https://www.kastros.co) — a global agricultural commodities trading company. It gives HR, managers, and employees one secure place to manage the employee lifecycle: hiring, onboarding, time off, performance, documents, org structure, and compliance workflows.
+**Kastros HR** is an internal people-operations platform built for [Kastros](https://www.kastros.co) â€” a global agricultural commodities trading company. It gives HR, managers, and employees one secure place to manage the employee lifecycle: hiring, onboarding, time off, performance, documents, org structure, and compliance workflows.
 
 The app is a **role-based web application** (Employee, HR Admin, CEO) with **Firebase Authentication**, **Firestore-backed data**, secure file storage, in-app notifications, and **email alerts** for approvals and HR milestones.
 
@@ -29,7 +29,7 @@ Data is persisted to **Firebase Firestore** in production (with a local JSON fal
 | Auth | Firebase Authentication + HTTP-only session cookies (JWT via `jose`) |
 | Database | Firestore (`kastros-hr/store` document) |
 | File storage | Firebase Storage / local uploads |
-| Email | Nodemailer (SMTP — Gmail, Microsoft 365, etc.) |
+| Email | Nodemailer (SMTP â€” Gmail, Microsoft 365, etc.) |
 | Hosting | Vercel (recommended) |
 
 **Node.js 20.9+** is required.
@@ -40,41 +40,41 @@ Data is persisted to **Firebase Firestore** in production (with a local JSON fal
 
 ### Overview & self-service
 
-- **Dashboard** — role-specific KPIs, probation alerts, pending approvals, and company pulse (CEO view).
-- **My leave** — request time off, view balances by leave type, track approval status.
-- **Expense claims** — submit and track reimbursement requests.
-- **Notification bell** — real-time in-app alerts for approvals, milestones, training, and more.
+- **Dashboard** â€” role-specific KPIs, probation alerts, pending approvals, and company pulse (CEO view).
+- **My leave** â€” request time off, view balances by leave type, track approval status.
+- **Expense claims** â€” submit and track reimbursement requests.
+- **Notification bell** â€” real-time in-app alerts for approvals, milestones, training, and more.
 
 ### People & org
 
-- **People** — master-detail employee directory with rich profiles (identity, employment, education, compensation, documents).
-- **Onboarding** — add team members with full intake forms; creates Firebase login and seeds leave entitlements.
-- **Recruiting** — job postings, public apply portal (`/apply/[jobId]`), applicant pipeline, approve-to-onboard handoff.
-- **Org chart** — interactive reporting hierarchy with pan/zoom and PNG export.
-- **Transfer / posting** — record cross–business-unit movements.
+- **People** â€” master-detail employee directory with rich profiles (identity, employment, education, compensation, documents).
+- **Onboarding** â€” add team members with full intake forms; creates Firebase login and seeds leave entitlements.
+- **Recruiting** â€” job postings, public apply portal (`/apply/[jobId]`), applicant pipeline, approve-to-onboard handoff.
+- **Org chart** â€” interactive reporting hierarchy with pan/zoom and PNG export.
+- **Transfer / posting** â€” record crossâ€“business-unit movements.
 
 ### Time, performance & learning
 
-- **Performance** — goals and review records by cycle.
-- **Learning** — assign training, track completion and attendance, attach materials.
+- **Performance** â€” goals and review records by cycle.
+- **Learning** â€” assign training, track completion and attendance, attach materials.
 
 ### Letters, documents & compliance
 
-- **Letters** — promotion and termination letter workflows.
-- **Documents** — company-wide and per-employee document library with policy acknowledgement tracking.
-- **HR cases** — restricted investigation / compliance case management.
+- **Letters** â€” promotion and termination letter workflows.
+- **Documents** â€” company-wide and per-employee document library with policy acknowledgement tracking.
+- **HR cases** â€” restricted investigation / compliance case management.
 
 ### Setup & administration
 
-- **Organization setup** — business units (UAE, Karachi, Multan), departments, job descriptions.
-- **Settings** — leave policy catalog, salary allowance types, company configuration.
-- **User roles** — assign Employee / HR Admin / CEO via Firebase custom claims.
-- **Security** — audit trail of HR actions.
+- **Organization setup** â€” business units (UAE, Karachi, Multan), departments, job descriptions.
+- **Settings** â€” leave policy catalog, salary allowance types, company configuration.
+- **User roles** â€” assign Employee / HR Admin / CEO via Firebase custom claims.
+- **Security** â€” audit trail of HR actions.
 
 ### Public surfaces
 
-- **Careers apply portal** — candidates apply to open roles without logging in.
-- **Training manual** — public how-to guide at `/training-manual/how-to`.
+- **Careers apply portal** â€” candidates apply to open roles without logging in.
+- **Training manual** â€” public how-to guide at `/training-manual/how-to`.
 
 ---
 
@@ -94,8 +94,8 @@ Navigation and server actions enforce **role-based access control (RBAC)** on ev
 
 Leave requests follow a **two-step approval chain**:
 
-1. **Line manager** — approves or denies (based on `Reports to` on the employee profile).
-2. **HR Admin / CEO** — final approval or denial.
+1. **Line manager** â€” approves or denies (based on `Reports to` on the employee profile).
+2. **HR Admin / CEO** â€” final approval or denial.
 
 If no line manager is set, the request goes directly to HR.
 
@@ -131,7 +131,7 @@ A **daily cron job** (5:00 UTC on Vercel) emails proactive HR alerts even if nob
 - Production users sign in with **email + password** via Firebase Authentication.
 - The server verifies the Firebase ID token, reads the `role` custom claim, and issues a signed **HTTP-only session cookie**.
 - First admin is created with `npm run bootstrap:fresh` (not hardcoded in env vars).
-- New employees get a Firebase account when HR adds them under **People → Onboarding**.
+- New employees get a Firebase account when HR adds them under **People â†’ Onboarding**.
 - Local development can use bundled `*.kastros.demo` accounts when `KASTROS_DEMO_USERS=true`.
 
 See [docs/FIREBASE_AUTH.md](docs/FIREBASE_AUTH.md) for the full auth setup guide.
@@ -152,11 +152,11 @@ npm install
 
 Copy `.env.example` to `.env.local` and fill in:
 
-- `NEXT_PUBLIC_FIREBASE_*` — from Firebase Console → Project settings
-- `FIREBASE_*` — service account credentials (Admin SDK)
-- `KASTROS_SESSION_SECRET` — random string, 32+ characters
-- `SMTP_*` — optional, for email notifications
-- `NEXT_PUBLIC_APP_URL` — `http://localhost:3000` for local dev
+- `NEXT_PUBLIC_FIREBASE_*` â€” from Firebase Console â†’ Project settings
+- `FIREBASE_*` â€” service account credentials (Admin SDK)
+- `KASTROS_SESSION_SECRET` â€” random string, 32+ characters
+- `SMTP_*` â€” optional, for email notifications
+- `NEXT_PUBLIC_APP_URL` â€” `http://localhost:3000` for local dev
 
 ### 3. Bootstrap your first admin
 
@@ -183,14 +183,14 @@ For a quick local demo without Firebase, set `KASTROS_DEMO_USERS=true` and use t
 ## Deployment (Vercel)
 
 1. Push to GitHub and import the repo in [Vercel](https://vercel.com).
-2. Add all variables from `.env.example` under **Settings → Environment Variables**.
-3. In Firebase Console → **Authentication → Authorized domains**, add your Vercel URL and custom domain.
+2. Add all variables from `.env.example` under **Settings â†’ Environment Variables**.
+3. In Firebase Console â†’ **Authentication â†’ Authorized domains**, add your Vercel URL and custom domain.
 4. Enable **Firestore** and **Storage** in the Firebase project.
 5. Deploy. The first request seeds an empty store if none exists.
 
 Optional for email cron:
 
-- Set `KASTROS_CRON_SECRET` (or use Vercel’s auto-generated `CRON_SECRET`).
+- Set `KASTROS_CRON_SECRET` (or use Vercelâ€™s auto-generated `CRON_SECRET`).
 - `vercel.json` schedules `/api/cron/notification-emails` daily.
 
 See also [docs/SETUP_COPY_PASTE.md](docs/SETUP_COPY_PASTE.md) for a condensed setup checklist.
@@ -201,25 +201,42 @@ See also [docs/SETUP_COPY_PASTE.md](docs/SETUP_COPY_PASTE.md) for a condensed se
 
 ```
 src/
-├── app/
-│   ├── (hr)/          # Authenticated HR app (dashboard, people, leave, …)
-│   ├── apply/         # Public job application portal
-│   ├── login/         # Sign-in page
-│   ├── api/           # File serving, notifications, cron
-│   └── training-manual/
-├── components/        # UI components (hr/, layout, notifications)
-├── lib/
-│   ├── store/         # HR data model, server actions, Firestore persist
-│   ├── hr-notifications.ts
-│   ├── hr-emails.ts
-│   ├── notification-email-sync.ts
-│   ├── org-tree.ts
-│   └── …
+â”œâ”€â”€ app/
+â”‚   â”œâ”€â”€ (hr)/          # Authenticated HR app (dashboard, people, leave, â€¦)
+â”‚   â”œâ”€â”€ apply/         # Public job application portal
+â”‚   â”œâ”€â”€ login/         # Sign-in page
+â”‚   â”œâ”€â”€ api/           # File serving, notifications, cron
+â”‚   â””â”€â”€ training-manual/
+â”œâ”€â”€ components/        # UI components (hr/, layout, notifications)
+â”œâ”€â”€ lib/
+â”‚   â”œâ”€â”€ store/         # HR data model, server actions, Firestore persist
+â”‚   â”œâ”€â”€ hr-notifications.ts
+â”‚   â”œâ”€â”€ hr-emails.ts
+â”‚   â”œâ”€â”€ notification-email-sync.ts
+â”‚   â”œâ”€â”€ org-tree.ts
+â”‚   â””â”€â”€ â€¦
 docs/                  # Setup and auth guides
 scripts/               # bootstrap-fresh, PDF generation
 ```
 
 ---
+
+
+## Sales playbook
+
+The sales-facing product walkthrough is generated as **`docs/Kastros-HR-Sales-Playbook.pdf`** (screenshots from a local dev server, then PDF export).
+
+```bash
+npm run docs:sales
+```
+
+Re-export PDF only (after editing `docs/sales/Kastros-HR-Sales-Playbook.html`):
+
+```bash
+npm run docs:sales-pdf
+```
+
+Set `SALES_CAPTURE_BASE_URL` if the app is not on `http://localhost:3000`. Screenshot auth uses demo JWT session cookies (no passwords in scripts).
 
 ## Scripts
 
@@ -231,6 +248,8 @@ scripts/               # bootstrap-fresh, PDF generation
 | `npm run lint` | ESLint |
 | `npm run bootstrap:fresh` | Wipe data and create first Firebase admin |
 | `npm run docs:pdf` | Generate executive product overview PDF |
+| `npm run docs:sales` | Capture screenshots and generate sales playbook PDF |
+| `npm run docs:sales-pdf` | Re-export sales playbook PDF from HTML only |
 
 ---
 
@@ -262,4 +281,4 @@ Employees are assigned a **business unit** (UAE, Karachi, Multan) which drives d
 
 ## License
 
-Private — internal use for Kastros. Do not distribute.
+Private â€” internal use for Kastros. Do not distribute.
