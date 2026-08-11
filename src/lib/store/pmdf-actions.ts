@@ -20,6 +20,11 @@ import {
   validatePmdfWeightTotals,
 } from "@/lib/pmdf-validation";
 import { applyPmdfFieldAccess } from "@/lib/pmdf-field-enforcement";
+import {
+  canHrReopenEmployeeGoals,
+  isEmployeeGoalsLocked,
+  isEmployeeGoalsReopenedForResubmit,
+} from "@/lib/pmdf-objective-lock";
 import { canEditPmdfForm, getPmdfFieldAccess } from "@/lib/pmdf-permissions";
 import { defaultDevelopmentRows, phaseLabel, type PmdfPhaseId } from "@/lib/pmdf-reference";
 import { hasExecAccess } from "@/lib/roles";
@@ -109,6 +114,7 @@ function buildFormFromEmployee(cycleId: string, employee: Employee, store: HrSto
     employeeSignedAt: null,
     managerSignedAt: null,
     employeeObjectivesSubmittedAt: null,
+    employeeObjectivesReopenedAt: null,
     phase: cycle?.currentPhase ?? "objective_setting_employee",
     locked: cycle?.locked ?? false,
     assignedAt: now,
@@ -598,6 +604,50 @@ function validatePmdfFields(
   return null;
 }
 
+export async function reopenPmdfEmployeeObjectives(formData: FormData): Promise<ActionResult> {
+  const session = await getSession();
+  if (!session || !hasExecAccess(session.role)) {
+    return { error: "Only HR Admin or CEO can reopen employee goals." };
+  }
+
+  const formId = String(formData.get("formId") ?? "").trim();
+  if (!formId) return { error: "Missing form." };
+
+  const store = await readStore();
+  const existing = store.pmdfForms.find((f) => f.id === formId);
+  if (!existing) return { error: "Form not found." };
+
+  const cycle = store.performanceCycles.find((c) => c.id === existing.cycleId);
+  if (!canHrReopenEmployeeGoals(existing, cycle)) {
+    return { error: "This form's goals are not locked, or a resubmission is already in progress." };
+  }
+
+  await mutateStore((s) => ({
+    next: audit(
+      {
+        ...s,
+        pmdfForms: s.pmdfForms.map((f) =>
+          f.id === formId
+            ? {
+                ...f,
+                employeeObjectivesSubmittedAt: null,
+                employeeObjectivesReopenedAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              }
+            : f,
+        ),
+      },
+      session.email,
+      `Reopened PMDF objectives for ${existing.employeeName} (${formId})`,
+    ),
+    result: ok(),
+  }));
+
+  revalidatePath("/performance");
+  revalidatePath(`/performance/print/${formId}`);
+  return { ok: true, message: "Goals reopened for employee." };
+}
+
 export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
   const session = await getSession();
   if (!session) return { error: "Unauthorized." };
@@ -614,11 +664,15 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
   const isOwner = existing.employeeEmail.toLowerCase() === session.email.toLowerCase();
   const isManager = isPmdfLineManager(store, session.email, existing);
   if (!isHr && !isOwner && !isManager) return { error: "You cannot edit this form." };
-  if ((existing.locked || cycle?.locked) && !isHr) return { error: "This form is locked." };
+
+  const reopenedForResubmit = isOwner && isEmployeeGoalsReopenedForResubmit(existing);
+  if ((existing.locked || cycle?.locked) && !isHr && !reopenedForResubmit) {
+    return { error: "This form is locked." };
+  }
 
   const saveRole: PmdfSaveRole = isHr ? "hr" : isOwner ? "employee" : "manager";
   const effectivePhase = cycle?.currentPhase ?? existing.phase;
-  const employeeObjectivesLocked = !!existing.employeeObjectivesSubmittedAt;
+  const employeeObjectivesLocked = isEmployeeGoalsLocked(existing, cycle);
 
   if (
     !isHr &&
@@ -658,12 +712,13 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
 
   const submittingObjectives =
     saveRole === "employee" &&
-    effectivePhase === "objective_setting_employee" &&
-    !existing.employeeObjectivesSubmittedAt;
+    !existing.employeeObjectivesSubmittedAt &&
+    (effectivePhase === "objective_setting_employee" || !!existing.employeeObjectivesReopenedAt);
 
   if (
     saveRole === "employee" &&
     existing.employeeObjectivesSubmittedAt &&
+    !existing.employeeObjectivesReopenedAt &&
     effectivePhase === "objective_setting_employee"
   ) {
     return {
@@ -671,7 +726,7 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
     };
   }
 
-  if (saveRole === "employee" && existing.employeeObjectivesSubmittedAt) {
+  if (saveRole === "employee" && employeeObjectivesLocked && !reopenedForResubmit) {
     merged = applyEmployeeObjectiveLock(existingPmdfFormFields(existing), merged);
   }
 
@@ -685,7 +740,8 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
     const submitValidation = validateObjectiveSubmitWeights(merged);
     if (submitValidation) return { error: submitValidation };
   } else {
-    const draftingPhase = effectivePhase === "objective_setting_employee";
+    const draftingPhase =
+      effectivePhase === "objective_setting_employee" || !!existing.employeeObjectivesReopenedAt;
     const validationError = validatePmdfFields(merged, {
       skipWeightValidation: saveRole === "employee" && draftingPhase,
       skipDevTraitValidation: saveRole === "employee" && draftingPhase,
@@ -722,6 +778,7 @@ export async function savePmdfForm(formData: FormData): Promise<ActionResult> {
                 employeeSignedAt: merged.employeeSignature ? new Date().toISOString() : f.employeeSignedAt,
                 managerSignedAt: merged.managerSignature ? new Date().toISOString() : f.managerSignedAt,
                 employeeObjectivesSubmittedAt: objectivesSubmittedAt,
+                employeeObjectivesReopenedAt: submittingObjectives ? null : f.employeeObjectivesReopenedAt,
                 updatedAt: new Date().toISOString(),
               }
             : f,

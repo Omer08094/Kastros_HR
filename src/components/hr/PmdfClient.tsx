@@ -24,6 +24,11 @@ import {
   validateObjectiveSubmitWeights,
 } from "@/lib/pmdf-validation";
 import { canEditPmdfForm, getPmdfFieldAccess } from "@/lib/pmdf-permissions";
+import {
+  canHrReopenEmployeeGoals,
+  isEmployeeGoalsLocked,
+  isEmployeeGoalsReopenedForResubmit,
+} from "@/lib/pmdf-objective-lock";
 import { isPmdfLineManagerFromEmployees } from "@/lib/pmdf-access";
 import { hasExecAccess } from "@/lib/roles";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -32,6 +37,7 @@ import {
   createPerformanceCycle,
   deletePerformanceCycle,
   notifyPmdfDeadline,
+  reopenPmdfEmployeeObjectives,
   savePmdfForm,
   updatePerformanceCycle,
 } from "@/lib/store/pmdf-actions";
@@ -477,7 +483,9 @@ function PmdfFormEditor({
   const isManager = isPmdfLineManagerFromEmployees(employees, session.email, form);
   const locked = form.locked || cycle?.locked;
   const effectivePhase = cycle?.currentPhase ?? form.phase;
-  const employeeObjectivesLocked = !!form.employeeObjectivesSubmittedAt;
+  const employeeObjectivesLocked = isEmployeeGoalsLocked(form, cycle);
+  const reopenedForResubmit = isEmployeeGoalsReopenedForResubmit(form);
+  const hrCanReopen = isHr && canHrReopenEmployeeGoals(form, cycle);
   const fieldAccess = useMemo(
     () =>
       getPmdfFieldAccess({
@@ -502,10 +510,10 @@ function PmdfFormEditor({
   });
   const submittingObjectives =
     isEmployee &&
-    effectivePhase === "objective_setting_employee" &&
-    !form.employeeObjectivesSubmittedAt;
+    !form.employeeObjectivesSubmittedAt &&
+    (effectivePhase === "objective_setting_employee" || !!form.employeeObjectivesReopenedAt);
   const employeeGoalsComplete =
-    isEmployee && employeeObjectivesLocked && effectivePhase === "objective_setting_employee";
+    isEmployee && employeeObjectivesLocked && !reopenedForResubmit && effectivePhase === "objective_setting_employee";
   const canEmployeeEditGoals = fieldAccess.canEditEmployeeObjectiveFields;
 
   const [tab, setTab] = useState<"bo" | "do" | "feedback">("bo");
@@ -691,13 +699,38 @@ function PmdfFormEditor({
               {" · "}Phase: {phaseLabel(form.phase)}
             </p>
           </div>
-          <Link
-            href={`/performance/print/${form.id}`}
-            target="_blank"
-            className="rounded-xl bg-kastros-cream px-3 py-1.5 text-xs font-semibold ring-1 ring-kastros-sand"
-          >
-            Print / PDF
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            {hrCanReopen ? (
+              <form
+                action={(fd) => {
+                  if (
+                    !window.confirm(
+                      `Allow ${form.employeeName} to edit and resubmit their performance and development goals? Existing goal text will be kept so they can correct it.`,
+                    )
+                  ) {
+                    return;
+                  }
+                  onAction(reopenPmdfEmployeeObjectives(fd), "Goals reopened for employee.");
+                }}
+              >
+                <input type="hidden" name="formId" value={form.id} />
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 disabled:opacity-50"
+                >
+                  Reopen goals for employee
+                </button>
+              </form>
+            ) : null}
+            <Link
+              href={`/performance/print/${form.id}`}
+              target="_blank"
+              className="rounded-xl bg-kastros-cream px-3 py-1.5 text-xs font-semibold ring-1 ring-kastros-sand"
+            >
+              Print / PDF
+            </Link>
+          </div>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2 text-xs">
@@ -759,10 +792,28 @@ function PmdfFormEditor({
         </div>
       ) : null}
 
-      {employeeObjectivesLocked ? (
+      {isHr && reopenedForResubmit ? (
+        <div className="mx-5 mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          Goals reopened for {form.employeeName} — awaiting employee resubmission.
+        </div>
+      ) : null}
+
+      {isEmployee && reopenedForResubmit ? (
+        <div className="mx-5 mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          HR reopened your goals — please review, edit, and submit again.
+        </div>
+      ) : null}
+
+      {employeeObjectivesLocked && !reopenedForResubmit && isEmployee ? (
         <div className="mx-5 mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Your performance and development goals were submitted on{" "}
-          {fmtDate(form.employeeObjectivesSubmittedAt)} and can no longer be changed.
+          {form.employeeObjectivesSubmittedAt ? (
+            <>
+              Your performance and development goals were submitted on{" "}
+              {fmtDate(form.employeeObjectivesSubmittedAt)} and can no longer be changed.
+            </>
+          ) : (
+            <>Your performance and development goals are locked and can no longer be changed.</>
+          )}
         </div>
       ) : submittingObjectives ? (
         <>

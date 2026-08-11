@@ -1,6 +1,7 @@
 import type { PerformanceCycle, PmdfForm } from "@/lib/store/types";
 import type { RoleId } from "@/lib/roles";
 import { hasExecAccess } from "@/lib/roles";
+import { isEmployeeGoalsLocked, isEmployeeGoalsReopenedForResubmit } from "@/lib/pmdf-objective-lock";
 
 export type PmdfFieldAccess = {
   canEditEmployeeObjectiveFields: boolean;
@@ -80,12 +81,24 @@ export function getPmdfFieldAccess(args: {
   effectivePhase: PmdfForm["phase"];
   onDate?: string;
 }): PmdfFieldAccess {
-  const { cycle, form, role, isEmployee, isManager, employeeObjectivesLocked, effectivePhase } = args;
+  const { cycle, form, role, isEmployee, isManager, effectivePhase } = args;
+  const employeeObjectivesLocked =
+    args.employeeObjectivesLocked ?? isEmployeeGoalsLocked(form, cycle);
   const hr = hasExecAccess(role);
   const globallyLocked = !!(form.locked || cycle?.locked);
   const managerOnForm = isManager && !isEmployee;
+  const reopenedForResubmit = isEmployee && isEmployeeGoalsReopenedForResubmit(form);
 
   if (hr) return allOpen();
+
+  if (reopenedForResubmit) {
+    return {
+      ...allLocked(),
+      canEditEmployeeObjectiveFields: true,
+      canEditPerformanceWeights: true,
+    };
+  }
+
   if (globallyLocked) return allLocked();
 
   const objectiveWindow =
@@ -137,6 +150,7 @@ export function canEditPmdfForm(args: {
   effectivePhase: PmdfForm["phase"];
 }): boolean {
   if (hasExecAccess(args.role)) return true;
+  if (args.isEmployee && isEmployeeGoalsReopenedForResubmit(args.form)) return true;
   if (args.form.locked || args.cycle?.locked) return false;
   if (!args.isEmployee && !args.isManager) return false;
 

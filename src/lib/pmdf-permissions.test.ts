@@ -31,7 +31,9 @@ function sampleForm(overrides: Partial<PmdfForm> = {}): PmdfForm {
     employeeSignedAt: null,
     managerSignedAt: null,
     employeeObjectivesSubmittedAt: null,
-    createdAt: "2026-01-01T00:00:00.000Z",
+    employeeObjectivesReopenedAt: null,
+    assignedAt: "2026-01-01T00:00:00.000Z",
+    lastNotifiedAt: null,
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
   };
@@ -167,5 +169,23 @@ describe("getPmdfFieldAccess", () => {
       onDate: "2026-11-01",
     });
     assert.equal(finalYear.canEditSelfScores, true);
+  });
+
+  it("allows employee goal edits when HR reopened mid-cycle", () => {
+    const access = getPmdfFieldAccess({
+      cycle: sampleCycle({ currentPhase: "mid_year_review_employee", locked: true }),
+      form: sampleForm({
+        employeeObjectivesReopenedAt: "2026-06-01T00:00:00.000Z",
+        employeeObjectivesSubmittedAt: null,
+      }),
+      role: "employee",
+      isEmployee: true,
+      isManager: false,
+      employeeObjectivesLocked: false,
+      effectivePhase: "mid_year_review_employee",
+    });
+    assert.equal(access.canEditEmployeeObjectiveFields, true);
+    assert.equal(access.canEditPerformanceWeights, true);
+    assert.equal(access.canEditSelfScores, false);
   });
 });

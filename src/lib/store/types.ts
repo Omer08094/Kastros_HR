@@ -444,6 +444,8 @@ export type PmdfForm = {
   managerSignedAt: string | null;
   /** Set when the employee submits performance + development goals (one-time, objective setting phase). */
   employeeObjectivesSubmittedAt: string | null;
+  /** HR reopened objective setting so the employee may edit and resubmit once. */
+  employeeObjectivesReopenedAt: string | null;
   phase: PmdfPhase;
   locked: boolean;
   assignedAt: string;
