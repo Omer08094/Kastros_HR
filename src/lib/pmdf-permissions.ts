@@ -1,7 +1,16 @@
 import type { PerformanceCycle, PmdfForm } from "@/lib/store/types";
 import type { RoleId } from "@/lib/roles";
 import { hasExecAccess } from "@/lib/roles";
-import { isEmployeeGoalsLocked, isEmployeeGoalsReopenedForResubmit } from "@/lib/pmdf-objective-lock";
+import {
+  hrReopenGrantsFinalEmployeeWindow,
+  hrReopenGrantsFinalManagerWindow,
+  hrReopenGrantsMidYearEmployeeWindow,
+  hrReopenGrantsMidYearManagerWindow,
+  hrReopenGrantsObjectiveWindow,
+  isEmployeeGoalsLocked,
+  isEmployeeObjectivesHrReopened,
+  isHrReopenActiveForUser,
+} from "@/lib/pmdf-hr-reopen";
 
 export type PmdfFieldAccess = {
   canEditEmployeeObjectiveFields: boolean;
@@ -87,11 +96,11 @@ export function getPmdfFieldAccess(args: {
   const hr = hasExecAccess(role);
   const globallyLocked = !!(form.locked || cycle?.locked);
   const managerOnForm = isManager && !isEmployee;
-  const reopenedForResubmit = isEmployee && isEmployeeGoalsReopenedForResubmit(form);
+  const hrReopenForUser = isHrReopenActiveForUser(form, isEmployee, isManager);
 
   if (hr) return allOpen();
 
-  if (reopenedForResubmit) {
+  if (hrReopenForUser && form.hrReopenedStage === "objective_setting_employee") {
     return {
       ...allLocked(),
       canEditEmployeeObjectiveFields: true,
@@ -99,26 +108,64 @@ export function getPmdfFieldAccess(args: {
     };
   }
 
+  if (hrReopenForUser && form.hrReopenedStage === "mid_year_review_employee") {
+    return {
+      ...allLocked(),
+      canEditEmployeeMidYearFeedback: true,
+    };
+  }
+
+  if (hrReopenForUser && form.hrReopenedStage === "mid_year_review_manager") {
+    return {
+      ...allLocked(),
+      canEditRowManagerHalfYearComments: true,
+      canEditManagerFeedbackMidYear: true,
+    };
+  }
+
+  if (hrReopenForUser && form.hrReopenedStage === "year_end_evaluation_employee") {
+    return {
+      ...allLocked(),
+      canEditEmployeeFinalFeedback: true,
+      canEditEmployeeSignature: true,
+      canEditSelfScores: true,
+    };
+  }
+
+  if (hrReopenForUser && form.hrReopenedStage === "year_end_evaluation_manager") {
+    return {
+      ...allLocked(),
+      canEditRowManagerFinalFields: true,
+      canEditManagerFeedbackFinal: true,
+      canEditManagerSignature: true,
+    };
+  }
+
   if (globallyLocked) return allLocked();
 
   const objectiveWindow =
+    hrReopenGrantsObjectiveWindow(form, isEmployee) ||
     windowOpen(cycle, "objectiveSettingEmployeeOpen", "objectiveSettingEmployeeDeadline") ||
     effectivePhase === "objective_setting_employee";
 
   const midYearManagerWindow =
+    hrReopenGrantsMidYearManagerWindow(form, isManager, isEmployee) ||
     windowOpen(cycle, "midYearManagerOpen", "midYearManagerDeadline") ||
     effectivePhase === "mid_year_review_manager";
 
   const midYearEmployeeWindow =
+    hrReopenGrantsMidYearEmployeeWindow(form, isEmployee) ||
     windowOpen(cycle, "midYearEmployeeOpen", "midYearEmployeeDeadline") ||
     effectivePhase === "mid_year_review_employee";
 
   const finalManagerWindow =
+    hrReopenGrantsFinalManagerWindow(form, isManager, isEmployee) ||
     windowOpen(cycle, "yearEndManagerOpen", "yearEndManagerDeadline") ||
     effectivePhase === "year_end_evaluation_manager" ||
     effectivePhase === "finalization";
 
   const finalEmployeeWindow =
+    hrReopenGrantsFinalEmployeeWindow(form, isEmployee) ||
     windowOpen(cycle, "yearEndEmployeeOpen", "yearEndEmployeeDeadline") ||
     effectivePhase === "year_end_evaluation_employee";
 
@@ -150,7 +197,8 @@ export function canEditPmdfForm(args: {
   effectivePhase: PmdfForm["phase"];
 }): boolean {
   if (hasExecAccess(args.role)) return true;
-  if (args.isEmployee && isEmployeeGoalsReopenedForResubmit(args.form)) return true;
+  if (isHrReopenActiveForUser(args.form, args.isEmployee, args.isManager)) return true;
+  if (args.isEmployee && isEmployeeObjectivesHrReopened(args.form)) return true;
   if (args.form.locked || args.cycle?.locked) return false;
   if (!args.isEmployee && !args.isManager) return false;
 

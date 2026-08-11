@@ -25,10 +25,15 @@ import {
 } from "@/lib/pmdf-validation";
 import { canEditPmdfForm, getPmdfFieldAccess } from "@/lib/pmdf-permissions";
 import {
-  canHrReopenEmployeeGoals,
+  canHrReopenStage,
+  hrReopenStageLabel,
   isEmployeeGoalsLocked,
-  isEmployeeGoalsReopenedForResubmit,
-} from "@/lib/pmdf-objective-lock";
+  isEmployeeObjectivesHrReopened,
+  isHrReopenActive,
+  isHrReopenActiveForUser,
+  PMDF_HR_REOPEN_STAGES,
+  type PmdfHrReopenStage,
+} from "@/lib/pmdf-hr-reopen";
 import { isPmdfLineManagerFromEmployees } from "@/lib/pmdf-access";
 import { hasExecAccess } from "@/lib/roles";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -37,7 +42,8 @@ import {
   createPerformanceCycle,
   deletePerformanceCycle,
   notifyPmdfDeadline,
-  reopenPmdfEmployeeObjectives,
+  reopenPmdfFormStage,
+  relockPmdfForm,
   savePmdfForm,
   updatePerformanceCycle,
 } from "@/lib/store/pmdf-actions";
@@ -484,8 +490,12 @@ function PmdfFormEditor({
   const locked = form.locked || cycle?.locked;
   const effectivePhase = cycle?.currentPhase ?? form.phase;
   const employeeObjectivesLocked = isEmployeeGoalsLocked(form, cycle);
-  const reopenedForResubmit = isEmployeeGoalsReopenedForResubmit(form);
-  const hrCanReopen = isHr && canHrReopenEmployeeGoals(form, cycle);
+  const objectivesHrReopened = isEmployeeObjectivesHrReopened(form);
+  const hrReopenActive = isHrReopenActive(form);
+  const hrReopenForUser = isHrReopenActiveForUser(form, isEmployee, isManager);
+  const [reopenStage, setReopenStage] = useState<PmdfHrReopenStage>("objective_setting_employee");
+  const selectedStageReopenable =
+    isHr && !hrReopenActive && canHrReopenStage(form, cycle, reopenStage);
   const fieldAccess = useMemo(
     () =>
       getPmdfFieldAccess({
@@ -511,9 +521,9 @@ function PmdfFormEditor({
   const submittingObjectives =
     isEmployee &&
     !form.employeeObjectivesSubmittedAt &&
-    (effectivePhase === "objective_setting_employee" || !!form.employeeObjectivesReopenedAt);
+    (effectivePhase === "objective_setting_employee" || form.hrReopenedStage === "objective_setting_employee");
   const employeeGoalsComplete =
-    isEmployee && employeeObjectivesLocked && !reopenedForResubmit && effectivePhase === "objective_setting_employee";
+    isEmployee && employeeObjectivesLocked && !objectivesHrReopened && effectivePhase === "objective_setting_employee";
   const canEmployeeEditGoals = fieldAccess.canEditEmployeeObjectiveFields;
 
   const [tab, setTab] = useState<"bo" | "do" | "feedback">("bo");
@@ -700,28 +710,65 @@ function PmdfFormEditor({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {hrCanReopen ? (
-              <form
-                action={(fd) => {
-                  if (
-                    !window.confirm(
-                      `Allow ${form.employeeName} to edit and resubmit their performance and development goals? Existing goal text will be kept so they can correct it.`,
-                    )
-                  ) {
-                    return;
-                  }
-                  onAction(reopenPmdfEmployeeObjectives(fd), "Goals reopened for employee.");
-                }}
-              >
-                <input type="hidden" name="formId" value={form.id} />
+            {isHr ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50/80 px-2 py-1.5">
+                <label className="flex items-center gap-1.5 text-xs text-amber-950">
+                  <span className="font-semibold">Stage</span>
+                  <select
+                    value={reopenStage}
+                    onChange={(e) => setReopenStage(e.target.value as PmdfHrReopenStage)}
+                    disabled={pending || hrReopenActive}
+                    className="rounded-lg border border-amber-200 bg-white px-2 py-1 text-xs"
+                  >
+                    {PMDF_HR_REOPEN_STAGES.map((stage) => (
+                      <option key={stage} value={stage}>
+                        {hrReopenStageLabel(stage)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <button
-                  type="submit"
-                  disabled={pending}
-                  className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 disabled:opacity-50"
+                  type="button"
+                  disabled={pending || !selectedStageReopenable}
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        `Reopen "${hrReopenStageLabel(reopenStage)}" for ${form.employeeName}? Only this employee's form will be editable for that stage, even if the cycle is locked or dates have passed.`,
+                      )
+                    ) {
+                      return;
+                    }
+                    const fd = new FormData();
+                    fd.set("formId", form.id);
+                    fd.set("stage", reopenStage);
+                    onAction(reopenPmdfFormStage(fd), "Form stage reopened for editing.");
+                  }}
+                  className="rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-900 disabled:opacity-50"
                 >
-                  Reopen goals for employee
+                  Reopen stage
                 </button>
-              </form>
+                {hrReopenActive ? (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => {
+                      if (
+                        !window.confirm(
+                          `Relock ${form.employeeName}'s form? The HR edit exception will end and normal lock rules apply again.`,
+                        )
+                      ) {
+                        return;
+                      }
+                      const fd = new FormData();
+                      fd.set("formId", form.id);
+                      onAction(relockPmdfForm(fd), "Form relocked.");
+                    }}
+                    className="rounded-lg bg-amber-800 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    Relock form
+                  </button>
+                ) : null}
+              </div>
             ) : null}
             <Link
               href={`/performance/print/${form.id}`}
@@ -792,19 +839,25 @@ function PmdfFormEditor({
         </div>
       ) : null}
 
-      {isHr && reopenedForResubmit ? (
+      {isHr && hrReopenActive && form.hrReopenedStage ? (
         <div className="mx-5 mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-          Goals reopened for {form.employeeName} — awaiting employee resubmission.
+          HR reopen active: <strong>{hrReopenStageLabel(form.hrReopenedStage)}</strong> — awaiting edits from{" "}
+          {form.hrReopenedStage === "mid_year_review_manager" ||
+          form.hrReopenedStage === "year_end_evaluation_manager"
+            ? form.lineManagerName ?? "line manager"
+            : form.employeeName}
+          . Click <strong>Relock form</strong> when corrections are complete.
         </div>
       ) : null}
 
-      {isEmployee && reopenedForResubmit ? (
+      {hrReopenForUser && form.hrReopenedStage ? (
         <div className="mx-5 mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-          HR reopened your goals — please review, edit, and submit again.
+          HR reopened <strong>{hrReopenStageLabel(form.hrReopenedStage)}</strong> — please review, edit, and save
+          {form.hrReopenedStage === "objective_setting_employee" ? " your goals again" : " your section"}.
         </div>
       ) : null}
 
-      {employeeObjectivesLocked && !reopenedForResubmit && isEmployee ? (
+      {employeeObjectivesLocked && !objectivesHrReopened && isEmployee ? (
         <div className="mx-5 mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {form.employeeObjectivesSubmittedAt ? (
             <>
@@ -1298,6 +1351,7 @@ export function PmdfClient({
             <div className="flex flex-wrap gap-2">
               {forms.map((f) => {
                 const cycle = cycleMap.get(f.cycleId);
+                const hrReopenBadge = hasExecAccess(session.role) && f.hrReopenedStage;
                 return (
                   <button
                     key={f.id}
@@ -1310,6 +1364,11 @@ export function PmdfClient({
                     }`}
                   >
                     <span className="font-semibold">{f.employeeName}</span>
+                    {hrReopenBadge ? (
+                      <span className="ml-1.5 inline-block rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-950">
+                        Reopen
+                      </span>
+                    ) : null}
                     <span className="block text-xs opacity-80">{cycle?.title ?? "Cycle"}</span>
                   </button>
                 );

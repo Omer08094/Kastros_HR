@@ -32,6 +32,9 @@ function sampleForm(overrides: Partial<PmdfForm> = {}): PmdfForm {
     managerSignedAt: null,
     employeeObjectivesSubmittedAt: null,
     employeeObjectivesReopenedAt: null,
+    hrReopenedStage: null,
+    hrReopenedAt: null,
+    hrReopenedByEmail: null,
     assignedAt: "2026-01-01T00:00:00.000Z",
     lastNotifiedAt: null,
     updatedAt: "2026-01-01T00:00:00.000Z",
@@ -171,11 +174,11 @@ describe("getPmdfFieldAccess", () => {
     assert.equal(finalYear.canEditSelfScores, true);
   });
 
-  it("allows employee goal edits when HR reopened mid-cycle", () => {
+  it("allows employee goal edits when HR reopened objectives on locked cycle", () => {
     const access = getPmdfFieldAccess({
       cycle: sampleCycle({ currentPhase: "mid_year_review_employee", locked: true }),
       form: sampleForm({
-        employeeObjectivesReopenedAt: "2026-06-01T00:00:00.000Z",
+        hrReopenedStage: "objective_setting_employee",
         employeeObjectivesSubmittedAt: null,
       }),
       role: "employee",
@@ -187,5 +190,35 @@ describe("getPmdfFieldAccess", () => {
     assert.equal(access.canEditEmployeeObjectiveFields, true);
     assert.equal(access.canEditPerformanceWeights, true);
     assert.equal(access.canEditSelfScores, false);
+  });
+
+  it("allows manager mid-year edits when HR reopened that stage on locked cycle", () => {
+    const access = getPmdfFieldAccess({
+      cycle: sampleCycle({ locked: true, currentPhase: "year_end_evaluation_manager" }),
+      form: sampleForm({ hrReopenedStage: "mid_year_review_manager" }),
+      role: "employee",
+      isEmployee: false,
+      isManager: true,
+      employeeObjectivesLocked: true,
+      effectivePhase: "year_end_evaluation_manager",
+    });
+    assert.equal(access.canEditRowManagerHalfYearComments, true);
+    assert.equal(access.canEditManagerFeedbackMidYear, true);
+    assert.equal(access.canEditRowManagerFinalFields, false);
+  });
+
+  it("allows employee year-end edits when HR reopened that stage", () => {
+    const access = getPmdfFieldAccess({
+      cycle: sampleCycle({ locked: true }),
+      form: sampleForm({ hrReopenedStage: "year_end_evaluation_employee" }),
+      role: "employee",
+      isEmployee: true,
+      isManager: false,
+      employeeObjectivesLocked: true,
+      effectivePhase: "closed",
+    });
+    assert.equal(access.canEditEmployeeFinalFeedback, true);
+    assert.equal(access.canEditSelfScores, true);
+    assert.equal(access.canEditEmployeeMidYearFeedback, false);
   });
 });

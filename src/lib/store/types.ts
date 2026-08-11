@@ -356,6 +356,14 @@ export type PmdfPhase =
   | "finalization"
   | "closed";
 
+/** Stages HR may reopen on a single employee form. */
+export type PmdfHrReopenStage =
+  | "objective_setting_employee"
+  | "mid_year_review_employee"
+  | "mid_year_review_manager"
+  | "year_end_evaluation_employee"
+  | "year_end_evaluation_manager";
+
 export type PmdfAssignmentScope = "organisation" | "department" | "employee";
 
 export type PerformanceCycle = {
@@ -444,8 +452,12 @@ export type PmdfForm = {
   managerSignedAt: string | null;
   /** Set when the employee submits performance + development goals (one-time, objective setting phase). */
   employeeObjectivesSubmittedAt: string | null;
-  /** HR reopened objective setting so the employee may edit and resubmit once. */
+  /** @deprecated Migrated to hrReopenedStage; kept for legacy store rows. */
   employeeObjectivesReopenedAt: string | null;
+  /** HR-granted edit window for one workflow stage; bypasses cycle lock and date windows for that stage only. */
+  hrReopenedStage: PmdfHrReopenStage | null;
+  hrReopenedAt: string | null;
+  hrReopenedByEmail: string | null;
   phase: PmdfPhase;
   locked: boolean;
   assignedAt: string;
